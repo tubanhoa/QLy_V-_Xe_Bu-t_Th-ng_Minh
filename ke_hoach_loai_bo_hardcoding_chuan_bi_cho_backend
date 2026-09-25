@@ -1,0 +1,96 @@
+# Kế Hoạch Loại Bỏ Toàn Bộ Hardcode & Chuẩn Bị Tích Hợp Backend (ICTU Smart Transit)
+
+## Bối cảnh & Mục tiêu
+Hiện tại, giao diện Frontend của hệ thống **ICTU Smart Transit** (gồm Landing Page, Portal Quản trị viên, Điều hành viên và Tài xế) đã hoàn chỉnh về mặt thẩm mỹ và tương tác. Tuy nhiên, dữ liệu (danh sách tuyến, 28 ghế xe buýt, thông số GPS xe, hồ sơ duyệt vé tháng, bảng giá, giao dịch thanh toán...) đang được viết trực tiếp (hardcoded) bên trong các file `.tsx`.
+
+Mục tiêu của đợt tái cấu trúc này:
+1. **Tách biệt hoàn toàn Tầng Giao Diện (Presentation Layer) khỏi Tầng Dữ Liệu (Data Layer)**.
+2. **Xây dựng hệ thống Type Definitions & Data Contracts chuẩn chỉnh** theo mô hình cơ sở dữ liệu quan hệ (PostgreSQL / Prisma / Drizzle / Neon).
+3. **Thiết lập Service Layer trừu tượng hóa** với cờ chuyển đổi linh hoạt:
+   - `USE_MOCK = true`: Dùng in-memory mock repository phục vụ phát triển frontend độc lập.
+   - `USE_MOCK = false`: Gọi thẳng qua REST API / Route Handlers khi backend hoàn thành mà **không cần sửa lại bất kỳ dòng code UI nào**.
+4. **Cung cấp file biến môi trường mẫu (`.env.example`)** chuẩn bị cho Neon DB, Better Auth, VNPay, MoMo.
+
+---
+
+## Các Hạng Mục Triển Khai
+
+### 1. Hệ Thống Type Definitions & Schemas (`types/`)
+Xây dựng các interface chuẩn hóa phản ánh đúng schema cơ sở dữ liệu:
+- [NEW] `types/transit.ts`:
+  - `Route`, `Station`, `Trip`, `Bus`, `VehicleType` (EV, Diesel), `VehicleStatus`.
+  - `Seat`, `SeatStatus` (available, selected, occupied, priority), `SeatTier`.
+- [NEW] `types/booking.ts`:
+  - `Booking`, `Ticket`, `Passenger`, `PaymentMethod` (vnpay, momo, vietqr, cash), `PaymentStatus`.
+- [NEW] `types/driver.ts`:
+  - `DriverShift`, `PassengerManifestItem`, `IncidentReport`, `IncidentSeverity`, `IncidentStatus`.
+- [NEW] `types/dispatcher.ts`:
+  - `BusTelemetry`, `StudentApplication`, `ApplicationStatus`, `DispatchSchedule`.
+- [NEW] `types/admin.ts`:
+  - `StaffMember`, `SystemSettings`, `RevenueReport`, `AuditLog`.
+
+---
+
+### 2. Cấu Hình Biến Môi Trường & API Config (`lib/config.ts` & `.env.example`)
+- [NEW] `.env.example`:
+  - `NEXT_PUBLIC_API_URL`: URL API backend (mặc định `/api` hoặc server NestJS/Express).
+  - `NEXT_PUBLIC_USE_MOCK`: `true` | `false`.
+  - Cấu hình kết nối DB: `DATABASE_URL` (Neon Postgres).
+  - Cấu hình xác thực: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`.
+  - Cổng thanh toán: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `MOMO_PARTNER_CODE`.
+- [NEW] `lib/config.ts`: Quản lý các hằng số hệ thống, fallback URL, và chế độ chạy.
+
+---
+
+### 3. Service Layer Trừu Tượng Hóa (`lib/services/`)
+Tạo các service độc lập tương thích chuẩn REST/JSON:
+- `authService`: Đăng nhập, phân quyền Role, lấy thông tin phiên làm việc.
+- `routeService`: Lấy danh sách tuyến, trạm dừng, tạo/sửa tuyến xe.
+- `tripService`: Lấy chuyến xe theo ngày/tuyến, lấy sơ đồ 28 ghế của chuyến, giữ chỗ tạm thời (hold seat).
+- `bookingService`: Tạo đơn đặt vé, xác nhận thanh toán, tra cứu mã vé, tạo QR vé điện tử.
+- `fleetService`: Lấy danh sách đội xe 12 chiếc, cập nhật dung lượng pin EV, theo dõi tọa độ GPS telemetry.
+- `incidentService`: Tài xế gửi báo cáo sự cố, trung tâm điều hành tiếp nhận & xử lý sự cố.
+- `studentService`: Nộp hồ sơ vé tháng HSSV, ban điều phối duyệt/từ chối hồ sơ.
+- `staffService`: Quản lý nhân sự, đổi vai trò (Admin, Dispatcher, Driver).
+- `settingsService`: Quản lý cấu hình hệ thống (thời gian giữ chỗ, chu kỳ ping GPS...).
+
+---
+
+### 4. Tách Toàn Bộ Mock Data Khỏi UI (`lib/mock-data/`)
+Di chuyển toàn bộ các mảng dữ liệu mẫu đang nằm rải rác về thư mục tập trung:
+- `mock-routes.ts`: Tuyến CT-01, CT-02, CT-03 và danh sách các trạm đón.
+- `mock-fleet.ts`: 12 phương tiện (VinFast eBus & Hyundai).
+- `mock-manifest.ts`: 28 hành khách của chuyến CT-01 (07:45).
+- `mock-telemetry.ts`: Tọa độ GPS thời gian thực, tốc độ, dung lượng pin.
+- `mock-students.ts`: 12 hồ sơ xin trợ giá vé tháng sinh viên ICTU.
+- `mock-transactions.ts`: Lịch sử giao dịch thanh toán VNPay, MoMo, VietQR.
+- `mock-staff.ts`: Danh bạ cán bộ, điều hành và tài xế.
+
+---
+
+### 5. Tái Cấu Trúc Các Component UI (Loại Bỏ Hardcode)
+Cập nhật các component chỉ giao tiếp qua Service / Types, không còn nhúng dữ liệu cứng:
+- **Tài xế**:
+  - `components/portal/dashboard/driver-manifest.tsx`: Gọi qua `driverService.getManifest(tripId)`.
+  - `components/portal/dashboard/driver-scanner.tsx`: Gọi qua `ticketService.verifyTicket(code)`.
+  - `components/portal/dashboard/driver-incident.tsx`: Gọi qua `incidentService.reportIncident(data)`.
+- **Điều hành viên**:
+  - `components/portal/modules/dispatcher-gps-map.tsx`: Gọi qua `fleetService.getTelemetry()`.
+  - `components/portal/modules/dispatcher-student-approval.tsx`: Gọi qua `studentService.getPendingApplications()`.
+  - `components/portal/modules/dispatcher-schedule.tsx`: Gọi qua `dispatchService.getSchedule()`.
+  - `components/portal/modules/dispatcher-incidents.tsx`: Gọi qua `incidentService.getIncidents()`.
+- **Quản trị viên**:
+  - `components/portal/modules/admin-routes.tsx`, `admin-fleet.tsx`, `admin-payments.tsx`, `admin-staff.tsx`, `admin-reports.tsx`, `admin-settings.tsx`.
+- **Khách hàng (Landing & Booking)**:
+  - `components/landing/seat-picker-modal.tsx`: Tải sơ đồ ghế qua `tripService.getTripSeats(tripId)` và tạo vé qua `bookingService.createBooking()`.
+  - `components/landing/quick-access-modals.tsx`: Tra cứu qua `bookingService.lookupTicket()`.
+  - `components/landing/vietcombank-hero.tsx`: Dữ liệu bộ thẻ `CARDS` tách ra file cấu hình riêng.
+
+---
+
+## Kế Hoạch Xác Minh (Verification)
+1. **Kiểm tra TypeScript**: Chạy `tsc --noEmit` hoặc `npm run build` để đảm bảo 100% Type-safe, không có lỗi kiểu dữ liệu.
+2. **Kiểm tra chức năng**:
+   - Tất cả các màn hình (Tài xế, Điều hành, Admin, Đặt vé) vẫn hoạt động mượt mà qua Service Layer.
+   - Khi chỉnh sửa dữ liệu trong mock store, giao diện cập nhật ngay lập tức.
+3. **Sẵn sàng Backend**: Backend developers có thể xem thư mục `types/` và `lib/services/` làm tài liệu đặc tả API (API Contract) chính thức để xây dựng Database Schema & REST endpoints.
