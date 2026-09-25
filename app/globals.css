@@ -1,0 +1,684 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-teal: var(--teal);
+  --color-cyber: var(--cyber);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-route-flow: route-flow 6s linear infinite;
+  --animate-float-slow: float-slow 7s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes route-flow {
+    to {
+      stroke-dashoffset: -240;
+    }
+  }
+  @keyframes float-slow {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+}
+
+:root {
+  color-scheme: light;
+  --brand: #005a36;
+  --brand-hover: #004529;
+  --brand-active: #00361f;
+  --vcb-primary: #005a36;
+  --vcb-primary-dark: #004529;
+  --vcb-accent: #c3e82c;
+  --vcb-accent-hover: #b0d820;
+  --teal: #005a36;
+  --cyber: #0a131c;
+
+  --background: #f4f7f6;
+  --foreground: #0b1620;
+  --card: #ffffff;
+  --card-foreground: #0b1620;
+  --popover: #ffffff;
+  --popover-foreground: #0b1620;
+  --primary: #005a36;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f5ef;
+  --secondary-foreground: #0b3a2a;
+  --muted: #eef2f1;
+  --muted-foreground: #5b6b72;
+  --accent: #e6f7f1;
+  --accent-foreground: #005a36;
+  --destructive: #ef4444;
+  --border: #e2e8e6;
+  --input: #e2e8e6;
+  --ring: #005a36;
+  --chart-1: #005a36;
+  --chart-2: #007044;
+  --chart-3: #f59e0b;
+  --chart-4: #0ea5e9;
+  --chart-5: #ef4444;
+  --radius: 0.625rem;
+  --sidebar: #0a131c;
+  --sidebar-foreground: #cbd5d1;
+  --sidebar-primary: #005a36;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #13212d;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #005a36;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0a131c;
+  --foreground: #e6eef0;
+  --card: #0f1c27;
+  --card-foreground: #e6eef0;
+  --popover: #0f1c27;
+  --popover-foreground: #e6eef0;
+  --primary: #00c27d;
+  --primary-foreground: #04140d;
+  --secondary: #11261f;
+  --secondary-foreground: #bff5dc;
+  --muted: #142331;
+  --muted-foreground: #8ba0a8;
+  --accent: #0f2a22;
+  --accent-foreground: #5ee6b0;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #00c27d;
+  --sidebar: #07101a;
+  --sidebar-foreground: #cbd5d1;
+  --sidebar-accent: #102030;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  a,
+  a:visited {
+    color: inherit;
+    text-decoration: none;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+html body a {
+  color: inherit;
+}
+
+/* Hide Next.js dev indicator badge in development mode */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay],
+div[data-nextjs-indicator],
+[data-nextjs-indicator-root],
+div[class*="nextjs-toast"] {
+  display: none !important;
+}
+
+@utility shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    color-mix(in oklab, var(--muted-foreground) 18%, var(--muted)) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+@utility press {
+  transition: transform 120ms ease-out;
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+
+.btn-vcb-solid {
+  background-color: #005a36 !important;
+  color: #ffffff !important;
+}
+
+.btn-vcb-solid:hover {
+  background-color: #004529 !important;
+  color: #ffffff !important;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 20px 10px rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8),
+    transparent,
+    rgba(255, 255, 255, 0.3)
+  );
+  pointer-events: none;
+}
+
+/* Glassmorphism for Hero Overlays */
+.hero-glass-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+}
+
+.hero-glass-search {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+}
+
+/* 3D Card Stack Hover Effect - Synchronous Scaling for All Cards */
+.card-stack-wrapper {
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), filter 280ms ease-out;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.card-stack-wrapper:hover {
+  transform: scale(1.06) translateY(-6px) !important;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.28)) !important;
+}
+
+/* Snappy Entrance Animations on Page Load (Elements visible immediately) */
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-1 {
+  animation: hero-fade-up 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-hero-2 {
+  animation: hero-fade-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-hero-3 {
+  animation: hero-fade-up 450ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-hero-4 {
+  animation: hero-fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* Ambient Subtle Animations */
+@keyframes sun-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 90, 54, 0.12);
+    transform: rotate(0deg);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(0, 90, 54, 0.22);
+    transform: rotate(12deg);
+  }
+}
+
+.animate-sun-ambient {
+  animation: sun-pulse-glow 4s ease-in-out infinite;
+}
+
+@keyframes live-indicator-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.6;
+  }
+}
+
+.animate-live-indicator {
+  animation: live-indicator-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ambient-bus-cruise {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(16px, -3px);
+  }
+}
+
+.animate-bus-cruise {
+  animation: ambient-bus-cruise 10s ease-in-out infinite;
+}
+
+/* 3D Card Stack Ambient Levitation */
+@keyframes card-levitate {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(-0.4deg);
+  }
+}
+
+.animate-card-levitate {
+  animation: card-levitate 5s ease-in-out infinite;
+}
+
+/* Smart QR Code Laser Scanner Beam */
+@keyframes qr-scan-beam {
+  0% {
+    top: -15%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    top: 115%;
+    opacity: 0;
+  }
+}
+
+.animate-qr-scan {
+  animation: qr-scan-beam 3.2s ease-in-out infinite;
+}
+
+/* Flowing SVG Arrow Dashes */
+@keyframes arrow-dash-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.animate-dash-flow {
+  animation: arrow-dash-flow 1.2s linear infinite;
+}
+
+/* Subtle Atmospheric Drifting Clouds */
+@keyframes cloud-drift-1 {
+  0% {
+    transform: translateX(-8%);
+  }
+  50% {
+    transform: translateX(12%);
+  }
+  100% {
+    transform: translateX(-8%);
+  }
+}
+
+.animate-cloud-1 {
+  animation: cloud-drift-1 55s ease-in-out infinite;
+}
+
+@keyframes cloud-drift-2 {
+  0% {
+    transform: translateX(10%);
+  }
+  50% {
+    transform: translateX(-15%);
+  }
+  100% {
+    transform: translateX(10%);
+  }
+}
+
+.animate-cloud-2 {
+  animation: cloud-drift-2 75s ease-in-out infinite;
+}
+
+/* Shimmer Light Beam Across Promotional Badges */
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-160%) skewX(-20deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  65% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(260%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 4.5s ease-in-out infinite;
+}
+
+/* Floating Support Bot Levitation */
+@keyframes bot-breathe {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-bot-breathe {
+  animation: bot-breathe 4s ease-in-out infinite;
+}
+
+/* -----------------------------------------------------------------
+   1. ORGANIC FALLING TEA LEAVES (Xứ Trà Thái Nguyên)
+   GPU-accelerated 3D tumbling, wobble & natural wind sway physics
+   Leaves start above viewport (-top-16) and tumble 125vh down
+   ----------------------------------------------------------------- */
+@keyframes tea-leaf-fall-1 {
+  0% {
+    transform: translate3d(0, 0, 0) rotateZ(0deg) rotateX(0deg) rotateY(0deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.88;
+  }
+  28% {
+    transform: translate3d(35px, 28vh, 0) rotateZ(60deg) rotateX(140deg) rotateY(45deg);
+  }
+  52% {
+    transform: translate3d(-18px, 58vh, 0) rotateZ(135deg) rotateX(260deg) rotateY(180deg);
+  }
+  78% {
+    transform: translate3d(45px, 88vh, 0) rotateZ(215deg) rotateX(340deg) rotateY(270deg);
+    opacity: 0.88;
+  }
+  100% {
+    transform: translate3d(15px, 125vh, 0) rotateZ(290deg) rotateX(420deg) rotateY(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes tea-leaf-fall-2 {
+  0% {
+    transform: translate3d(0, 0, 0) rotateZ(35deg) rotateX(0deg) rotateY(0deg);
+    opacity: 0;
+  }
+  7% {
+    opacity: 0.8;
+  }
+  32% {
+    transform: translate3d(-42px, 32vh, 0) rotateZ(90deg) rotateX(170deg) rotateY(80deg);
+  }
+  62% {
+    transform: translate3d(24px, 68vh, 0) rotateZ(175deg) rotateX(290deg) rotateY(200deg);
+  }
+  84% {
+    transform: translate3d(-12px, 94vh, 0) rotateZ(240deg) rotateX(360deg) rotateY(280deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate3d(30px, 125vh, 0) rotateZ(315deg) rotateX(460deg) rotateY(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes tea-leaf-fall-3 {
+  0% {
+    transform: translate3d(0, 0, 0) rotateZ(-25deg) rotateX(0deg) rotateY(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.75;
+  }
+  38% {
+    transform: translate3d(55px, 36vh, 0) rotateZ(45deg) rotateX(130deg) rotateY(100deg);
+  }
+  68% {
+    transform: translate3d(8px, 72vh, 0) rotateZ(110deg) rotateX(250deg) rotateY(210deg);
+  }
+  88% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(65px, 125vh, 0) rotateZ(185deg) rotateX(360deg) rotateY(360deg);
+    opacity: 0;
+  }
+}
+
+/* -----------------------------------------------------------------
+   2. SMART ELECTRIC BUS ARRIVAL & DOCKING (Xe buýt điện cập bến trạm)
+   Full cinematic trajectory: approaches along the tea hill road curve, 
+   smoothly decelerates into ICTU bus stop, docks for passenger boarding,
+   then departs down the campus road loop.
+   ----------------------------------------------------------------- */
+@keyframes smart-bus-journey {
+  /* Phase 1: Emerges from tea hill road curve & cruises down (0s - 4.4s) */
+  0% {
+    transform: translate3d(-65%, -78%, 0) scale(0.42) rotate(-5.5deg);
+    opacity: 0;
+    filter: blur(0.5px);
+  }
+  4% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  14% {
+    /* Smoothly rounds the natural tea hill bend on the asphalt */
+    transform: translate3d(-72%, -58%, 0) scale(0.56) rotate(-3.5deg);
+  }
+  26% {
+    /* Enters straight road approach toward bus stop */
+    transform: translate3d(-38%, -34%, 0) scale(0.82) rotate(-1.5deg);
+  }
+  35% {
+    /* Smooth braking deceleration entering station curb bay */
+    transform: translate3d(-4%, -4%, 0) scale(0.98) rotate(0deg);
+  }
+  38% {
+    /* Subtle vehicular braking front suspension dip */
+    transform: translate3d(0.8%, 0.5%, 0) scale(1.008) rotate(0.4deg);
+  }
+  40% {
+    /* Air-suspension settles perfectly level at station platform */
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+
+  /* Phase 2: Docked at Bus Stop with visible pneumatic suspension breath (4.4s - 6.4s) */
+  45% {
+    transform: translate3d(0, -2.5px, 0) scale(1) rotate(0.1deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  55% {
+    transform: translate3d(0, -1.8px, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  58% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+
+  /* Phase 3: Departure & acceleration down campus boulevard (6.4s - 9.0s) */
+  64% {
+    /* Gentle forward pull out into right-hand lane */
+    transform: translate3d(18%, 10%, 0) scale(1.08) rotate(1.8deg);
+    opacity: 1;
+  }
+  73% {
+    /* Accelerating down the road toward viewer */
+    transform: translate3d(58%, 35%, 0) scale(1.22) rotate(3.2deg);
+    opacity: 0.96;
+  }
+  82% {
+    /* Smooth exit down the road slope */
+    transform: translate3d(125%, 78%, 0) scale(1.38) rotate(5.2deg);
+    opacity: 0;
+  }
+
+  /* Phase 4: Clear scenic road pause before next bus arrives (9.0s - 11.0s) */
+  82.1%, 100% {
+    transform: translate3d(-65%, -78%, 0) scale(0.42) rotate(-5.5deg);
+    opacity: 0;
+  }
+}
+
+.animate-smart-bus {
+  animation: smart-bus-journey 11s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  will-change: transform, opacity;
+  transform-origin: 50% 100%;
+}
+
+/* Smart Bus Stop IoT Radar Beacon Signal */
+@keyframes station-radar-beacon {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.animate-station-beacon {
+  animation: station-radar-beacon 2.4s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
+}
+
+/* Headlight Beam Sweeping Intensity */
+@keyframes headlight-glow {
+  0% {
+    opacity: 0;
+  }
+  4% {
+    opacity: 0.35;
+  }
+  40%, 58% {
+    opacity: 0.75;
+  }
+  75% {
+    opacity: 0.3;
+  }
+  82%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-headlight-glow {
+  animation: headlight-glow 11s ease-in-out infinite;
+}
