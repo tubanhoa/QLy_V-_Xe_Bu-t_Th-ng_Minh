@@ -157,7 +157,12 @@ export class AuthService {
   }
 
   async logout(userId: string) {
-    await this.userRepository.update(userId, { refreshTokenHash: null as any });
+    await this.userRepository
+      .createQueryBuilder()
+      .update(UserEntity)
+      .set({ refreshTokenHash: () => 'NULL' })
+      .where('id = :id', { id: userId })
+      .execute();
     return { message: 'Đăng xuất thành công' };
   }
 
