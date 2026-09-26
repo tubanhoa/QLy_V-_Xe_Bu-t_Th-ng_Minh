@@ -73,9 +73,10 @@ export class SearchTripsDto {
   @IsString()
   destination?: string;
 
-  @ApiProperty({ example: '2026-09-26', description: 'Ngày đi (YYYY-MM-DD)' })
+  @ApiPropertyOptional({ example: '2026-09-26', description: 'Ngày đi (YYYY-MM-DD), mặc định hôm nay nếu bỏ trống' })
+  @IsOptional()
   @IsDateString()
-  date: string;
+  date?: string;
 }
 
 export class ExchangeTicketDto {

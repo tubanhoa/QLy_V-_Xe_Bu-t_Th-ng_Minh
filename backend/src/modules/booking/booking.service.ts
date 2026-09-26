@@ -45,8 +45,14 @@ export class BookingService {
   ) {}
 
   async searchTrips(dto: SearchTripsDto) {
-    const startOfDay = new Date(`${dto.date}T00:00:00`);
-    const endOfDay = new Date(`${dto.date}T23:59:59.999`);
+    let targetDateStr = dto?.date?.trim();
+    if (!targetDateStr || isNaN(Date.parse(targetDateStr))) {
+      const now = new Date();
+      targetDateStr = now.toISOString().split('T')[0];
+    }
+
+    const startOfDay = new Date(`${targetDateStr}T00:00:00`);
+    const endOfDay = new Date(`${targetDateStr}T23:59:59.999`);
 
     const query = this.tripRepository
       .createQueryBuilder('trip')
