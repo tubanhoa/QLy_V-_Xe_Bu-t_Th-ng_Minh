@@ -33,12 +33,14 @@ describe('RoutesService - Keyword Search (STT 1)', () => {
 
   beforeEach(() => {
     mockQueryBuilder = {
+      select: vi.fn().mockReturnThis(),
       leftJoinAndSelect: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       andWhere: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
       addOrderBy: vi.fn().mockReturnThis(),
-      getMany: vi.fn().mockResolvedValue(sampleRoutes),
+      getRawMany: vi.fn().mockResolvedValue([{ id: 'route-uuid-1' }]),
+      getMany: vi.fn().mockResolvedValue([sampleRoutes[0]]),
     };
 
     mockRouteRepo = {

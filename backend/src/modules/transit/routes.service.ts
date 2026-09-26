@@ -15,36 +15,92 @@ export class RoutesService {
   ) {}
 
   async findAll(query?: SearchRouteDto) {
-    const qb = this.routeRepository
+    const hasFilter =
+      Boolean(query?.keyword?.trim()) ||
+      Boolean(query?.origin?.trim()) ||
+      Boolean(query?.destination?.trim());
+
+    if (!hasFilter) {
+      return this.routeRepository
+        .createQueryBuilder('route')
+        .leftJoinAndSelect('route.routeStations', 'routeStations')
+        .leftJoinAndSelect('routeStations.station', 'station')
+        .where('route.status = :status', { status: 'active' })
+        .orderBy('route.routeCode', 'ASC')
+        .addOrderBy('routeStations.stopOrder', 'ASC')
+        .getMany();
+    }
+
+    // Bước 1: Dùng subquery EXISTS xác định route.id thoả mãn điều kiện lọc
+    const idQuery = this.routeRepository
       .createQueryBuilder('route')
-      .leftJoinAndSelect('route.routeStations', 'routeStations')
-      .leftJoinAndSelect('routeStations.station', 'station')
+      .select('route.id', 'id')
       .where('route.status = :status', { status: 'active' });
 
     if (query?.keyword?.trim()) {
-      qb.andWhere(
+      idQuery.andWhere(
         '(LOWER(route.routeCode) LIKE :keyword OR LOWER(route.name) LIKE :keyword)',
         { keyword: `%${query.keyword.trim().toLowerCase()}%` },
       );
     }
 
     if (query?.origin?.trim()) {
-      qb.andWhere(
-        '(LOWER(route.origin) LIKE :origin OR LOWER(station.name) LIKE :origin)',
+      idQuery.andWhere(
+        `(LOWER(route.origin) LIKE :origin OR EXISTS (
+          SELECT 1 FROM route_stations rs_o
+          JOIN stations s_o ON rs_o.station_id = s_o.id
+          WHERE rs_o.route_id = route.id AND LOWER(s_o.name) LIKE :origin
+        ))`,
         { origin: `%${query.origin.trim().toLowerCase()}%` },
       );
     }
 
     if (query?.destination?.trim()) {
-      qb.andWhere(
-        '(LOWER(route.destination) LIKE :destination OR LOWER(station.name) LIKE :destination)',
+      idQuery.andWhere(
+        `(LOWER(route.destination) LIKE :destination OR EXISTS (
+          SELECT 1 FROM route_stations rs_d
+          JOIN stations s_d ON rs_d.station_id = s_d.id
+          WHERE rs_d.route_id = route.id AND LOWER(s_d.name) LIKE :destination
+        ))`,
         { destination: `%${query.destination.trim().toLowerCase()}%` },
       );
     }
 
-    qb.orderBy('route.routeCode', 'ASC').addOrderBy('routeStations.stopOrder', 'ASC');
+    if (query?.origin?.trim() && query?.destination?.trim()) {
+      idQuery.andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM route_stations rs_from
+          JOIN stations s_from ON rs_from.station_id = s_from.id
+          JOIN route_stations rs_to ON rs_to.route_id = rs_from.route_id
+          JOIN stations s_to ON rs_to.station_id = s_to.id
+          WHERE rs_from.route_id = route.id
+            AND LOWER(s_from.name) LIKE :origin
+            AND LOWER(s_to.name) LIKE :destination
+            AND rs_from.stop_order >= rs_to.stop_order
+        )`,
+        {
+          origin: `%${query.origin.trim().toLowerCase()}%`,
+          destination: `%${query.destination.trim().toLowerCase()}%`,
+        },
+      );
+    }
 
-    return qb.getMany();
+    const matchingRows = await idQuery.getRawMany();
+    const matchingIds = matchingRows.map((r: { id: string }) => r.id);
+
+    if (matchingIds.length === 0) {
+      return [];
+    }
+
+    // Bước 2: Query lại FULL route kèm FULL danh sách routeStations (không lọc trên collection con)
+    return this.routeRepository
+      .createQueryBuilder('route')
+      .leftJoinAndSelect('route.routeStations', 'routeStations')
+      .leftJoinAndSelect('routeStations.station', 'station')
+      .where('route.id IN (:...matchingIds)', { matchingIds })
+      .orderBy('route.routeCode', 'ASC')
+      .addOrderBy('routeStations.stopOrder', 'ASC')
+      .getMany();
   }
 
   async findById(id: string) {

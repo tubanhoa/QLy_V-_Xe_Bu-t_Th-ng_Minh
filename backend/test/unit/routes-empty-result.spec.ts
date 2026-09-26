@@ -12,11 +12,13 @@ describe('RoutesService - Empty Result Handling (STT 1)', () => {
 
   beforeEach(() => {
     mockQueryBuilder = {
+      select: vi.fn().mockReturnThis(),
       leftJoinAndSelect: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       andWhere: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
       addOrderBy: vi.fn().mockReturnThis(),
+      getRawMany: vi.fn().mockResolvedValue([]),
       getMany: vi.fn().mockResolvedValue([]), // Returns empty array
     };
 

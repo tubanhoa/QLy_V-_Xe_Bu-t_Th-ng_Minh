@@ -90,6 +90,14 @@ describe('Real Dev Environment Verification (Postgres & Redis, No Mock)', () => 
     const response = await routesController.findAll({});
     console.log('=== SCENARIO A RAW JSON ===');
     console.log(JSON.stringify(response, null, 2));
+
+    expect(response.length).toBe(2);
+    const ct01 = response.find((r) => r.routeCode === 'CT-01');
+    const ct02 = response.find((r) => r.routeCode === 'CT-02');
+    expect(ct01).toBeDefined();
+    expect(ct02).toBeDefined();
+    expect(ct01!.routeStations.length).toBe(5);
+    expect(ct02!.routeStations.length).toBe(3);
   });
 
   it('Scenario b1: GET /api/routes with origin as intermediate station (Cổng KTX)', async () => {
@@ -98,6 +106,15 @@ describe('Real Dev Environment Verification (Postgres & Redis, No Mock)', () => 
     });
     console.log('=== SCENARIO B1 (ORIGIN INTERMEDIATE) RAW JSON ===');
     console.log(JSON.stringify(response, null, 2));
+
+    // Tuyến CT-01 được tìm thấy và giữ ĐẦY ĐỦ 5 trạm dừng
+    expect(response.length).toBe(1);
+    expect(response[0].routeCode).toBe('CT-01');
+    expect(response[0].routeStations.length).toBe(5);
+
+    // Tuyến CT-02 không đi qua Cổng KTX -> Phải bị loại bỏ
+    const hasCT02 = response.some((r) => r.routeCode === 'CT-02');
+    expect(hasCT02).toBe(false);
   });
 
   it('Scenario b2: GET /api/routes with destination as intermediate station (Bệnh Viện)', async () => {
@@ -106,6 +123,15 @@ describe('Real Dev Environment Verification (Postgres & Redis, No Mock)', () => 
     });
     console.log('=== SCENARIO B2 (DESTINATION INTERMEDIATE) RAW JSON ===');
     console.log(JSON.stringify(response, null, 2));
+
+    // Tuyến CT-01 được tìm thấy và giữ ĐẦY ĐỦ 5 trạm dừng
+    expect(response.length).toBe(1);
+    expect(response[0].routeCode).toBe('CT-01');
+    expect(response[0].routeStations.length).toBe(5);
+
+    // Tuyến CT-02 không đi qua Bệnh Viện -> Phải bị loại bỏ
+    const hasCT02 = response.some((r) => r.routeCode === 'CT-02');
+    expect(hasCT02).toBe(false);
   });
 
   it('Scenario c: GET /api/v1/booking/search without date parameter', async () => {
@@ -115,5 +141,8 @@ describe('Real Dev Environment Verification (Postgres & Redis, No Mock)', () => 
     });
     console.log('=== SCENARIO C RAW JSON ===');
     console.log(JSON.stringify(response, null, 2));
+
+    expect(response.length).toBeGreaterThan(0);
+    expect(response[0].routeCode).toBe('CT-01');
   });
 });

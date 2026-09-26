@@ -172,6 +172,58 @@ export class SeedService implements OnApplicationBootstrap {
       this.logger.log('Seeded route: CT-01 with 5 stations');
     }
 
+    // 4b. Seed Route CT-02 (Tuyến độc lập: Bến Xe Nam ↔ KCN Sông Công, không qua KTX/Bệnh Viện)
+    const ct02StationsData = [
+      { name: 'Trạm Bến Xe Nam Thái Nguyên', address: 'Phường Tích Lương, TP. Thái Nguyên', latitude: 21.543210, longitude: 105.854321, isHub: true },
+      { name: 'Trạm Ngã 4 Tích Lương', address: 'Đường 3 Tháng 2, Tích Lương, TP. Thái Nguyên', latitude: 21.532100, longitude: 105.865432, isHub: false },
+      { name: 'Trạm Khu Công Nghiệp Sông Công', address: 'KCN Sông Công 1, TP. Sông Công', latitude: 21.501234, longitude: 105.887654, isHub: true },
+    ];
+
+    const ct02StationMap = new Map<string, StationEntity>();
+    for (const s of ct02StationsData) {
+      let station = await this.stationRepo.findOne({ where: { name: s.name } });
+      if (!station) {
+        station = this.stationRepo.create(s);
+        station = await this.stationRepo.save(station);
+        this.logger.log(`Seeded station: ${s.name}`);
+      }
+      ct02StationMap.set(s.name, station);
+    }
+
+    let route2 = await this.routeRepo.findOne({ where: { routeCode: 'CT-02' } });
+    if (!route2) {
+      route2 = this.routeRepo.create({
+        routeCode: 'CT-02',
+        name: 'Bến Xe Nam Thái Nguyên ↔ Khu Công Nghiệp Sông Công',
+        origin: 'Bến Xe Nam Thái Nguyên',
+        destination: 'Khu Công Nghiệp Sông Công',
+        distanceKm: 18.0,
+        basePrice: 15000,
+        studentPrice: 8000,
+        operatingStart: '06:00:00',
+        operatingEnd: '20:30:00',
+        frequencyMinutes: 30,
+        status: 'active',
+      });
+      route2 = await this.routeRepo.save(route2);
+
+      let order2 = 1;
+      for (const s of ct02StationsData) {
+        const station = ct02StationMap.get(s.name)!;
+        await this.routeStationRepo.save(
+          this.routeStationRepo.create({
+            routeId: route2.id,
+            stationId: station.id,
+            stopOrder: order2,
+            distanceFromOriginKm: (order2 - 1) * 9.0,
+            estimatedMinutes: (order2 - 1) * 18,
+          }),
+        );
+        order2++;
+      }
+      this.logger.log('Seeded route: CT-02 with 3 stations');
+    }
+
     // 5. Seed Vehicles & Seats
     const vehiclesData = [
       { licensePlate: '20B-012.34', model: 'VinFast eBus 2024 (EV)', vehicleType: 'electric', seatCapacity: 28 },
