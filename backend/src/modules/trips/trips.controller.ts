@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
 @ApiTags('Trips & Dispatch')
-@Controller('api/v1/trips')
+@Controller('trips')
 export class TripsController {
   constructor(private readonly tripsService: TripsService) {}
 

@@ -17,7 +17,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
 @ApiTags('Transit - Stations')
-@Controller('api/v1/stations')
+@Controller('stations')
 export class StationsController {
   constructor(private readonly stationsService: StationsService) {}
 

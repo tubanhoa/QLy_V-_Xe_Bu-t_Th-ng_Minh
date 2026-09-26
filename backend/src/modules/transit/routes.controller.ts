@@ -8,6 +8,7 @@ import {
   Body,
   Query,
   UseGuards,
+  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { RoutesService } from './routes.service.js';
@@ -19,7 +20,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
 @ApiTags('Transit - Routes')
-@Controller(['api/v1/routes', 'api/routes'])
+// TODO: xoá alias VERSION_NEUTRAL sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/routes
+@Controller({
+  path: 'routes',
+  version: ['1', VERSION_NEUTRAL],
+})
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
 

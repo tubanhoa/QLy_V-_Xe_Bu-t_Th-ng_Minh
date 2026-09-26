@@ -43,8 +43,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
         errorCode = (responseObj['error'] as string) || errorCode;
       }
+
+      // Nếu là lỗi máy chủ (>= 500) trong production, ẩn chi tiết kỹ thuật nội bộ
+      if (statusCode >= 500 && process.env.NODE_ENV === 'production') {
+        message = 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.';
+      }
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Ẩn chi tiết kỹ thuật/lỗi nội bộ khi ở môi trường production
+      if (process.env.NODE_ENV === 'production') {
+        message = 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.';
+      } else {
+        message = exception.message;
+      }
     }
 
     // Log lỗi server-side

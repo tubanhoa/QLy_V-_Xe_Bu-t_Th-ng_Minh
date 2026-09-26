@@ -17,7 +17,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @ApiTags('Transit - Vehicles')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT')
-@Controller('api/v1/vehicles')
+@Controller('vehicles')
 export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 

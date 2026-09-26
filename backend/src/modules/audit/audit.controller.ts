@@ -11,7 +11,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 @ApiBearerAuth('JWT')
-@Controller('api/v1/admin/activity-logs')
+@Controller('admin/activity-logs')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 

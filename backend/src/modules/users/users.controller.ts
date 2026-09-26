@@ -21,7 +21,7 @@ import { Role } from '../../common/constants/roles.constant.js';
 @ApiBearerAuth('JWT')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
-@Controller('api/v1/admin/users')
+@Controller('admin/users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
