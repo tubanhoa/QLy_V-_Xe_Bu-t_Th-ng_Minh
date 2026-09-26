@@ -13,8 +13,16 @@ import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto } from './dto/trip.dto.js';
+import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import { TripStatus, TicketStatus } from '../../common/constants/status.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
+
+// Map DTO field names to actual DB column names
+const SORT_COLUMN_MAP: Record<string, string> = {
+  departureTime: 'trip.departureTime',
+  status: 'trip.status',
+  createdAt: 'trip.createdAt',
+};
 
 @Injectable()
 export class TripsService {
@@ -32,6 +40,97 @@ export class TripsService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
   ) {}
+
+  /**
+   * GET /api/v1/trips — Danh sách chuyến xe cho Admin/Manager
+   * Hỗ trợ filter (date, routeId, status, excludeDeparted), pagination, sort
+   */
+  async findAll(query: ListTripsQueryDto) {
+    const {
+      date,
+      routeId,
+      status,
+      excludeDeparted,
+      page = 1,
+      limit = 20,
+      sortBy = 'departureTime',
+      sortOrder = 'ASC',
+    } = query;
+
+    const qb = this.tripRepository
+      .createQueryBuilder('trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
+      .leftJoinAndSelect('trip.conductor', 'conductor');
+
+    // Filter by date (BETWEEN startOfDay AND endOfDay)
+    if (date) {
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new BadRequestException('Định dạng ngày không hợp lệ (YYYY-MM-DD)');
+      }
+      const startOfDay = new Date(date + 'T00:00:00.000Z');
+      const endOfDay = new Date(date + 'T23:59:59.999Z');
+      qb.andWhere('trip.departureTime BETWEEN :start AND :end', {
+        start: startOfDay.toISOString(),
+        end: endOfDay.toISOString(),
+      });
+    } else {
+      // Default: today
+      const today = new Date();
+      const startOfDay = new Date(today);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+      qb.andWhere('trip.departureTime BETWEEN :start AND :end', {
+        start: startOfDay.toISOString(),
+        end: endOfDay.toISOString(),
+      });
+    }
+
+    // Filter by routeId
+    if (routeId) {
+      qb.andWhere('trip.routeId = :routeId', { routeId });
+    }
+
+    // Filter by status
+    if (status) {
+      qb.andWhere('trip.status = :status', { status });
+    }
+
+    // STT6: Exclude departed trips
+    if (excludeDeparted) {
+      qb.andWhere('trip.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [
+          TripStatus.DEPARTED,
+          TripStatus.IN_PROGRESS,
+          TripStatus.COMPLETED,
+        ],
+      });
+    }
+
+    // Sorting (whitelist validated by DTO)
+    const sortColumn = SORT_COLUMN_MAP[sortBy] || 'trip.departureTime';
+    qb.orderBy(sortColumn, sortOrder);
+
+    // Pagination
+    const skip = (page - 1) * limit;
+    qb.skip(skip).take(limit);
+
+    // Execute query
+    const [items, totalItems] = await qb.getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+      },
+    };
+  }
 
   async generateSchedule(dto: GenerateTripsDto) {
     const route = await this.routeRepository.findOne({ where: { id: dto.routeId } });

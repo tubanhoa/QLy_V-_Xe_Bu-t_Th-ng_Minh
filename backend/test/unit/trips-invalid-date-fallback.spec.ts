@@ -49,33 +49,36 @@ describe('BookingService - Invalid Date Parsing & Fallback (STT 3)', () => {
     );
   });
 
-  it('should not crash with RangeError when date is malformed string like "32/13/2026"', async () => {
-    // Trước khi fix: new Date('32/13/2026') -> Invalid Date -> crash 500 RangeError
-    // Sau khi fix: an toàn fallback về ngày hiện tại, không crash
+  it('should throw BadRequestException when date is malformed string like "32/13/2026"', async () => {
     await expect(
       bookingService.searchTrips({ date: '32/13/2026' }),
-    ).resolves.not.toThrow();
-
-    const whereCalls = mockQueryBuilder.where.mock.calls;
-    const betweenCall = whereCalls.find((c: any[]) =>
-      typeof c[0] === 'string' && c[0].includes('trip.departureTime BETWEEN :start AND :end'),
-    );
-
-    expect(betweenCall).toBeDefined();
-    const { start, end } = betweenCall[1];
-    expect(start).toBeInstanceOf(Date);
-    expect(end).toBeInstanceOf(Date);
-    expect(isNaN(start.getTime())).toBe(false);
-    expect(isNaN(end.getTime())).toBe(false);
+    ).rejects.toThrow('Định dạng ngày không hợp lệ');
   });
 
-  it('should safely fallback for random garbage strings or nonexistent calendar dates', async () => {
-    const invalidDates = ['invalid-date-string', '2026-99-99', 'undefined', 'null', '  '];
+  it('should throw BadRequestException for random garbage strings or nonexistent calendar dates', async () => {
+    const invalidDates = ['invalid-date-string', '2026-99-99', '2026-02-30', '32/13/2026'];
 
     for (const invalidDate of invalidDates) {
       await expect(
         bookingService.searchTrips({ date: invalidDate }),
+      ).rejects.toThrow('Định dạng ngày không hợp lệ');
+    }
+  });
+
+  it('should safely fallback to today when date is omitted or empty', async () => {
+    const emptyDates = [undefined, '', '   '];
+
+    for (const emptyDate of emptyDates) {
+      await expect(
+        bookingService.searchTrips({ date: emptyDate }),
       ).resolves.not.toThrow();
+
+      const whereCalls = mockQueryBuilder.where.mock.calls;
+      const betweenCall = whereCalls[whereCalls.length - 1];
+      expect(betweenCall[0]).toContain('trip.departureTime BETWEEN :start AND :end');
+      const { start, end } = betweenCall[1];
+      expect(start).toBeInstanceOf(Date);
+      expect(end).toBeInstanceOf(Date);
     }
   });
 
