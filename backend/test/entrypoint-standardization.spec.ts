@@ -212,6 +212,9 @@ describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
           unexpected_extra_field: 'malicious_or_unknown_payload',
         });
 
+      console.log('=== FORBID NON WHITELISTED 400 REAL RESPONSE ===');
+      console.log(JSON.stringify(res.body, null, 2));
+
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.statusCode).toBe(400);

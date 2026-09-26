@@ -19,8 +19,8 @@ import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
-// TODO: xoá alias VERSION_NEUTRAL sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/routes
 @ApiTags('Transit - Routes')
+// TODO: xoá alias VERSION_NEUTRAL sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/routes
 @Controller({
   path: 'routes',
   version: ['1', VERSION_NEUTRAL],
