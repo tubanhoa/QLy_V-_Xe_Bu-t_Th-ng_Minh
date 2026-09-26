@@ -6,11 +6,12 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { RoutesService } from './routes.service.js';
-import { CreateRouteDto, UpdateRouteDto } from './dto/transit.dto.js';
+import { CreateRouteDto, UpdateRouteDto, SearchRouteDto } from './dto/transit.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.constant.js';
@@ -24,9 +25,9 @@ export class RoutesController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách các tuyến xe buýt đang hoạt động' })
-  async findAll() {
-    return this.routesService.findAll();
+  @ApiOperation({ summary: 'Lấy danh sách các tuyến xe buýt đang hoạt động hoặc tìm kiếm theo điểm đi, điểm đến, từ khóa' })
+  async findAll(@Query() query?: SearchRouteDto) {
+    return this.routesService.findAll(query);
   }
 
   @Public()

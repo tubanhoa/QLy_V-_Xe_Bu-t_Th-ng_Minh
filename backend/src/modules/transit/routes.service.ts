@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RouteEntity } from '../../database/entities/route.entity.js';
 import { RouteStationEntity } from '../../database/entities/route-station.entity.js';
-import { CreateRouteDto, UpdateRouteDto } from './dto/transit.dto.js';
+import { CreateRouteDto, UpdateRouteDto, SearchRouteDto } from './dto/transit.dto.js';
 
 @Injectable()
 export class RoutesService {
@@ -14,15 +14,37 @@ export class RoutesService {
     private readonly routeStationRepository: Repository<RouteStationEntity>,
   ) {}
 
-  async findAll() {
-    return this.routeRepository.find({
-      where: { status: 'active' },
-      relations: { routeStations: { station: true } },
-      order: {
-        routeCode: 'ASC',
-        routeStations: { stopOrder: 'ASC' },
-      },
-    });
+  async findAll(query?: SearchRouteDto) {
+    const qb = this.routeRepository
+      .createQueryBuilder('route')
+      .leftJoinAndSelect('route.routeStations', 'routeStations')
+      .leftJoinAndSelect('routeStations.station', 'station')
+      .where('route.status = :status', { status: 'active' });
+
+    if (query?.keyword?.trim()) {
+      qb.andWhere(
+        '(LOWER(route.routeCode) LIKE :keyword OR LOWER(route.name) LIKE :keyword)',
+        { keyword: `%${query.keyword.trim().toLowerCase()}%` },
+      );
+    }
+
+    if (query?.origin?.trim()) {
+      qb.andWhere(
+        '(LOWER(route.origin) LIKE :origin OR LOWER(station.name) LIKE :origin)',
+        { origin: `%${query.origin.trim().toLowerCase()}%` },
+      );
+    }
+
+    if (query?.destination?.trim()) {
+      qb.andWhere(
+        '(LOWER(route.destination) LIKE :destination OR LOWER(station.name) LIKE :destination)',
+        { destination: `%${query.destination.trim().toLowerCase()}%` },
+      );
+    }
+
+    qb.orderBy('route.routeCode', 'ASC').addOrderBy('routeStations.stopOrder', 'ASC');
+
+    return qb.getMany();
   }
 
   async findById(id: string) {

@@ -236,3 +236,20 @@ export class CreateVehicleDto {
   @IsNumber()
   batteryCapacityKwh?: number;
 }
+
+export class SearchRouteDto {
+  @ApiPropertyOptional({ example: 'ĐH CNTT & TT Thái Nguyên', description: 'Điểm khởi hành / trạm đi' })
+  @IsOptional()
+  @IsString()
+  origin?: string;
+
+  @ApiPropertyOptional({ example: 'Bến xe Trung tâm Thái Nguyên', description: 'Điểm đến / trạm đến' })
+  @IsOptional()
+  @IsString()
+  destination?: string;
+
+  @ApiPropertyOptional({ example: 'CT-01', description: 'Từ khóa tìm kiếm (mã tuyến hoặc tên tuyến)' })
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+}
