@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -15,6 +16,7 @@ import {
   UpdateTripStatusDto,
   VerifyQrDto,
 } from './dto/trip.dto.js';
+import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -26,6 +28,18 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @Controller('trips')
 export class TripsController {
   constructor(private readonly tripsService: TripsService) {}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Get()
+  @ApiOperation({ summary: 'Danh sách chuyến xe (Admin, Manager) — hỗ trợ filter/sort/pagination' })
+  @ApiResponse({ status: 200, description: 'Danh sách chuyến xe với phân trang' })
+  @ApiResponse({ status: 401, description: 'Chưa xác thực' })
+  @ApiResponse({ status: 403, description: 'Không đủ quyền' })
+  async findAll(@Query() query: ListTripsQueryDto) {
+    return this.tripsService.findAll(query);
+  }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
