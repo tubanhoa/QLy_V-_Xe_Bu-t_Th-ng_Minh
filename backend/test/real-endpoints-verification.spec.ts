@@ -66,7 +66,7 @@ describe('Real Dev Environment Verification (Postgres & Redis, No Mock)', () => 
     const seatRepo = dataSource.getRepository(SeatEntity);
     const voucherRepo = dataSource.getRepository(VoucherEntity);
     const userRepo = dataSource.getRepository(UserEntity);
-    const seatLockService = new SeatLockService({} as any);
+    const seatLockService = new SeatLockService();
 
     const bookingService = new BookingService(
       bookingRepo,

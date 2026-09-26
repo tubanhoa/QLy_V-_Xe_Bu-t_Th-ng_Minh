@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RoutesService } from '../../src/modules/transit/routes.service.js';
 import { Repository } from 'typeorm';
-import { RouteEntity } from '../../database/entities/route.entity.js';
-import { RouteStationEntity } from '../../database/entities/route-station.entity.js';
+import { RouteEntity } from '../../src/database/entities/route.entity.js';
+import { RouteStationEntity } from '../../src/database/entities/route-station.entity.js';
 
 describe('RoutesService - Keyword Search (STT 1)', () => {
   let routesService: RoutesService;

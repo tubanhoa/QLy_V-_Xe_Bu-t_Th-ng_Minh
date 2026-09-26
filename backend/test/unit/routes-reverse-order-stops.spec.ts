@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BookingService } from '../../src/modules/booking/booking.service.js';
 import { Repository } from 'typeorm';
-import { BookingEntity } from '../../database/entities/booking.entity.js';
-import { TicketEntity } from '../../database/entities/ticket.entity.js';
-import { TripEntity } from '../../database/entities/trip.entity.js';
-import { SeatEntity } from '../../database/entities/seat.entity.js';
-import { VoucherEntity } from '../../database/entities/voucher.entity.js';
-import { UserEntity } from '../../database/entities/user.entity.js';
+import { BookingEntity } from '../../src/database/entities/booking.entity.js';
+import { TicketEntity } from '../../src/database/entities/ticket.entity.js';
+import { TripEntity } from '../../src/database/entities/trip.entity.js';
+import { SeatEntity } from '../../src/database/entities/seat.entity.js';
+import { VoucherEntity } from '../../src/database/entities/voucher.entity.js';
+import { UserEntity } from '../../src/database/entities/user.entity.js';
 import { SeatLockService } from '../../src/modules/booking/seat-lock.service.js';
 
 describe('Route Stations Sequence & Reverse Direction Order (STT 2)', () => {
