@@ -64,17 +64,44 @@ export class BookingService {
       })
       .andWhere('trip.status != :cancelled', { cancelled: TripStatus.CANCELLED });
 
-    if (dto.origin) {
+    if (dto.origin?.trim()) {
       query.andWhere(
-        '(LOWER(route.origin) LIKE :origin OR LOWER(route.name) LIKE :origin)',
-        { origin: `%${dto.origin.toLowerCase()}%` },
+        `(LOWER(route.origin) LIKE :origin OR LOWER(route.name) LIKE :origin OR EXISTS (
+          SELECT 1 FROM route_stations rs_o
+          JOIN stations s_o ON rs_o.station_id = s_o.id
+          WHERE rs_o.route_id = route.id AND LOWER(s_o.name) LIKE :origin
+        ))`,
+        { origin: `%${dto.origin.trim().toLowerCase()}%` },
       );
     }
 
-    if (dto.destination) {
+    if (dto.destination?.trim()) {
       query.andWhere(
-        '(LOWER(route.destination) LIKE :dest OR LOWER(route.name) LIKE :dest)',
-        { dest: `%${dto.destination.toLowerCase()}%` },
+        `(LOWER(route.destination) LIKE :dest OR LOWER(route.name) LIKE :dest OR EXISTS (
+          SELECT 1 FROM route_stations rs_d
+          JOIN stations s_d ON rs_d.station_id = s_d.id
+          WHERE rs_d.route_id = route.id AND LOWER(s_d.name) LIKE :dest
+        ))`,
+        { dest: `%${dto.destination.trim().toLowerCase()}%` },
+      );
+    }
+
+    if (dto.origin?.trim() && dto.destination?.trim()) {
+      query.andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM route_stations rs_from
+          JOIN stations s_from ON rs_from.station_id = s_from.id
+          JOIN route_stations rs_to ON rs_to.route_id = rs_from.route_id
+          JOIN stations s_to ON rs_to.station_id = s_to.id
+          WHERE rs_from.route_id = route.id
+            AND LOWER(s_from.name) LIKE :origin
+            AND LOWER(s_to.name) LIKE :dest
+            AND rs_from.stop_order >= rs_to.stop_order
+        )`,
+        {
+          origin: `%${dto.origin.trim().toLowerCase()}%`,
+          dest: `%${dto.destination.trim().toLowerCase()}%`,
+        },
       );
     }
 
