@@ -6,6 +6,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
@@ -14,8 +15,12 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 
+// TODO: xoá alias VERSION_NEUTRAL sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/auth
 @ApiTags('Authentication')
-@Controller(['api/v1/auth', 'api/auth'])
+@Controller({
+  path: 'auth',
+  version: ['1', VERSION_NEUTRAL],
+})
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

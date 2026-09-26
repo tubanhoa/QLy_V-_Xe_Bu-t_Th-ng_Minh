@@ -22,7 +22,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @ApiTags('Monthly Passes')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT')
-@Controller('api/v1')
+@Controller()
 export class MonthlyPassController {
   constructor(private readonly monthlyPassService: MonthlyPassService) {}
 

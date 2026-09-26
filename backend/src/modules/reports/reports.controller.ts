@@ -10,7 +10,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.MANAGER)
 @ApiBearerAuth('JWT')
-@Controller('api/v1/reports')
+@Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 

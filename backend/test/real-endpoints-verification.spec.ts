@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter.js';
@@ -17,12 +17,20 @@ describe('Real Dev Environment Verification (Postgres & Redis, HTTP Pipeline wit
 
     app = moduleFixture.createNestApplication();
 
-    // Enable Global ValidationPipe, Filter, and Interceptor exactly as in main.ts
+    // Enable Global Prefix, Versioning, ValidationPipe, Filter, and Interceptor exactly as in main.ts
+    app.setGlobalPrefix('api', {
+      exclude: ['/'],
+    });
+    app.enableVersioning({
+      type: VersioningType.URI,
+      defaultVersion: '1',
+    });
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
         transform: true,
-        forbidNonWhitelisted: false,
+        forbidNonWhitelisted: true,
         transformOptions: {
           enableImplicitConversion: true,
         },

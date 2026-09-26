@@ -21,7 +21,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 @ApiTags('Feedback & Ratings')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT')
-@Controller('api/v1')
+@Controller()
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
 

@@ -6,6 +6,7 @@ import {
   Body,
   Query,
   UseGuards,
+  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { BookingService } from './booking.service.js';
@@ -20,8 +21,12 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 
+// TODO: xoá alias VERSION_NEUTRAL và alias 'bookings' sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/booking
 @ApiTags('Booking & Tickets')
-@Controller(['api/v1/booking', 'api/booking', 'api/bookings'])
+@Controller({
+  path: ['booking', 'bookings'],
+  version: ['1', VERSION_NEUTRAL],
+})
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
 

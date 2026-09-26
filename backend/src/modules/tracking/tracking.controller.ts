@@ -17,7 +17,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
 @ApiTags('Tracking & Incidents')
-@Controller('api/v1')
+@Controller()
 export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 

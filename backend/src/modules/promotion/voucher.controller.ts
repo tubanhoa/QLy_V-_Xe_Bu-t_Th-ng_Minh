@@ -17,7 +17,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 
 @ApiTags('Vouchers & Promotions')
-@Controller('api/v1')
+@Controller()
 export class VoucherController {
   constructor(private readonly voucherService: VoucherService) {}
 
