@@ -46,9 +46,23 @@ export class BookingService {
 
   async searchTrips(dto: SearchTripsDto) {
     let targetDateStr = dto?.date?.trim();
-    if (!targetDateStr || isNaN(Date.parse(targetDateStr))) {
+    if (!targetDateStr) {
       const now = new Date();
       targetDateStr = now.toISOString().split('T')[0];
+    } else {
+      const isIsoFormat = /^\d{4}-\d{2}-\d{2}$/.test(targetDateStr);
+      if (!isIsoFormat || isNaN(Date.parse(targetDateStr))) {
+        throw new BadRequestException('Định dạng ngày không hợp lệ');
+      }
+      const [year, month, day] = targetDateStr.split('-').map(Number);
+      const testDate = new Date(year, month - 1, day);
+      if (
+        testDate.getFullYear() !== year ||
+        testDate.getMonth() !== month - 1 ||
+        testDate.getDate() !== day
+      ) {
+        throw new BadRequestException('Định dạng ngày không hợp lệ');
+      }
     }
 
     const startOfDay = new Date(`${targetDateStr}T00:00:00`);
