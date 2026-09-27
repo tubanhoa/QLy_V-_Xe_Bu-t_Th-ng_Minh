@@ -27,7 +27,18 @@ export interface TicketDetail extends TicketSummary {
   destination: string
   vehiclePlate: string
   qrDataUrl: string
+  qrData?: string
+  signature?: string
+  busNumber?: string
+  routeCode?: string
   checkedInAt: string | null
+  cachedAt?: string
+}
+
+export interface ResendTicketEmailResult {
+  success: boolean
+  message: string
+  recipientEmail?: string
 }
 
 export interface MyTicketsResponse {
