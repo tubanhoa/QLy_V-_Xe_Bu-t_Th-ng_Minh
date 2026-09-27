@@ -125,22 +125,28 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
                   </div>
                   <p className="mt-1 text-xs font-medium text-slate-600">Chọn vị trí ghế trên sơ đồ xe & thanh toán quét QR</p>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenModal?.('student-pass')}
-                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors cursor-pointer"
+                <Link
+                  href="/monthly-pass"
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block"
+                  id="desktop-nav-monthly-pass"
                 >
-                  <span className="block text-sm font-black text-slate-900">Đăng ký vé tháng HSSV</span>
-                  <p className="mt-1 text-xs font-medium text-slate-600">Hưởng mức trợ giá 50% dành cho sinh viên ICTU</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenModal?.('lookup')}
-                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors cursor-pointer"
+                  <div className="flex items-center justify-between">
+                    <span className="block text-sm font-black text-slate-900">Đăng ký vé tháng HSSV</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Trợ giá 50%</span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-slate-600">Đăng ký trực tuyến thẻ tháng sinh viên ICTU</p>
+                </Link>
+                <Link
+                  href="/my-tickets"
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block"
+                  id="desktop-nav-my-tickets"
                 >
-                  <span className="block text-sm font-black text-slate-900">Ví vé & Thẻ NFC Sinh Viên</span>
-                  <p className="mt-1 text-xs font-medium text-slate-600">Xem vé đã mua & thẻ xe buýt chạm 1 giây</p>
-                </button>
+                  <div className="flex items-center justify-between">
+                    <span className="block text-sm font-black text-slate-900">Vé của tôi & Mã QR</span>
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">Lịch sử</span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-slate-600">Xem vé đã mua, đổi vé, hủy vé & theo dõi xe realtime</p>
+                </Link>
               </div>
             </div>
           </div>
@@ -308,17 +314,15 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
                       Bảng điều hành
                     </Link>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOpen(false)
-                        onOpenModal?.('lookup')
-                      }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                    <Link
+                      href="/my-tickets"
+                      onClick={() => setOpen(false)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs"
+                      id="mobile-my-tickets-link"
                     >
                       <Ticket size={14} />
-                      <span>Ví vé của tôi</span>
-                    </button>
+                      <span>Vé của tôi</span>
+                    </Link>
                   )}
                   <button
                     type="button"
@@ -369,26 +373,22 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
               >
                 Mạng lưới tuyến xe buýt ICTU
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  onOpenModal?.('student-pass')
-                }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer"
+              <Link
+                href="/monthly-pass"
+                onClick={() => setOpen(false)}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors block"
+                id="mobile-nav-monthly-pass"
               >
                 Đăng ký vé tháng HSSV (-50%)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  onOpenModal?.('lookup')
-                }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer"
+              </Link>
+              <Link
+                href="/my-tickets"
+                onClick={() => setOpen(false)}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors block"
+                id="mobile-nav-my-tickets"
               >
-                Ví vé điện tử & Tra cứu
-              </button>
+                Vé của tôi & Mã QR
+              </Link>
               <button
                 type="button"
                 onClick={() => {

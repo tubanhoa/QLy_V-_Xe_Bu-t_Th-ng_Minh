@@ -43,6 +43,8 @@ import { BookingResultData, SeatItem } from '@/lib/types/booking'
 import { TripSearchResult } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
+import { VoucherInput } from '@/components/portal/voucher-input'
+import type { VoucherValidationResult } from '@/lib/types/promotion'
 
 interface SeatPickerModalProps {
   open: boolean
@@ -90,6 +92,7 @@ export function SeatPickerModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [voucherResult, setVoucherResult] = useState<VoucherValidationResult | null>(null)
 
   // Tích hợp Hook Realtime Seat Locking & Anti-Race-Condition
   const {
@@ -99,6 +102,8 @@ export function SeatPickerModal({
     isHoldingAction,
     conflictedSeatId,
     errorMessage: lockError,
+    successMessage: lockSuccess,
+    isExpired: isHoldExpired,
     remainingSeconds,
     toggleSeat,
     releaseAllHeldSeats,
@@ -138,6 +143,8 @@ export function SeatPickerModal({
   const totalPrice = selectedSeats.length * effectivePrice
   const totalStandardPrice = selectedSeats.length * basePrice
   const totalSavings = totalStandardPrice - totalPrice
+  const voucherDiscount = voucherResult?.discountAmount || 0
+  const finalPrice = Math.max(0, totalPrice - voucherDiscount)
 
   const displaySeats = seatMap?.seats && seatMap.seats.length > 0 ? seatMap.seats : FALLBACK_SEATS
 
@@ -148,6 +155,7 @@ export function SeatPickerModal({
       setStep('seats')
       setBookingResult(null)
       setSubmitError(null)
+      setVoucherResult(null)
     }, 250)
   }
 
@@ -255,9 +263,36 @@ export function SeatPickerModal({
           </div>
         </div>
 
-        {/* Cảnh báo Conflict Race Condition (Nếu có) */}
+        {/* 1. Thông báo khi ghế được giữ thành công (Point 1) */}
+        {lockSuccess && !lockError && (
+          <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in slide-in-from-top-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={15} className="shrink-0 text-emerald-200" />
+              <span>{lockSuccess}</span>
+            </div>
+            <span className="text-[10px] bg-emerald-700/80 px-2 py-0.5 rounded-full font-mono font-bold">10:00</span>
+          </div>
+        )}
+
+        {/* 2. Cảnh báo khi thời gian giữ chỗ sắp hết (dưới 2 phút) (Point 4) */}
+        {remainingSeconds > 0 && remainingSeconds <= 120 && (
+          <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-black flex items-center justify-between shrink-0 animate-pulse">
+            <div className="flex items-center gap-2">
+              <Flame size={15} className="shrink-0 text-white fill-white" />
+              <span>Thời gian giữ chỗ sắp hết! Vui lòng hoàn tất thanh toán trước khi ghế bị giải phóng.</span>
+            </div>
+            <span className="font-mono text-xs bg-amber-600/40 text-slate-950 px-2 py-0.5 rounded-md font-black">
+              {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')}
+            </span>
+          </div>
+        )}
+
+        {/* 3. Cảnh báo Xung đột Race Condition hoặc Hết hạn giữ chỗ (Points 5 & 9) */}
         {(lockError || submitError) && (
-          <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in fade-in">
+          <div className={cn(
+            "text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in fade-in",
+            isHoldExpired ? "bg-rose-600" : "bg-amber-600"
+          )}>
             <div className="flex items-center gap-2">
               <AlertCircle size={15} className="shrink-0" />
               <span>{lockError || submitError}</span>
@@ -265,10 +300,10 @@ export function SeatPickerModal({
             <button
               type="button"
               onClick={() => refreshSeatMap()}
-              className="underline text-[11px] font-black hover:text-amber-100 flex items-center gap-1 cursor-pointer"
+              className="underline text-[11px] font-black hover:opacity-90 flex items-center gap-1 cursor-pointer bg-black/20 px-2.5 py-1 rounded-lg"
             >
-              <RefreshCw size={11} />
-              Tải lại
+              <RefreshCw size={12} />
+              <span>{isHoldExpired ? 'Chọn lại ghế' : 'Tải lại'}</span>
             </button>
           </div>
         )}
@@ -471,6 +506,15 @@ export function SeatPickerModal({
                   </div>
                 </div>
 
+                {/* Voucher / Khuyến mãi */}
+                <div className="pt-1">
+                  <VoucherInput
+                    orderAmount={totalPrice}
+                    onApplied={setVoucherResult}
+                    disabled={selectedSeats.length === 0 || isSubmitting}
+                  />
+                </div>
+
                 {/* Bảng tính chi phí */}
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-600">
@@ -483,10 +527,16 @@ export function SeatPickerModal({
                       <span className="font-mono">-{totalSavings.toLocaleString('vi-VN')}đ</span>
                     </div>
                   )}
+                  {voucherDiscount > 0 && (
+                    <div className="flex justify-between text-violet-700 font-bold">
+                      <span>Mã giảm giá ({voucherResult?.code}):</span>
+                      <span className="font-mono">-{voucherDiscount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
                   <div className="border-t border-slate-200/80 pt-2 flex justify-between items-center">
                     <span className="font-black text-slate-900">Tổng thanh toán:</span>
                     <span className="text-base font-black text-[#005A36] font-mono">
-                      {totalPrice.toLocaleString('vi-VN')}đ
+                      {finalPrice.toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 </div>
@@ -513,7 +563,7 @@ export function SeatPickerModal({
                   ) : (
                     <>
                       <ShieldCheck size={18} />
-                      <span>Xác Nhận & Xuất Vé ({totalPrice.toLocaleString('vi-VN')}đ)</span>
+                      <span>Xác Nhận & Xuất Vé ({finalPrice.toLocaleString('vi-VN')}đ)</span>
                     </>
                   )}
                 </button>
@@ -579,12 +629,21 @@ export function SeatPickerModal({
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-sm pt-2">
+              <Link
+                href="/my-tickets"
+                onClick={handleClose}
+                className="flex-1 rounded-xl bg-white border border-[#005A36] text-[#005A36] hover:bg-emerald-50 py-2.5 text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5"
+                id="success-view-my-tickets"
+              >
+                <Ticket size={14} />
+                Xem trong Vé của tôi
+              </Link>
               <button
                 type="button"
                 onClick={handleClose}
                 className="flex-1 rounded-xl bg-[#005A36] py-2.5 text-xs font-black text-white hover:bg-[#004529] transition-all shadow-md cursor-pointer"
               >
-                Hoàn tất & Về trang chủ
+                Hoàn tất
               </button>
             </div>
           </div>

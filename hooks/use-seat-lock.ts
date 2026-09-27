@@ -18,6 +18,8 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
   const [isHoldingAction, setIsHoldingAction] = useState(false)
   const [conflictedSeatId, setConflictedSeatId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [isExpired, setIsExpired] = useState<boolean>(false)
   const [holdExpiresAt, setHoldExpiresAt] = useState<number | null>(null)
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
 
@@ -95,7 +97,9 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
         if (timerRef.current) clearInterval(timerRef.current)
         setHoldExpiresAt(null)
         setSelectedSeats([])
-        setErrorMessage('Thời gian giữ chỗ (10 phút) đã hết. Vui lòng chọn lại ghế.')
+        setIsExpired(true)
+        setSuccessMessage(null)
+        setErrorMessage('Thời gian giữ chỗ (10 phút) đã hết. Ghế đã được tự động mở lại cho người khác.')
         fetchSeatMap(false)
       }
     }
@@ -187,6 +191,8 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
       setSelectedSeats((prev) => [...prev, newHeldSeat])
       setHoldExpiresAt(Date.now() + 600 * 1000)
       setIsHoldingAction(false)
+      setIsExpired(false)
+      setSuccessMessage(`Đã giữ ghế ${seat.seatNumber} thành công! Bạn có 10 phút để hoàn tất thanh toán.`)
       return
     }
 
@@ -222,6 +228,8 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
           ? new Date(res.data.expiresAt).getTime()
           : Date.now() + 600 * 1000
         setHoldExpiresAt(expiresTime)
+        setIsExpired(false)
+        setSuccessMessage(`Đã giữ ghế ${seat.seatNumber} thành công! Bạn có 10 phút để hoàn tất thanh toán.`)
       } else {
         // Xung đột Race Condition (HTTP 409 Conflict): Có người khác bấm trước!
         setConflictedSeatId(seat.seatId)
@@ -274,6 +282,8 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     isHoldingAction,
     conflictedSeatId,
     errorMessage,
+    successMessage,
+    isExpired,
     remainingSeconds,
     holdExpiresAt,
     toggleSeat,
