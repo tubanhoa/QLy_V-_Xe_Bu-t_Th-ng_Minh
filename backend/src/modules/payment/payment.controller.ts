@@ -13,6 +13,7 @@ import type { Request } from 'express';
 import { PaymentService } from './payment.service.js';
 import { CreatePaymentUrlDto, RefundTicketDto } from './dto/payment.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
@@ -52,6 +53,17 @@ export class PaymentController {
   async handleVNPayIpnPost(@Query() query: Record<string, string>, @Body() body: Record<string, string>) {
     const params = { ...query, ...body };
     return this.paymentService.handleVNPayIpn(params);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post('cancel/:bookingId')
+  @ApiOperation({ summary: 'Hủy thanh toán đơn đặt vé và giải phóng ghế lập tức' })
+  async cancelPayment(
+    @Param('bookingId') bookingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.paymentService.cancelPayment(bookingId, userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
