@@ -3,6 +3,9 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Inject,
+  forwardRef,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, Not } from 'typeorm';
@@ -15,6 +18,7 @@ import { UserEntity } from '../../database/entities/user.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto } from './dto/trip.dto.js';
 import { TripStatus, TicketStatus } from '../../common/constants/status.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
+import { SeatLockService } from '../booking/seat-lock.service.js';
 
 @Injectable()
 export class TripsService {
@@ -31,6 +35,9 @@ export class TripsService {
     private readonly ticketRepository: Repository<TicketEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    @Inject(forwardRef(() => SeatLockService))
+    @Optional()
+    private readonly seatLockService?: SeatLockService,
   ) {}
 
   async generateSchedule(dto: GenerateTripsDto) {
@@ -129,7 +136,7 @@ export class TripsService {
     return trip;
   }
 
-  async getSeatMap(tripId: string) {
+  async getSeatMap(tripId: string, currentUserId?: string) {
     const trip = await this.findById(tripId);
 
     let vehicleId = trip.vehicleId;
@@ -170,29 +177,69 @@ export class TripsService {
       });
     }
 
+    const lockedSeatsMap = this.seatLockService
+      ? await this.seatLockService.getLockedSeatsForTrip(tripId)
+      : new Map<string, { userId: string; expiresAt: number }>();
+
+    let holdingCount = 0;
     const seatMap = seats.map((seat) => {
       const bookingInfo = bookedSeatMap.get(seat.id);
+      if (bookingInfo) {
+        return {
+          seatId: seat.id,
+          seatNumber: seat.seatNumber,
+          rowNumber: seat.rowNumber,
+          columnLabel: seat.columnLabel,
+          seatType: seat.seatType,
+          isBooked: true,
+          bookingStatus: bookingInfo.status || 'booked',
+          isHeldByMe: false,
+          holdExpiresAt: null,
+        };
+      }
+
+      const lockInfo = lockedSeatsMap.get(seat.id);
+      if (lockInfo) {
+        holdingCount++;
+        const isHeldByMe = currentUserId ? lockInfo.userId === currentUserId : false;
+        return {
+          seatId: seat.id,
+          seatNumber: seat.seatNumber,
+          rowNumber: seat.rowNumber,
+          columnLabel: seat.columnLabel,
+          seatType: seat.seatType,
+          isBooked: false,
+          bookingStatus: 'holding',
+          isHeldByMe,
+          holdExpiresAt: new Date(lockInfo.expiresAt).toISOString(),
+        };
+      }
+
       return {
         seatId: seat.id,
         seatNumber: seat.seatNumber,
         rowNumber: seat.rowNumber,
         columnLabel: seat.columnLabel,
         seatType: seat.seatType,
-        isBooked: !!bookingInfo,
-        bookingStatus: bookingInfo?.status || 'available',
+        isBooked: false,
+        bookingStatus: 'available',
+        isHeldByMe: false,
+        holdExpiresAt: null,
       };
     });
 
     const totalSeats = seats.length;
     const bookedCount = bookedSeatMap.size;
-    const availableCount = totalSeats - bookedCount;
+    const availableCount = Math.max(0, totalSeats - bookedCount - holdingCount);
 
     return {
       tripId: trip.id,
       routeName: trip.route?.name,
       departureTime: trip.departureTime,
+      vehiclePlate: trip.vehicle?.licensePlate,
       totalSeats,
       bookedCount,
+      holdingCount,
       availableCount,
       seats: seatMap,
     };
