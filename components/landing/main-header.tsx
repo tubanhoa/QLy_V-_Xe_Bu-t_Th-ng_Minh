@@ -25,9 +25,10 @@ import { cn } from '@/lib/utils'
 interface MainHeaderProps {
   onOpenSeatPicker?: () => void
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
+  onOpenTicketModal?: () => void
 }
 
-export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
+export function MainHeader({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }: MainHeaderProps) {
   const { isAuthenticated, user, role, logout } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
@@ -136,17 +137,24 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
                   </div>
                   <p className="mt-1 text-xs font-medium text-slate-600">Đăng ký trực tuyến thẻ tháng sinh viên ICTU</p>
                 </Link>
-                <Link
-                  href="/my-tickets"
-                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenTicketModal) {
+                      onOpenTicketModal()
+                    } else {
+                      window.location.href = '/my-tickets'
+                    }
+                  }}
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block cursor-pointer"
                   id="desktop-nav-my-tickets"
                 >
                   <div className="flex items-center justify-between">
                     <span className="block text-sm font-black text-slate-900">Vé của tôi & Mã QR</span>
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">Lịch sử</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
                   </div>
-                  <p className="mt-1 text-xs font-medium text-slate-600">Xem vé đã mua, đổi vé, hủy vé & theo dõi xe realtime</p>
-                </Link>
+                  <p className="mt-1 text-xs font-medium text-slate-600">Xem vé đã mua, quét mã QR, đổi vé & theo dõi xe realtime</p>
+                </button>
               </div>
             </div>
           </div>
@@ -209,7 +217,13 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => onOpenModal?.('lookup')}
+                  onClick={() => {
+                    if (onOpenTicketModal) {
+                      onOpenTicketModal()
+                    } else {
+                      onOpenModal?.('lookup')
+                    }
+                  }}
                   title="Mở ví vé của tôi & thẻ sinh viên"
                   className="flex items-center gap-2 rounded-xl bg-white/90 border border-emerald-300/80 px-3 py-1.5 shadow-xs backdrop-blur-md hover:bg-emerald-50/80 hover:border-emerald-400 transition-all cursor-pointer text-left group"
                 >
@@ -314,15 +328,22 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
                       Bảng điều hành
                     </Link>
                   ) : (
-                    <Link
-                      href="/my-tickets"
-                      onClick={() => setOpen(false)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false)
+                        if (onOpenTicketModal) {
+                          onOpenTicketModal()
+                        } else {
+                          window.location.href = '/my-tickets'
+                        }
+                      }}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
                       id="mobile-my-tickets-link"
                     >
                       <Ticket size={14} />
                       <span>Vé của tôi</span>
-                    </Link>
+                    </button>
                   )}
                   <button
                     type="button"

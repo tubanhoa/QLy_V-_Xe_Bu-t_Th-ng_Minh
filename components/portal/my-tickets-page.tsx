@@ -19,9 +19,11 @@ import {
   LogIn,
   QrCode,
   Bus,
+  WifiOff,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
+import { offlineTicketCache } from '@/lib/services/offline-ticket-cache'
 import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketFilterStatus } from '@/lib/types/ticket'
 import {
@@ -136,6 +138,7 @@ export function MyTicketsPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TicketFilterStatus>('all')
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
 
   const loadTickets = useCallback(async () => {
     if (!isAuthenticated) {
@@ -159,10 +162,46 @@ export function MyTicketsPage() {
     loadTickets()
   }, [loadTickets])
 
+  useEffect(() => {
+    setIsOffline(!offlineTicketCache.isOnline())
+    const handleOnline = () => {
+      setIsOffline(false)
+      loadTickets()
+    }
+    const handleOffline = () => setIsOffline(true)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [loadTickets])
+
   const displayedTickets = filterTickets(tickets, filter)
 
   return (
     <div className="space-y-4">
+      {/* Offline Mode Alert */}
+      {isOffline && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3.5 flex items-center justify-between text-xs text-amber-900 gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <WifiOff className="w-5 h-5 text-amber-600 shrink-0 animate-pulse" />
+            <div>
+              <p className="font-bold">Chế độ Ngoại tuyến (Offline Mode)</p>
+              <p className="text-[11px] text-amber-700">
+                Đang hiển thị danh sách vé lưu tạm trên thiết bị. Bạn vẫn có thể bấm vào vé để mở mã QR quét cổng xe buýt bình thường.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => loadTickets()}
+            className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 font-bold hover:bg-amber-100/50 shrink-0 cursor-pointer shadow-2xs"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      )}
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">

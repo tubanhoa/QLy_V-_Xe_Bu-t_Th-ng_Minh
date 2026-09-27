@@ -10,6 +10,7 @@ import { QuickAccessModals } from './quick-access-modals'
 import { SeatPickerModal } from './seat-picker-modal'
 import { TopUtilityBar } from './top-utility-bar'
 import { TripSearchModal } from './trip-search-modal'
+import { TicketManagementModal } from './ticket-management-modal'
 import { VietcombankHero } from './vietcombank-hero'
 import { AuthPromptModal } from '@/components/auth/auth-prompt-modal'
 import { useAuth } from '@/lib/auth-context'
@@ -19,10 +20,12 @@ export function LandingPage() {
   const { isAuthenticated } = useAuth()
   const [isSeatPickerOpen, setIsSeatPickerOpen] = useState(false)
   const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
   const [pendingTrip, setPendingTrip] = useState<TripSearchResult | null>(null)
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
 
@@ -127,7 +130,14 @@ export function LandingPage() {
         <TopUtilityBar />
         <MainHeader
           onOpenSeatPicker={() => setIsTripSearchOpen(true)}
-          onOpenModal={(modal) => setActiveModal(modal)}
+          onOpenModal={(modal) => {
+            if (modal === 'lookup') {
+              setIsTicketModalOpen(true)
+            } else {
+              setActiveModal(modal)
+            }
+          }}
+          onOpenTicketModal={() => setIsTicketModalOpen(true)}
         />
       </div>
 
@@ -159,7 +169,14 @@ export function LandingPage() {
             setSelectedTrip(null)
             setIsTripSearchOpen(true)
           }}
-          onOpenModal={(modal) => setActiveModal(modal)}
+          onOpenModal={(modal) => {
+            if (modal === 'lookup') {
+              setIsTicketModalOpen(true)
+            } else {
+              setActiveModal(modal)
+            }
+          }}
+          onOpenTicketModal={() => setIsTicketModalOpen(true)}
         />
       </main>
 
@@ -207,11 +224,25 @@ export function LandingPage() {
         initialOrigin={searchOrigin || 'ĐH CNTT & TT Thái Nguyên'}
         initialDestination={searchDestination || 'Bến Xe Trung Tâm Thái Nguyên'}
         selectedTrip={selectedTrip}
+        onViewMyTickets={(tId) => {
+          setSelectedTicketId(tId || null)
+          setIsTicketModalOpen(true)
+        }}
       />
 
-      {/* Interactive Quick Access Modals (Routes, News, Student Pass, Lookup) */}
+      {/* Cửa sổ nổi (Floating Modal Window): Vé Điện Tử & Mã QR Soát Vé */}
+      <TicketManagementModal
+        open={isTicketModalOpen}
+        onClose={() => {
+          setIsTicketModalOpen(false)
+          setSelectedTicketId(null)
+        }}
+        initialTicketId={selectedTicketId}
+      />
+
+      {/* Interactive Quick Access Modals (Routes, News, Student Pass) */}
       <QuickAccessModals
-        activeModal={activeModal}
+        activeModal={activeModal === 'lookup' ? null : activeModal}
         onClose={() => setActiveModal(null)}
         onBookSeat={(route?: BusRoute) => {
           if (route) {

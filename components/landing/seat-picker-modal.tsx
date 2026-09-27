@@ -52,6 +52,7 @@ interface SeatPickerModalProps {
   initialOrigin?: string
   initialDestination?: string
   selectedTrip?: TripSearchResult | null
+  onViewMyTickets?: (ticketId?: string) => void
 }
 
 // Fallback 28 ghế tiêu chuẩn khi chưa có dữ liệu backend
@@ -81,6 +82,7 @@ export function SeatPickerModal({
   initialOrigin = 'KTX ICTU',
   initialDestination = 'Bến xe Đồng Quang',
   selectedTrip = null,
+  onViewMyTickets,
 }: SeatPickerModalProps) {
   const { isAuthenticated, user } = useAuth()
 
@@ -629,15 +631,22 @@ export function SeatPickerModal({
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-sm pt-2">
-              <Link
-                href="/my-tickets"
-                onClick={handleClose}
-                className="flex-1 rounded-xl bg-white border border-[#005A36] text-[#005A36] hover:bg-emerald-50 py-2.5 text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5"
+              <button
+                type="button"
+                onClick={() => {
+                  handleClose()
+                  if (onViewMyTickets) {
+                    onViewMyTickets(bookingResult?.tickets?.[0]?.id || bookingResult?.tickets?.[0]?.ticketCode)
+                  } else {
+                    window.location.href = '/my-tickets'
+                  }
+                }}
+                className="flex-1 rounded-xl bg-white border border-[#005A36] text-[#005A36] hover:bg-emerald-50 py-2.5 text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 id="success-view-my-tickets"
               >
                 <Ticket size={14} />
                 Xem trong Vé của tôi
-              </Link>
+              </button>
               <button
                 type="button"
                 onClick={handleClose}

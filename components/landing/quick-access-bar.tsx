@@ -16,9 +16,10 @@ import { cn } from '@/lib/utils'
 interface QuickAccessBarProps {
   onOpenSeatPicker: () => void
   onOpenModal: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
+  onOpenTicketModal?: () => void
 }
 
-export function QuickAccessBar({ onOpenSeatPicker, onOpenModal }: QuickAccessBarProps) {
+export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }: QuickAccessBarProps) {
   const items = [
     {
       id: 'suggest',
@@ -53,7 +54,13 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal }: QuickAccessBar
       icon: Search,
       label: 'Tra cứu & Vé đã mua',
       badge: null,
-      onClick: () => onOpenModal('lookup'),
+      onClick: () => {
+        if (onOpenTicketModal) {
+          onOpenTicketModal()
+        } else {
+          onOpenModal('lookup')
+        }
+      },
     },
   ]
 
