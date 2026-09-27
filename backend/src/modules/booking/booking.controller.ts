@@ -72,9 +72,45 @@ export class BookingController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @Get('my-tickets/:id')
-  @ApiOperation({ summary: 'Chi tiết vé và hiển thị mã QR điện tử' })
+  @ApiOperation({ summary: 'Chi tiết vé và hiển thị mã QR điện tử của hành khách' })
   async getTicketDetail(@Param('id') ticketId: string, @CurrentUser('id') userId: string) {
     return this.bookingService.getTicketDetail(ticketId, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get('tickets/:id')
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết vé điện tử và dữ liệu mã QR (Hành khách hoặc Nhân viên)' })
+  async getTicketDetailById(
+    @Param('id') ticketId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole?: string,
+  ) {
+    return this.bookingService.getTicketDetail(ticketId, userId, userRole);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get('tickets/:id/qr')
+  @ApiOperation({ summary: 'Lấy thông tin mã QR chứa dữ liệu mã hóa của vé' })
+  async getTicketQr(
+    @Param('id') ticketId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole?: string,
+  ) {
+    return this.bookingService.getTicketQr(ticketId, userId, userRole);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post('tickets/:id/resend-email')
+  @ApiOperation({ summary: 'Gửi lại email vé điện tử kèm mã QR' })
+  async resendTicketEmail(
+    @Param('id') ticketId: string,
+    @CurrentUser('id') userId: string,
+    @Body('email') customEmail?: string,
+  ) {
+    return this.bookingService.resendTicketEmail(ticketId, userId, customEmail);
   }
 
   @UseGuards(JwtAuthGuard)

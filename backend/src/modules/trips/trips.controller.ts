@@ -71,7 +71,7 @@ export class TripsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
-  @Post('driver/verify-qr')
+  @Post(['driver/verify-qr', 'verify-qr'])
   @ApiOperation({ summary: 'Soát vé QR online cho hành khách khi lên xe (Driver, Conductor)' })
   async verifyQr(@Body() dto: VerifyQrDto, @CurrentUser('id') conductorId: string) {
     return this.tripsService.verifyQr(dto, conductorId);
