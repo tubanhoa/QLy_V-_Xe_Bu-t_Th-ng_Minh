@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { RouteStationEntity } from './route-station.entity.js';
 
@@ -53,5 +54,5 @@ export class RouteEntity {
   updatedAt: Date;
 
   @OneToMany(() => RouteStationEntity, (rs) => rs.route, { cascade: true })
-  routeStations: RouteStationEntity[];
+  routeStations: Relation<RouteStationEntity[]>;
 }

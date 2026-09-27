@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { RouteStationEntity } from './route-station.entity.js';
 
@@ -34,5 +35,5 @@ export class StationEntity {
   createdAt: Date;
 
   @OneToMany(() => RouteStationEntity, (rs) => rs.station)
-  routeStations: RouteStationEntity[];
+  routeStations: Relation<RouteStationEntity[]>;
 }

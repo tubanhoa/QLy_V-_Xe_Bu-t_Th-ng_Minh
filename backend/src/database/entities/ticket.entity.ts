@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  type Relation,
 } from 'typeorm';
 import { BookingEntity } from './booking.entity.js';
 import { SeatEntity } from './seat.entity.js';
@@ -25,7 +26,7 @@ export class TicketEntity {
 
   @ManyToOne(() => BookingEntity, (booking) => booking.tickets, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'booking_id' })
-  booking: BookingEntity;
+  booking: Relation<BookingEntity>;
 
   @Column({ name: 'seat_id', type: 'uuid' })
   seatId: string;

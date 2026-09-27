@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { Role } from '../../common/constants/roles.constant.js';
 import { UserEntity } from './user.entity.js';
@@ -34,5 +35,5 @@ export class RoleEntity {
   createdAt: Date;
 
   @OneToMany(() => UserEntity, (user) => user.role)
-  users: UserEntity[];
+  users: Relation<UserEntity[]>;
 }
