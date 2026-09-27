@@ -168,8 +168,7 @@ export function SeatPickerModal({
             passengerName: passengerName.trim() || 'Hành khách',
             passengerPhone: phone.trim() || undefined,
           })),
-          isStudent,
-          studentIdCard: user?.studentId || undefined,
+          paymentMethod: paymentMethod === 'ictupay' ? 'cash' : paymentMethod,
         }
 
         const res = await bookingService.createBooking(payload)

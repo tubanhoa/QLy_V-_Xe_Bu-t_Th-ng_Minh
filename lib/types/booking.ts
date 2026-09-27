@@ -46,9 +46,8 @@ export interface PassengerInfoPayload {
 export interface CreateBookingPayload {
   tripId: string
   passengers: PassengerInfoPayload[]
-  couponCode?: string
-  isStudent?: boolean
-  studentIdCard?: string
+  voucherCode?: string
+  paymentMethod?: string
 }
 
 export interface TicketResultItem {
