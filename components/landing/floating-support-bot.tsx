@@ -55,7 +55,7 @@ export function FloatingSupportBot() {
   return (
     <>
       {/* Unified Single Floating Support Capsule in Bottom Right with Idle Levitation */}
-      <div className="fixed bottom-5 right-5 z-40 animate-bot-breathe">
+      <div className="fixed bottom-24 right-4 sm:bottom-24 sm:right-6 z-40 animate-bot-breathe">
         {/* Subtle proactive speech bubble prompt */}
         {!isOpen && showHint && (
           <div
@@ -71,7 +71,7 @@ export function FloatingSupportBot() {
               setIsOpen(true)
               setShowHint(false)
             }}
-            className="cursor-pointer absolute -top-11 right-0 flex items-center gap-1.5 rounded-2xl bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-800 shadow-xl border border-emerald-200/80 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300 hover:scale-105 transition-transform"
+            className="cursor-pointer absolute -top-11 right-0 flex items-center gap-1.5 rounded-2xl bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-xl border border-emerald-200/80 animate-in fade-in slide-in-from-bottom-2 duration-300 hover:scale-105 transition-transform"
           >
             <span className="relative flex size-2 items-center justify-center">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 animate-ping opacity-75" />
@@ -100,7 +100,7 @@ export function FloatingSupportBot() {
           }}
           aria-label={isOpen ? 'Đóng trợ lý ảo' : 'Mở trợ lý ảo ICTU Bus 24/7'}
           className={cn(
-            'flex items-center gap-2.5 rounded-full bg-[#005A36] px-4 py-2.5 text-white shadow-xl shadow-emerald-950/25 border-2 border-white/95 backdrop-blur-md transition-all duration-200 hover:bg-[#004529] active:scale-95',
+            'flex items-center gap-2.5 rounded-full bg-[#005A36] px-4 py-2.5 text-white shadow-xl shadow-emerald-950/25 border-2 border-white/95 transition-all duration-200 hover:bg-[#004529] active:scale-95',
             isOpen ? 'px-3 py-3' : '',
           )}
         >

@@ -125,7 +125,10 @@ export function LandingPage() {
       {/* 2-Tier Header with Transparent Background */}
       <div className="relative shrink-0 z-30">
         <TopUtilityBar />
-        <MainHeader onOpenSeatPicker={() => setIsTripSearchOpen(true)} />
+        <MainHeader
+          onOpenSeatPicker={() => setIsTripSearchOpen(true)}
+          onOpenModal={(modal) => setActiveModal(modal)}
+        />
       </div>
 
       {/* Middle Hero Viewport Stage */}
