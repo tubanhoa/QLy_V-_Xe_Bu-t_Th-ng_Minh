@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
   Armchair,
   ArrowRight,
@@ -9,6 +10,8 @@ import {
   Clock,
   CreditCard,
   Download,
+  Lock,
+  LogIn,
   MapPin,
   QrCode,
   ShieldCheck,
@@ -18,6 +21,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 
 import { TripSearchResult } from '@/lib/types/sprint1'
+import { useAuth } from '@/lib/auth-context'
 
 interface SeatPickerModalProps {
   open: boolean
@@ -57,12 +61,20 @@ export function SeatPickerModal({
   initialDestination = 'Bến xe Đồng Quang',
   selectedTrip = null,
 }: SeatPickerModalProps) {
+  const { isAuthenticated, user } = useAuth()
   const [step, setStep] = useState<'seats' | 'info' | 'ticket'>('seats')
   const [selectedSeats, setSelectedSeats] = useState<string[]>(['02B'])
   const [selectedTripTime, setSelectedTripTime] = useState('07:45')
-  const [passengerName, setPassengerName] = useState('Nguyễn Hoàng Long')
-  const [phone, setPhone] = useState('0981.234.567')
+  const [passengerName, setPassengerName] = useState(user?.fullName || user?.name || '')
+  const [phone, setPhone] = useState(user?.phoneNumber || '')
   const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo'>('vnpay')
+
+  useEffect(() => {
+    if (user) {
+      if (user.fullName || user.name) setPassengerName(user.fullName || user.name)
+      if (user.phoneNumber) setPhone(user.phoneNumber)
+    }
+  }, [user])
 
   if (!open) return null
 
@@ -117,6 +129,22 @@ export function SeatPickerModal({
                 {originName} ⇄ {destinationName}
               </p>
             </div>
+
+            {/* Guest Notice */}
+            {!isAuthenticated && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 text-xs text-amber-900 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Lock size={16} className="text-amber-600 shrink-0" />
+                  <span>Bạn đang duyệt ở chế độ khách vãng lai. Vui lòng đăng nhập để thực hiện đặt vé và giữ chỗ.</span>
+                </div>
+                <Link
+                  href="/login?redirect=/"
+                  className="rounded-xl bg-[#005A36] px-3.5 py-1.5 font-bold text-white text-xs hover:bg-[#004529] shrink-0"
+                >
+                  Đăng nhập
+                </Link>
+              </div>
+            )}
 
             {/* Trip Selector Chips */}
             <div>
@@ -230,14 +258,23 @@ export function SeatPickerModal({
                 </p>
               </div>
 
-              <button
-                type="button"
-                disabled={selectedSeats.length === 0}
-                onClick={() => setStep('info')}
-                className="flex items-center gap-2 rounded-xl bg-[#00A86B] px-6 py-3 font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:opacity-50 active:scale-95 transition-all text-sm"
-              >
-                Tiếp tục điền thông tin <ArrowRight size={16} />
-              </button>
+              {!isAuthenticated ? (
+                <Link
+                  href="/login?redirect=/"
+                  className="flex items-center gap-2 rounded-xl bg-[#005A36] px-6 py-3 font-bold text-white shadow-lg hover:bg-[#004529] active:scale-95 transition-all text-sm cursor-pointer"
+                >
+                  <LogIn size={16} /> Đăng nhập để tiếp tục
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled={selectedSeats.length === 0}
+                  onClick={() => setStep('info')}
+                  className="flex items-center gap-2 rounded-xl bg-[#00A86B] px-6 py-3 font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:opacity-50 active:scale-95 transition-all text-sm cursor-pointer"
+                >
+                  Tiếp tục điền thông tin <ArrowRight size={16} />
+                </button>
+              )}
             </div>
           </div>
         )}

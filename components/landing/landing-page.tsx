@@ -11,13 +11,18 @@ import { SeatPickerModal } from './seat-picker-modal'
 import { TopUtilityBar } from './top-utility-bar'
 import { TripSearchModal } from './trip-search-modal'
 import { VietcombankHero } from './vietcombank-hero'
+import { AuthPromptModal } from '@/components/auth/auth-prompt-modal'
+import { useAuth } from '@/lib/auth-context'
 import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
 
 export function LandingPage() {
+  const { isAuthenticated } = useAuth()
   const [isSeatPickerOpen, setIsSeatPickerOpen] = useState(false)
   const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
+  const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
+  const [pendingTrip, setPendingTrip] = useState<TripSearchResult | null>(null)
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
 
@@ -161,8 +166,24 @@ export function LandingPage() {
           setSearchOrigin(trip.origin)
           setSearchDestination(trip.destination)
           setIsTripSearchOpen(false)
-          setIsSeatPickerOpen(true)
+
+          if (!isAuthenticated) {
+            setPendingTrip(trip)
+            setIsAuthPromptOpen(true)
+          } else {
+            setIsSeatPickerOpen(true)
+          }
         }}
+      />
+
+      {/* Auth Prompt Modal (Required for Guests attempting to book) */}
+      <AuthPromptModal
+        open={isAuthPromptOpen}
+        onClose={() => {
+          setIsAuthPromptOpen(false)
+          setPendingTrip(null)
+        }}
+        trip={pendingTrip}
       />
 
       {/* Interactive 28-Seat Bus Booking & QR Ticket Modal */}

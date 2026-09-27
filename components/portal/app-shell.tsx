@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Layout } from 'antd'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
-import { ROLE_NAV } from '@/lib/rbac'
+import { ROLE_NAV, type Role } from '@/lib/rbac'
 import { BottomSheet } from './bottom-sheet'
 import { DriverScanner } from './dashboard/driver-scanner'
 import { DriverManifest } from './dashboard/driver-manifest'
@@ -46,7 +46,9 @@ export function AppShell() {
 
   useEffect(() => () => clearTimeout(loadingTimer.current), [])
 
-  const navItems = ROLE_NAV[role]
+  const portalRole: Role =
+    role === 'driver' ? 'driver' : role === 'dispatcher' || role === 'manager' ? 'dispatcher' : 'admin'
+  const navItems = ROLE_NAV[portalRole] || ROLE_NAV.admin
   const activeItem = navItems.find((item) => item.key === selectedKey) ?? navItems[0]
 
   const handleNavigate = useCallback((key: string) => {
@@ -70,7 +72,7 @@ export function AppShell() {
     if (loading) return <ContentSkeleton />
 
     // Phân hệ Driver (Tài xế / Phụ xe)
-    if (role === 'driver') {
+    if (portalRole === 'driver') {
       if (activeItem.key === 'driver-trip') return <DriverDashboard onNavigate={handleNavigate} />
       if (activeItem.key === 'scanner') return <DriverScanner onBack={() => handleNavigate('driver-trip')} />
       if (activeItem.key === 'manifest') return <DriverManifest onBack={() => handleNavigate('driver-trip')} />
@@ -78,8 +80,8 @@ export function AppShell() {
     }
 
     // Phân hệ Dispatcher (Điều hành viên)
-    if (role === 'dispatcher') {
-      if (activeItem.key === 'dashboard') return <OpsDashboard role={role} />
+    if (portalRole === 'dispatcher') {
+      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
       if (activeItem.key === 'gps') return <DispatcherGpsMap />
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
@@ -87,8 +89,8 @@ export function AppShell() {
     }
 
     // Phân hệ Super Admin (Quản trị viên)
-    if (role === 'admin') {
-      if (activeItem.key === 'dashboard') return <OpsDashboard role={role} />
+    if (portalRole === 'admin') {
+      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
       if (activeItem.key === 'routes') return <AdminRoutes />
       if (activeItem.key === 'fleet') return <AdminFleet />
       if (activeItem.key === 'payments') return <AdminPayments />
@@ -107,7 +109,7 @@ export function AppShell() {
         <DesktopSider
           collapsed={collapsed}
           user={user}
-          role={role}
+          role={portalRole}
           items={navItems}
           activeKey={activeItem.key}
           onNavigate={handleNavigate}
@@ -124,9 +126,9 @@ export function AppShell() {
         />
         <Layout.Content>
           <div
-            key={`${role}-${activeItem.key}-${loading}`}
+            key={`${portalRole}-${activeItem.key}-${loading}`}
             className={
-              role === 'driver'
+              portalRole === 'driver'
                 ? 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-32 duration-300 md:p-6'
                 : 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-10 duration-300 md:p-6'
             }
@@ -136,7 +138,7 @@ export function AppShell() {
         </Layout.Content>
       </Layout>
 
-      {role === 'driver' && (
+      {portalRole === 'driver' && (
         <DriverBottomNav
           activeKey={activeItem.key}
           onNavigate={handleNavigate}
@@ -146,7 +148,7 @@ export function AppShell() {
 
       <BottomSheet open={sheetOpen} onClose={closeSheet} title="Menu điều hướng">
         <div className="px-1 pb-3">
-          <OperatorCard user={user} role={role} variant="sheet" />
+          <OperatorCard user={user} role={portalRole} variant="sheet" />
         </div>
         <nav aria-label="Điều hướng chính">
           <NavMenu items={navItems} activeKey={activeItem.key} onNavigate={handleNavigate} theme={themeMode} />

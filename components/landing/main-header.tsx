@@ -6,12 +6,14 @@ import {
   ChevronDown,
   LayoutDashboard,
   LogIn,
+  LogOut,
   Menu,
   PhoneCall,
   Route,
   ShieldCheck,
   Sparkles,
   Ticket,
+  User,
   X,
   Zap,
 } from 'lucide-react'
@@ -25,7 +27,7 @@ interface MainHeaderProps {
 }
 
 export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
-  const { isAuthenticated, user, role } = useAuth()
+  const { isAuthenticated, user, role, logout } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -169,29 +171,65 @@ export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
         </nav>
 
         {/* Right CTA - Dynamic auth state */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {isAuthenticated && user ? (
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-xl btn-vcb-solid text-white font-black px-4 py-2.5 text-xs sm:text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.02] active:scale-95"
-              style={{ backgroundColor: '#005a36', color: '#ffffff' }}
-            >
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 animate-ping opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-              </span>
-              <LayoutDashboard size={17} strokeWidth={2.2} className="text-white" aria-hidden="true" />
-              <span className="text-white font-black">Bảng Điều Hành ({ROLE_META[role]?.shortLabel})</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              {role === 'admin' || role === 'dispatcher' || role === 'driver' || role === 'manager' ? (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 rounded-xl btn-vcb-solid text-white font-black px-3.5 py-2 text-xs sm:text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.02] active:scale-95"
+                  style={{ backgroundColor: '#005a36', color: '#ffffff' }}
+                >
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 animate-ping opacity-75" />
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+                  </span>
+                  <LayoutDashboard size={16} strokeWidth={2.2} className="text-white" aria-hidden="true" />
+                  <span className="text-white font-black">Bảng Điều Hành</span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 rounded-xl bg-white/90 border border-emerald-300/80 px-3 py-1.5 shadow-xs backdrop-blur-md">
+                  <div className="flex size-7 items-center justify-center rounded-lg bg-[#005A36] text-white text-xs font-black">
+                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="flex flex-col text-left leading-tight pr-1">
+                    <span className="text-xs font-black text-slate-900 truncate max-w-[130px]">
+                      {user.fullName || user.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700">
+                      {user.studentId ? `SV: ${user.studentId}` : user.roleTitle || 'Hành khách'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Logout button */}
+              <button
+                type="button"
+                onClick={logout}
+                title="Đăng xuất khỏi tài khoản"
+                className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white/90 text-slate-600 hover:text-rose-600 hover:border-rose-200 transition-colors shadow-xs"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
           ) : (
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl btn-vcb-solid text-white font-black px-5 py-2.5 text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.03] hover:shadow-lg active:scale-95"
-              style={{ backgroundColor: '#005a36', color: '#ffffff' }}
-            >
-              <LogIn size={18} strokeWidth={2.5} className="text-white" aria-hidden="true" />
-              <span className="text-white font-black">Đăng nhập</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/register"
+                className="hidden sm:inline-flex items-center rounded-xl border-2 border-[#005A36] bg-white/80 hover:bg-emerald-50 px-3.5 py-2 text-xs sm:text-sm font-black text-[#005A36] shadow-xs transition-all active:scale-95"
+              >
+                Đăng ký
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 rounded-xl btn-vcb-solid text-white font-black px-4 py-2 text-xs sm:text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.03] active:scale-95"
+                style={{ backgroundColor: '#005a36', color: '#ffffff' }}
+              >
+                <LogIn size={16} strokeWidth={2.5} className="text-white" aria-hidden="true" />
+                <span className="text-white font-black">Đăng nhập</span>
+              </Link>
+            </div>
           )}
 
           {/* Mobile Menu Button */}
@@ -237,15 +275,39 @@ export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
 
           <div className="mt-6 flex flex-col gap-2.5">
             {isAuthenticated && user ? (
-              <Link
-                href="/dashboard"
-                onClick={() => setOpen(false)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl btn-vcb-solid py-3 text-sm font-black text-white shadow-md"
-                style={{ backgroundColor: '#005a36', color: '#ffffff' }}
-              >
-                <LayoutDashboard size={18} strokeWidth={2.2} />
-                Vào Bảng Điều Hành ({ROLE_META[role]?.shortLabel})
-              </Link>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-[#005A36] text-white font-bold text-sm">
+                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div>
+                    <p className="font-black text-sm text-slate-900">{user.fullName || user.name}</p>
+                    <p className="text-[11px] font-bold text-emerald-800">
+                      {user.studentId ? `Mã SV: ${user.studentId}` : user.roleTitle || 'Hành khách'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1 border-t border-emerald-200/60">
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex-1 text-center rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs"
+                  >
+                    Bảng điều hành
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout()
+                      setOpen(false)
+                    }}
+                    className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
                 <Link
@@ -255,16 +317,16 @@ export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
                   style={{ backgroundColor: '#005a36', color: '#ffffff' }}
                 >
                   <LogIn size={18} strokeWidth={2.5} />
-                  Đăng nhập tài khoản HSSV
+                  Đăng nhập tài khoản
                 </Link>
 
                 <Link
-                  href="/login"
+                  href="/register"
                   onClick={() => setOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#005A36]/40 bg-emerald-50/50 py-2.5 text-xs font-black text-[#005A36] shadow-xs"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#005A36] bg-emerald-50/50 py-2.5 text-xs font-black text-[#005A36] shadow-xs"
                 >
-                  <ShieldCheck size={16} strokeWidth={2.2} />
-                  Cổng Điều Hành (Nội bộ)
+                  <User size={16} strokeWidth={2.2} />
+                  Đăng ký tài khoản (Trợ giá -50%)
                 </Link>
               </>
             )}

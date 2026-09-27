@@ -1,16 +1,25 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ROLE_META, type Role, type StaffUser } from '@/lib/rbac'
+import { authService, AuthUser, LoginResponseData } from '@/lib/services/auth.service'
+import { ROLE_META, type Role } from '@/lib/rbac'
 
 export type ThemeMode = 'light' | 'dark'
 
+export interface UserProfile extends AuthUser {
+  name: string
+  roleTitle: string
+  staffId: string
+  initials: string
+}
+
 interface AuthContextValue {
-  user: StaffUser | null
-  role: Role
-  setRole: (role: Role) => void
+  user: UserProfile | null
+  role: string
+  accessToken: string | null
   isAuthenticated: boolean
-  login: (email: string, role: Role, remember?: boolean) => Promise<void>
+  login: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; message?: string }>
+  setUserSession: (data: LoginResponseData, remember?: boolean) => void
   logout: () => void
   themeMode: ThemeMode
   toggleTheme: () => void
@@ -18,36 +27,53 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const STORAGE_KEY = 'ictu_transit_auth_state'
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>('admin')
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('light')
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Khôi phục trạng thái từ sessionStorage hoặc localStorage khi tải trang
+  // Hàm helper định dạng user profile đồng nhất
+  const formatUserProfile = (rawUser: AuthUser): UserProfile => {
+    let roleTitle = 'Hành khách'
+    if (rawUser.role === 'admin') roleTitle = 'Quản trị viên'
+    else if (rawUser.role === 'manager' || rawUser.role === 'dispatcher') roleTitle = 'Điều hành viên'
+    else if (rawUser.role === 'driver') roleTitle = 'Tài xế xe buýt'
+    else if (rawUser.studentId) roleTitle = `Sinh viên ICTU (${rawUser.studentId})`
+
+    const name = rawUser.fullName || rawUser.email
+    const initials =
+      name
+        .split(' ')
+        .filter(Boolean)
+        .slice(-2)
+        .map((w) => w[0].toUpperCase())
+        .join('') || 'U'
+    const staffId = rawUser.studentId || `ICTU-${(rawUser.role || 'US').toUpperCase()}-01`
+
+    return {
+      ...rawUser,
+      name,
+      roleTitle,
+      staffId,
+      initials,
+    }
+  }
+
+  // Khôi phục phiên đăng nhập khi tải trang
   useEffect(() => {
     try {
-      // Ưu tiên session hiện tại, sau đó mới đến persistent remember nếu có
-      const sessionSaved = sessionStorage.getItem(STORAGE_KEY)
-      const localSaved = localStorage.getItem(STORAGE_KEY)
-      const saved = sessionSaved || localSaved
+      const storedToken = authService.getToken()
+      const storedUser = authService.getUser()
 
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.role && ROLE_META[parsed.role as Role]) {
-          setRoleState(parsed.role as Role)
-        }
-        if (typeof parsed.isAuthenticated === 'boolean') {
-          setIsAuthenticated(parsed.isAuthenticated)
-        }
-        if (parsed.themeMode === 'light' || parsed.themeMode === 'dark') {
-          setThemeMode(parsed.themeMode)
-        }
+      if (storedToken && storedUser) {
+        setAccessToken(storedToken)
+        setUser(formatUserProfile(storedUser))
+        setIsAuthenticated(true)
       }
-    } catch {
-      // bỏ qua lỗi đọc storage
+    } catch (err) {
+      console.error('[AuthProvider] Lỗi nạp phiên đăng nhập:', err)
     } finally {
       setIsLoaded(true)
     }
@@ -59,38 +85,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     root.style.colorScheme = themeMode
   }, [themeMode])
 
-  const setRole = useCallback((newRole: Role) => {
-    setRoleState(newRole)
+  const setUserSession = useCallback((data: LoginResponseData, remember: boolean = false) => {
+    authService.saveSession(data, remember)
+    setAccessToken(data.accessToken)
+    setUser(formatUserProfile(data.user))
+    setIsAuthenticated(true)
   }, [])
 
-  // Đăng nhập: chỉ lưu lâu dài vào localStorage nếu người dùng chủ động chọn remember = true
-  const login = useCallback(async (_email: string, nextRole: Role, remember: boolean = false) => {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    setRoleState(nextRole)
-    setIsAuthenticated(true)
-
-    const payload = JSON.stringify({ role: nextRole, isAuthenticated: true, themeMode })
-    try {
-      if (remember) {
-        localStorage.setItem(STORAGE_KEY, payload)
-        sessionStorage.removeItem(STORAGE_KEY)
-      } else {
-        sessionStorage.setItem(STORAGE_KEY, payload)
-        localStorage.removeItem(STORAGE_KEY)
+  /**
+   * Đăng nhập thật kết nối Backend API
+   */
+  const login = useCallback(
+    async (email: string, password: string, remember: boolean = false) => {
+      const res = await authService.login({ email, password })
+      if (res.success && res.data) {
+        setUserSession(res.data, remember)
+        return { success: true, message: res.message }
       }
-    } catch {
-      // bỏ qua lỗi storage
-    }
-  }, [themeMode])
+      return { success: false, message: res.message || 'Đăng nhập không thành công' }
+    },
+    [setUserSession],
+  )
 
+  /**
+   * Đăng xuất xóa sạch session
+   */
   const logout = useCallback(() => {
+    authService.clearSession()
+    setAccessToken(null)
+    setUser(null)
     setIsAuthenticated(false)
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-      sessionStorage.removeItem(STORAGE_KEY)
-    } catch {
-      // bỏ qua lỗi storage
-    }
   }, [])
 
   const toggleTheme = useCallback(
@@ -100,16 +124,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user: isAuthenticated ? (ROLE_META[role]?.staff ?? null) : null,
-      role,
-      setRole,
+      user,
+      role: user?.role || 'passenger',
+      accessToken,
       isAuthenticated,
       login,
+      setUserSession,
       logout,
       themeMode,
       toggleTheme,
     }),
-    [isAuthenticated, role, setRole, login, logout, themeMode, toggleTheme],
+    [user, accessToken, isAuthenticated, login, setUserSession, logout, themeMode, toggleTheme],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
