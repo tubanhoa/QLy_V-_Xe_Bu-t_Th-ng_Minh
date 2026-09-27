@@ -89,6 +89,11 @@ export class CancelTicketDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({ example: 'req-cancel-12345', description: 'Khóa chống trùng lặp (Idempotency Key)' })
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }
 
 export class HoldExchangeSeatDto {
@@ -118,6 +123,11 @@ export class ConfirmExchangeDto {
   @IsOptional()
   @IsString()
   paymentMethod?: string;
+
+  @ApiPropertyOptional({ example: 'req-exchange-12345', description: 'Khóa chống trùng lặp (Idempotency Key)' })
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }
 
 export class ExchangeTicketDto {

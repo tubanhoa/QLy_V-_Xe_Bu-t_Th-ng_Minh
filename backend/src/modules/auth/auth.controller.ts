@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -24,13 +25,35 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  private setTokenCookies(res: any, tokens: any) {
+    if (!res || typeof res.cookie !== 'function') return;
+    if (tokens?.accessToken) {
+      res.cookie('access_token', tokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000,
+      });
+    }
+    if (tokens?.refreshToken) {
+      res.cookie('refresh_token', tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+  }
+
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Đăng ký tài khoản hành khách' })
   @ApiResponse({ status: 201, description: 'Đăng ký thành công' })
   @ApiResponse({ status: 409, description: 'Email đã tồn tại' })
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res?: any) {
+    const result = await this.authService.register(dto);
+    this.setTokenCookies(res, result);
+    return result;
   }
 
   @Public()
@@ -39,8 +62,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Đăng nhập hệ thống' })
   @ApiResponse({ status: 200, description: 'Đăng nhập thành công, trả về JWT tokens' })
   @ApiResponse({ status: 401, description: 'Sai email hoặc mật khẩu' })
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res?: any) {
+    const result = await this.authService.login(dto);
+    this.setTokenCookies(res, result);
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -57,8 +82,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Làm mới Access Token bằng Refresh Token' })
   @ApiResponse({ status: 200, description: 'Cấp token mới thành công' })
-  async refreshToken(@Body() dto: RefreshTokenDto) {
-    return this.authService.refreshTokens(dto.refreshToken);
+  async refreshToken(@Body() dto: RefreshTokenDto, @Res({ passthrough: true }) res?: any) {
+    const result = await this.authService.refreshTokens(dto.refreshToken);
+    this.setTokenCookies(res, result);
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -66,7 +93,12 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng xuất khỏi hệ thống' })
-  async logout(@CurrentUser('id') userId: string) {
+  async logout(@CurrentUser('id') userId: string, @Res({ passthrough: true }) res?: any) {
+    if (res && typeof res.clearCookie === 'function') {
+      res.clearCookie('access_token');
+      res.clearCookie('refresh_token');
+    }
     return this.authService.logout(userId);
   }
 }
+
