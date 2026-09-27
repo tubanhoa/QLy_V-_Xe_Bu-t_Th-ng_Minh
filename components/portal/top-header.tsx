@@ -30,7 +30,7 @@ const iconButton =
   'press inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-brand/30 hover:text-foreground'
 
 export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, activeItem, onLogout }: TopHeaderProps) {
-  const { user, role, setRole, themeMode, toggleTheme } = useAuth()
+  const { user, role, themeMode, toggleTheme } = useAuth()
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -80,9 +80,11 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
     },
   ]
 
+  const portalRole: Role =
+    role === 'driver' ? 'driver' : role === 'dispatcher' || role === 'manager' ? 'dispatcher' : 'admin'
+
   const handleProfileClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'logout') onLogout()
-    else if (key.startsWith('role:')) setRole(key.slice(5) as Role)
   }
 
   const notifications = (
@@ -126,7 +128,7 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
           <Breadcrumb
             separator={<ChevronRight size={14} className="mt-1 text-muted-foreground" aria-hidden="true" />}
             items={[
-              { title: ROLE_META[role].label },
+              { title: ROLE_META[portalRole].label },
               { title: <span className="font-semibold text-foreground">{activeItem.label}</span> },
             ]}
             className="hidden truncate sm:block"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowRight,
   Bus,
@@ -24,6 +24,13 @@ interface VietcombankHeroProps {
   onOpenSeatPicker: () => void
   onSearchRoute?: (query: string) => void
 }
+
+const POPULAR_STATIONS = [
+  { name: 'ĐH CNTT & TT Thái Nguyên', desc: 'Trạm cổng chính ICTU · Điểm đón xe buýt điện số 1' },
+  { name: 'Bến Xe Trung Tâm Thái Nguyên', desc: 'Trạm trung chuyển liên tỉnh & nội đô TP Thái Nguyên' },
+  { name: 'Ký Túc Xá ICTU', desc: 'Trạm nội khu giảng đường & khu nhà ở sinh viên' },
+  { name: 'Khu Công Nghiệp Sông Công', desc: 'Trạm ga phía Nam tuyến CT-02' },
+]
 
 const CARDS = [
   {
@@ -89,9 +96,21 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
     icon: 'moon',
   })
   const [searchQuery, setSearchQuery] = useState('')
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
   const [activeCard, setActiveCard] = useState(0)
   const [isStackHovered, setIsStackHovered] = useState(false)
   const [isRightHovered, setIsRightHovered] = useState(false)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -175,29 +194,146 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
               </div>
             </div>
 
-            {/* Search-First Pill Input with Glassmorphism */}
-            <form
-              onSubmit={handleSearchSubmit}
-              className="animate-hero-1 group relative flex w-full max-w-[460px] items-center hero-glass-search p-1.5 sm:p-2 pl-3 transition-all focus-within:ring-4 focus-within:ring-[#005A36]/15"
-            >
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full text-[#005A36]">
-                <Search size={22} strokeWidth={2.8} />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm tuyến xe buýt, trạm dừng..."
-                className="w-full bg-transparent px-3 text-sm sm:text-base font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium outline-none"
-              />
-              <button
-                type="submit"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#005A36] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-150 hover:bg-[#004529] hover:scale-[1.03] active:scale-95"
+            {/* Search-First Pill Input with Glassmorphism and Instant Popover */}
+            <div ref={searchContainerRef} className="relative w-full max-w-[460px] z-30">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="animate-hero-1 group relative flex w-full items-center hero-glass-search p-1.5 sm:p-2 pl-3 transition-all focus-within:ring-4 focus-within:ring-[#005A36]/15"
               >
-                <span>Tìm xe</span>
-                <ArrowRight size={16} strokeWidth={2.8} />
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full text-[#005A36]">
+                  <Search size={22} strokeWidth={2.8} />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setIsSearchFocused(true)
+                  }}
+                  placeholder="Tìm tuyến xe buýt, trạm dừng..."
+                  className="w-full bg-transparent px-3 text-sm sm:text-base font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium outline-none"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#005A36] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-150 hover:bg-[#004529] hover:scale-[1.03] active:scale-95"
+                >
+                  <span>Tìm xe</span>
+                  <ArrowRight size={16} strokeWidth={2.8} />
+                </button>
+              </form>
+
+              {/* Instant Search Dropdown Popover */}
+              {isSearchFocused && (
+                <div className="absolute top-full left-0 right-0 mt-2 z-40 rounded-2xl bg-white border border-slate-200/90 p-3 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                  {/* Quick Stations */}
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between">
+                    <span>Trạm dừng đón trả phổ biến</span>
+                    <span className="text-[#005A36] text-[10px] font-bold">1 chạm chọn trạm</span>
+                  </div>
+                  <div className="space-y-1">
+                    {POPULAR_STATIONS.filter(
+                      (st) =>
+                        !searchQuery.trim() ||
+                        st.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        st.desc.toLowerCase().includes(searchQuery.toLowerCase()),
+                    ).map((st) => (
+                      <button
+                        key={st.name}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(st.name)
+                          setIsSearchFocused(false)
+                          onSearchRoute?.(st.name)
+                        }}
+                        className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-emerald-50 text-left transition-colors group/item"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-7 rounded-lg bg-emerald-100 text-[#005A36] flex items-center justify-center shrink-0">
+                            <MapPin size={14} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 group-hover/item:text-[#005A36] block">
+                              {st.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate max-w-[280px]">
+                              {st.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <ArrowRight
+                          size={13}
+                          className="text-slate-300 group-hover/item:text-[#005A36] transition-transform group-hover/item:translate-x-0.5"
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Quick Routes Divider */}
+                  <div className="pt-2 mt-2 border-t border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between">
+                    <span>Tuyến buýt đang vận hành</span>
+                    <span className="text-emerald-700 text-[10px] font-bold">Live 60fps</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('CT-01')
+                        setIsSearchFocused(false)
+                        onSearchRoute?.('CT-01')
+                      }}
+                      className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 transition-all text-left"
+                    >
+                      <div className="size-6 rounded-md bg-[#005A36] text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                        CT-01
+                      </div>
+                      <div className="truncate">
+                        <span className="text-[11px] font-black text-slate-800 block truncate">ICTU ↔ Bến Xe</span>
+                        <span className="text-[9px] text-[#005A36] font-bold block">15p/chuyến · Buýt điện</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('CT-02')
+                        setIsSearchFocused(false)
+                        onSearchRoute?.('CT-02')
+                      }}
+                      className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 hover:bg-teal-50 border border-slate-100 hover:border-teal-200 transition-all text-left"
+                    >
+                      <div className="size-6 rounded-md bg-teal-800 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                        CT-02
+                      </div>
+                      <div className="truncate">
+                        <span className="text-[11px] font-black text-slate-800 block truncate">Campus Loop</span>
+                        <span className="text-[9px] text-teal-700 font-bold block">20p/chuyến · SV ICTU</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Popular Route Fast Exploration Pills */}
+            <div className="animate-hero-2 flex flex-wrap items-center gap-2 pt-0.5 text-xs">
+              <span className="text-slate-500 font-bold text-[11px]">Tuyến hot:</span>
+              <button
+                type="button"
+                onClick={() => onSearchRoute?.('CT-01')}
+                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-[#005A36] border border-emerald-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+              >
+                <Zap size={11} className="text-[#005A36]" />
+                <span>CT-01 (ICTU ↔ Bến Xe)</span>
               </button>
-            </form>
+              <button
+                type="button"
+                onClick={() => onSearchRoute?.('CT-02')}
+                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-teal-800 border border-teal-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+              >
+                <Bus size={11} className="text-teal-700" />
+                <span>CT-02 (BX Nam ↔ KCN Sông Công)</span>
+              </button>
+            </div>
 
             {/* Sub-actions: Transparent Outline seat picker + Live fleet text indicator */}
             <div className="animate-hero-2 flex flex-col gap-2.5 pt-0.5">

@@ -1,393 +1,630 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
+  AlertCircle,
   Armchair,
   ArrowRight,
+  BatteryCharging,
   Bus,
+  Check,
   CheckCircle2,
+  ChevronRight,
   Clock,
+  Compass,
   CreditCard,
   Download,
+  Flame,
+  Info,
+  Lock,
+  LogIn,
   MapPin,
   QrCode,
+  RefreshCw,
+  RotateCcw,
   ShieldCheck,
+  Sparkles,
+  Ticket,
   User,
+  Users,
+  Wifi,
+  Wind,
   X,
+  Zap,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+
+import { BusSeatGrid } from '@/components/booking/bus-seat-grid'
+import { SeatLockTimer } from '@/components/booking/seat-lock-timer'
+import { useSeatLock } from '@/hooks/use-seat-lock'
+import { bookingService } from '@/lib/services/booking.service'
+import { BookingResultData, SeatItem } from '@/lib/types/booking'
+import { TripSearchResult } from '@/lib/types/sprint1'
+import { useAuth } from '@/lib/auth-context'
+import { cn } from '@/lib/utils'
 
 interface SeatPickerModalProps {
   open: boolean
   onClose: () => void
   initialOrigin?: string
   initialDestination?: string
+  selectedTrip?: TripSearchResult | null
 }
 
-interface SeatInfo {
-  id: string
-  number: string
-  status: 'available' | 'occupied' | 'priority'
-}
-
-const SEATS: SeatInfo[] = [
-  { id: '01A', number: '01A', status: 'occupied' },
-  { id: '01B', number: '01B', status: 'occupied' },
-  { id: '02A', number: '02A', status: 'occupied' },
-  { id: '02B', number: '02B', status: 'available' },
-  { id: '03A', number: '03A', status: 'occupied' },
-  { id: '03B', number: '03B', status: 'available' },
-  { id: '04A', number: '04A', status: 'priority' },
-  { id: '04B', number: '04B', status: 'occupied' },
-  { id: '05A', number: '05A', status: 'occupied' },
-  { id: '05B', number: '05B', status: 'available' },
-  { id: '06A', number: '06A', status: 'occupied' },
-  { id: '06B', number: '06B', status: 'occupied' },
-  { id: '07A', number: '07A', status: 'available' },
-  { id: '07B', number: '07B', status: 'available' },
-]
+// Fallback 28 ghế tiêu chuẩn khi chưa có dữ liệu backend
+const FALLBACK_SEATS: SeatItem[] = Array.from({ length: 28 }, (_, i) => {
+  const rowNumber = Math.floor(i / 4) + 1
+  const cols = ['A', 'B', 'C', 'D'] as const
+  const col = cols[i % 4]
+  const seatNumber = `${String(rowNumber).padStart(2, '0')}${col}`
+  // Demo một số ghế đã bán hoặc đang giữ
+  const isBooked = ['01A', '02D', '04B', '05A'].includes(seatNumber)
+  const isHolding = ['03A', '06B'].includes(seatNumber)
+  return {
+    seatId: `fallback-seat-${seatNumber}`,
+    seatNumber,
+    rowNumber,
+    columnLabel: col,
+    isBooked,
+    bookingStatus: isBooked ? 'booked' : isHolding ? 'holding' : 'available',
+    isHeldByMe: false,
+    holdExpiresAt: null,
+  }
+})
 
 export function SeatPickerModal({
   open,
   onClose,
   initialOrigin = 'KTX ICTU',
   initialDestination = 'Bến xe Đồng Quang',
+  selectedTrip = null,
 }: SeatPickerModalProps) {
-  const [step, setStep] = useState<'seats' | 'info' | 'ticket'>('seats')
-  const [selectedSeats, setSelectedSeats] = useState<string[]>(['02B'])
-  const [selectedTrip, setSelectedTrip] = useState('07:45')
-  const [passengerName, setPassengerName] = useState('Nguyễn Hoàng Long')
-  const [phone, setPhone] = useState('0981.234.567')
-  const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo'>('vnpay')
+  const { isAuthenticated, user } = useAuth()
+
+  // Các bước: 'seats' (chọn ghế) | 'mobile-info' (điền thông tin mobile) | 'success' (thành công)
+  const [step, setStep] = useState<'seats' | 'mobile-info' | 'success'>('seats')
+  const [passengerName, setPassengerName] = useState(user?.fullName || user?.name || 'Nguyễn Thu An')
+  const [phone, setPhone] = useState(user?.phoneNumber || '0981234567')
+  const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'ictupay'>('vnpay')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Tích hợp Hook Realtime Seat Locking & Anti-Race-Condition
+  const {
+    seatMap,
+    selectedSeats,
+    isLoading: isSeatMapLoading,
+    isHoldingAction,
+    conflictedSeatId,
+    errorMessage: lockError,
+    remainingSeconds,
+    toggleSeat,
+    releaseAllHeldSeats,
+    refreshSeatMap,
+  } = useSeatLock({
+    tripId: selectedTrip?.id,
+    enabled: open,
+  })
+
+  // Đồng bộ thông tin user khi đăng nhập
+  useEffect(() => {
+    if (user) {
+      if (user.fullName || user.name) setPassengerName(user.fullName || user.name)
+      if (user.phoneNumber) setPhone(user.phoneNumber)
+    }
+  }, [user])
 
   if (!open) return null
 
-  const basePrice = 10000
-  const totalPrice = selectedSeats.length * basePrice
+  // Giá vé và ưu đãi sinh viên
+  const originName = selectedTrip?.origin || initialOrigin
+  const destinationName = selectedTrip?.destination || initialDestination
+  const routeCode = selectedTrip?.routeCode || 'CT-01'
+  const routeName = selectedTrip?.routeName || 'Tuyến CT-01 KTX ICTU ↔ Bến Xe TP'
+  const departureTime = selectedTrip?.departureTime
+    ? new Date(selectedTrip.departureTime).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '07:45'
+  const vehiclePlate = selectedTrip?.vehiclePlate || '20B-999.88'
 
-  const toggleSeat = (id: string, status: string) => {
-    if (status === 'occupied') return
-    setSelectedSeats((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    )
-  }
+  const basePrice = selectedTrip ? Number(selectedTrip.basePrice) : 10000
+  const isStudent = user?.role === 'STUDENT' || Boolean(user?.studentId) || true // Mặc định hỗ trợ SV
+  const studentPrice = selectedTrip ? Number(selectedTrip.studentPrice) : 5000
+  const effectivePrice = isStudent ? studentPrice : basePrice
+  const totalPrice = selectedSeats.length * effectivePrice
+  const totalStandardPrice = selectedSeats.length * basePrice
+  const totalSavings = totalStandardPrice - totalPrice
 
-  const handleConfirmBooking = (e: React.FormEvent) => {
-    e.preventDefault()
-    setStep('ticket')
-  }
+  const displaySeats = seatMap?.seats && seatMap.seats.length > 0 ? seatMap.seats : FALLBACK_SEATS
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    await releaseAllHeldSeats()
     onClose()
     setTimeout(() => {
       setStep('seats')
-      setSelectedSeats(['02B'])
+      setBookingResult(null)
+      setSubmitError(null)
     }, 250)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md animate-in fade-in">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-        {/* Close Button */}
-        <button
-          type="button"
-          onClick={handleClose}
-          className="absolute right-5 top-5 flex size-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-        >
-          <X size={18} />
-        </button>
+  // Xử lý chốt đặt vé (POST /api/v1/booking/create)
+  const handleConfirmBooking = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (selectedSeats.length === 0) return
 
-        {/* Modal Steps */}
-        {step === 'seats' && (
-          <div className="flex flex-col gap-6">
+    setIsSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      if (selectedTrip?.id) {
+        const payload = {
+          tripId: selectedTrip.id,
+          passengers: selectedSeats.map((s) => ({
+            seatId: s.seatId,
+            passengerName: passengerName.trim() || 'Hành khách',
+            passengerPhone: phone.trim() || undefined,
+          })),
+          paymentMethod: paymentMethod === 'ictupay' ? 'cash' : paymentMethod,
+        }
+
+        const res = await bookingService.createBooking(payload)
+        if (res.success && res.data) {
+          setBookingResult(res.data)
+          setStep('success')
+          return
+        } else {
+          setSubmitError(res.message || 'Không thể tạo đơn đặt vé')
+        }
+      } else {
+        // Mock hoàn tất khi mở chế độ demo trực tiếp
+        const mockResult: BookingResultData = {
+          id: `bkg-${Date.now()}`,
+          bookingCode: `ICTU-${Math.floor(100000 + Math.random() * 900000)}`,
+          totalAmount: totalStandardPrice,
+          discountAmount: totalSavings,
+          finalAmount: totalPrice,
+          paymentStatus: 'PAID',
+          tickets: selectedSeats.map((s) => ({
+            id: `tkt-${s.seatNumber}`,
+            ticketCode: `TK-2026-${s.seatNumber}`,
+            seatNumber: s.seatNumber,
+            passengerName: passengerName.trim() || 'Hành khách',
+            passengerPhone: phone.trim() || undefined,
+            price: effectivePrice,
+            status: 'VALID',
+            qrCodeData: `ICTU-PASS:${routeCode}-${s.seatNumber}-${user?.studentId || 'SV'}`,
+          })),
+        }
+        setBookingResult(mockResult)
+        setStep('success')
+      }
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Lỗi kết nối khi thanh toán')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 p-0 sm:p-4 overscroll-contain animate-in fade-in duration-150"
+    >
+      <div className="relative w-full h-[95vh] sm:h-auto sm:max-h-[92vh] max-w-5xl rounded-t-3xl sm:rounded-3xl border border-slate-100 bg-white shadow-2xl flex flex-col will-change-transform overflow-hidden">
+        {/* ===================================================================
+            HEADER: TRẠM DỰNG · BIỂN SỐ XE · ĐỒNG HỒ ĐẾM NGƯỢC GIỮ CHỖ
+            =================================================================== */}
+        <div className="border-b border-slate-100 px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 sm:size-10 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-sm shrink-0">
+              <Bus size={20} />
+            </div>
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <Bus size={13} /> Tuyến 01: Xe Buýt Điện Thông Minh
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-[#005A36] text-white px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">
+                  {routeCode}
+                </span>
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[220px] sm:max-w-md">
+                  {originName} ➔ {destinationName}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-medium">
+                <span className="font-mono font-bold text-emerald-800">Khởi hành: {departureTime}</span>
+                <span>·</span>
+                <span>Xe: {vehiclePlate}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Countdown Timer Pill (Khi đã giữ ít nhất 1 ghế) */}
+            <SeatLockTimer remainingSeconds={remainingSeconds} />
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Cảnh báo Conflict Race Condition (Nếu có) */}
+        {(lockError || submitError) && (
+          <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={15} className="shrink-0" />
+              <span>{lockError || submitError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => refreshSeatMap()}
+              className="underline text-[11px] font-black hover:text-amber-100 flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw size={11} />
+              Tải lại
+            </button>
+          </div>
+        )}
+
+        {/* ===================================================================
+            BODY: DUAL-COLUMN DESKTOP SPLIT VIEW / SINGLE COLUMN MOBILE
+            =================================================================== */}
+        {step !== 'success' ? (
+          <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+            {/* CỘT TRÁI: SƠ ĐỒ GHẾ XE BUÝT 28 CHỖ (Chiếm 56% trên Desktop) */}
+            <div
+              className={cn(
+                'lg:w-[56%] flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/60 flex flex-col items-center justify-between',
+                step === 'mobile-info' && 'hidden lg:flex',
+              )}
+            >
+              <div className="w-full max-w-sm mb-3 flex items-center justify-between text-xs font-bold">
+                <div className="flex items-center gap-1.5 text-slate-700">
+                  <Armchair size={15} className="text-[#005A36]" />
+                  <span>Sơ đồ ghế buýt thông minh</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                  <span>Trống: <strong className="text-emerald-700">{seatMap?.availableCount ?? 24}</strong></span>
+                  <span>·</span>
+                  <span>Đang giữ: <strong className="text-amber-700">{seatMap?.holdingCount ?? 2}</strong></span>
+                </div>
+              </div>
+
+              {/* Sơ đồ ghế Component */}
+              <BusSeatGrid
+                seats={displaySeats}
+                selectedSeatIds={selectedSeats.map((s) => s.seatId)}
+                onToggleSeat={toggleSeat}
+                conflictedSeatId={conflictedSeatId}
+                isLoading={isSeatMapLoading || isHoldingAction}
+              />
+
+              <div className="mt-4 text-center text-[11px] text-slate-400">
+                Chạm vào vị trí ghế mong muốn để giữ chỗ tức thì trong 10 phút.
+              </div>
+            </div>
+
+            {/* CỘT PHẢI: BẢNG CHECKOUT, THÔNG TIN HÀNH KHÁCH & THANH TOÁN (Chiếm 44% trên Desktop) */}
+            <div
+              className={cn(
+                'lg:w-[44%] flex-1 overflow-y-auto p-4 sm:p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-between',
+                step === 'seats' && 'hidden lg:flex',
+              )}
+            >
+              <div className="space-y-4">
+                {/* Tiêu đề & Nút quay lại (nếu ở mobile view) */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {step === 'mobile-info' && (
+                      <button
+                        type="button"
+                        onClick={() => setStep('seats')}
+                        className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 lg:hidden"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                      Thông Tin Đặt Vé & Thanh Toán
+                    </h4>
+                  </div>
+                  {isStudent && (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-[#005A36]">
+                      GIẢM 50% HSSV
+                    </span>
+                  )}
+                </div>
+
+                {/* Danh sách ghế đã chọn */}
+                <div className="rounded-2xl bg-emerald-50/60 border border-emerald-200/80 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-600">Ghế đã chọn:</span>
+                    <span className="font-black text-[#005A36]">
+                      {selectedSeats.length > 0
+                        ? `${selectedSeats.length} vị trí`
+                        : 'Chưa chọn ghế nào'}
+                    </span>
+                  </div>
+
+                  {selectedSeats.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedSeats.map((seat) => (
+                        <div
+                          key={seat.seatId}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-emerald-300 px-2.5 py-1 text-xs font-black text-[#005A36] shadow-2xs"
+                        >
+                          <Armchair size={13} />
+                          <span>Ghế {seat.seatNumber}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleSeat(seat)}
+                            className="text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">
+                      Vui lòng chạm chọn tối thiểu 1 ghế trên sơ đồ xe buýt bên cạnh.
+                    </p>
+                  )}
+                </div>
+
+                {/* Form thông tin hành khách */}
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Họ và tên hành khách
+                    </label>
+                    <input
+                      type="text"
+                      value={passengerName}
+                      onChange={(e) => setPassengerName(e.target.value)}
+                      placeholder="VD: Nguyễn Thu An"
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#005A36] transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Số điện thoại nhận vé
+                      </label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="0981 234 567"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#005A36] transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Mã sinh viên ICTU
+                      </label>
+                      <input
+                        type="text"
+                        value={user?.studentId || 'DTC215180001'}
+                        disabled
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phương thức thanh toán 1-chạm */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Phương thức thanh toán
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('vnpay')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'vnpay'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">VNPAY-QR</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Quét QR ngân hàng</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('momo')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'momo'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">Ví MoMo</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Thanh toán 1s</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('ictupay')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'ictupay'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">Tiền mặt</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Tại cửa xe buýt</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bảng tính chi phí */}
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Đơn giá tiêu chuẩn ({selectedSeats.length} vé):</span>
+                    <span className="font-mono">{totalStandardPrice.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  {isStudent && (
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>Ưu đãi sinh viên ICTU (-50%):</span>
+                      <span className="font-mono">-{totalSavings.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-200/80 pt-2 flex justify-between items-center">
+                    <span className="font-black text-slate-900">Tổng thanh toán:</span>
+                    <span className="text-base font-black text-[#005A36] font-mono">
+                      {totalPrice.toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nút hành động Desktop */}
+              <div className="pt-4">
+                <button
+                  type="button"
+                  disabled={selectedSeats.length === 0 || isSubmitting}
+                  onClick={() => handleConfirmBooking()}
+                  className={cn(
+                    'w-full py-3 rounded-xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg transition-all duration-150',
+                    selectedSeats.length > 0 && !isSubmitting
+                      ? 'bg-[#005A36] hover:bg-[#004529] hover:scale-[1.01] active:scale-95 cursor-pointer shadow-emerald-950/20'
+                      : 'bg-slate-300 cursor-not-allowed shadow-none',
+                  )}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="size-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      <span>Đang xuất vé an toàn...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck size={18} />
+                      <span>Xác Nhận & Xuất Vé ({totalPrice.toLocaleString('vi-VN')}đ)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ===================================================================
+              STEP 3: THÀNH CÔNG · MÃ VÉ ĐIỆN TỬ & QR LÊN XE THỰC TẾ
+              =================================================================== */
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="size-14 rounded-3xl bg-emerald-100 text-[#005A36] flex items-center justify-center shadow-md animate-in zoom-in-75">
+              <CheckCircle2 size={32} />
+            </div>
+
+            <div className="space-y-1">
+              <span className="rounded-full bg-emerald-100 text-[#005A36] px-3 py-1 text-xs font-black uppercase tracking-wider">
+                ĐẶT CHỖ THÀNH CÔNG
               </span>
-              <h2 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Chọn Chuyến & Vị Trí Ghế Ngồi
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                {initialOrigin} ⇄ {initialDestination}
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
+                Vé Điện Tử Đã Sẵn Sàng Lên Xe
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Mã QR đã được đồng bộ vào hệ thống kiểm soát cửa thông minh của xe buýt{' '}
+                <strong className="text-slate-800">{vehiclePlate}</strong>.
               </p>
             </div>
 
-            {/* Trip Selector Chips */}
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">
-                Chọn giờ xuất bến hôm nay
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { time: '07:45', available: '6 chỗ' },
-                  { time: '08:15', available: '14 chỗ' },
-                  { time: '08:45', available: '18 chỗ' },
-                ].map((t) => (
-                  <button
-                    key={t.time}
-                    type="button"
-                    onClick={() => setSelectedTrip(t.time)}
-                    className={`flex flex-col items-center justify-center rounded-2xl border p-3 transition-all ${
-                      selectedTrip === t.time
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-200'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'
-                    }`}
-                  >
-                    <span className="font-mono text-base font-bold">{t.time}</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Còn {t.available}</span>
-                  </button>
-                ))}
+            {/* QR Code Pass Card */}
+            <div className="w-full max-w-sm rounded-3xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 p-5 space-y-3.5 shadow-sm">
+              <div className="bg-white p-3.5 rounded-2xl border border-emerald-100 shadow-xs flex items-center justify-center mx-auto w-fit">
+                <QRCodeSVG
+                  value={
+                    bookingResult?.tickets[0]?.qrCodeData ||
+                    `ICTU-PASS:${bookingResult?.bookingCode || 'TICKET'}`
+                  }
+                  size={170}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-mono font-black text-base text-[#005A36]">
+                  {bookingResult?.bookingCode || 'ICTU-2026-PASS'}
+                </div>
+                <div className="text-xs font-extrabold text-slate-800">
+                  {routeName} (Khởi hành: {departureTime})
+                </div>
+                <div className="text-xs text-slate-600">
+                  Ghế:{' '}
+                  <strong className="text-[#005A36]">
+                    {selectedSeats.map((s) => s.seatNumber).join(', ')}
+                  </strong>{' '}
+                  · Hành khách: <strong>{passengerName}</strong>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white border border-emerald-200/80 p-2.5 text-[11px] text-emerald-950 font-medium">
+                Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.
               </div>
             </div>
 
-            {/* Interactive 28-Seat Bus Map */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/50">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Armchair size={15} /> Sơ đồ ghế xe buýt điện 28 chỗ
-                </span>
-                <span className="text-xs text-slate-500">Đầu xe (Bác tài) ↑</span>
-              </div>
-
-              {/* Seat Legend */}
-              <div className="my-3 flex flex-wrap items-center justify-center gap-4 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-3 rounded border border-emerald-500 bg-white" /> Trống
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-3 rounded bg-[#005A36]" /> Đang chọn
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-3 rounded bg-slate-300 dark:bg-slate-700" /> Đã bán
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-3 rounded border border-[#005A36] bg-[#005A36]/15" /> Ưu tiên
-                </span>
-              </div>
-
-              {/* Seats Grid */}
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 max-w-xs mx-auto py-2">
-                {SEATS.map((seat) => {
-                  const isSelected = selectedSeats.includes(seat.id)
-                  const isOccupied = seat.status === 'occupied'
-                  const isPriority = seat.status === 'priority'
-
-                  return (
-                    <button
-                      key={seat.id}
-                      type="button"
-                      disabled={isOccupied}
-                      onClick={() => toggleSeat(seat.id, seat.status)}
-                      className={`flex h-11 items-center justify-center gap-1.5 rounded-xl border font-mono text-xs font-bold transition-all active:scale-95 ${
-                        isSelected
-                          ? 'border-[#005A36] bg-[#005A36] text-white shadow-md shadow-emerald-950/20'
-                          : isOccupied
-                          ? 'cursor-not-allowed border-transparent bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
-                          : isPriority
-                          ? 'border-[#005A36]/40 bg-[#005A36]/10 text-[#005A36] hover:border-[#005A36]'
-                          : 'border-emerald-300 bg-white text-emerald-800 hover:border-emerald-500 dark:bg-slate-900 dark:text-emerald-300'
-                      }`}
-                    >
-                      <Armchair size={14} />
-                      {seat.number}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Price & Continue CTA */}
-            <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-              <div>
-                <span className="text-xs text-slate-500">
-                  Đã chọn: <strong>{selectedSeats.join(', ') || 'Chưa chọn ghế'}</strong>
-                </span>
-                <p className="font-mono text-xl font-bold text-[#00A86B]">
-                  {totalPrice.toLocaleString('vi-VN')} đ
-                </p>
-              </div>
-
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-sm pt-2">
               <button
                 type="button"
-                disabled={selectedSeats.length === 0}
-                onClick={() => setStep('info')}
-                className="flex items-center gap-2 rounded-xl bg-[#00A86B] px-6 py-3 font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:opacity-50 active:scale-95 transition-all text-sm"
+                onClick={handleClose}
+                className="flex-1 rounded-xl bg-[#005A36] py-2.5 text-xs font-black text-white hover:bg-[#004529] transition-all shadow-md cursor-pointer"
               >
-                Tiếp tục điền thông tin <ArrowRight size={16} />
+                Hoàn tất & Về trang chủ
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Passenger Info & Payment */}
-        {step === 'info' && (
-          <form onSubmit={handleConfirmBooking} className="flex flex-col gap-6">
+        {/* ===================================================================
+            MOBILE FLOATING DOCK (STICKY BOTTOM BAR KHI Ở STEP 'seats')
+            =================================================================== */}
+        {step === 'seats' && (
+          <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md p-3 px-4 flex items-center justify-between shadow-2xl shrink-0 z-30">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Thông Tin Hành Khách & Thanh Toán
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Chuyến {selectedTrip} • Ghế {selectedSeats.join(', ')} • Tổng:{' '}
-                {totalPrice.toLocaleString('vi-VN')} đ
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Họ và tên hành khách
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={passengerName}
-                  onChange={(e) => setPassengerName(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Số điện thoại nhận vé SMS
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                />
-              </div>
-            </div>
-
-            {/* Payment Method Selector */}
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">
-                Chọn phương thức thanh toán bảo mật
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('vnpay')}
-                  className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMethod === 'vnpay'
-                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 dark:bg-emerald-950/40'
-                      : 'border-slate-200 dark:border-slate-800'
-                  }`}
-                >
-                  <CreditCard size={20} className="text-emerald-600" />
-                  <div>
-                    <p className="font-bold text-sm text-slate-900 dark:text-white">VNPay Sandbox</p>
-                    <p className="text-[11px] text-slate-500">Mã QR ngân hàng, ATM nội địa</p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('momo')}
-                  className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMethod === 'momo'
-                      ? 'border-pink-500 bg-pink-50/60 ring-2 ring-pink-500/20 dark:bg-pink-950/40'
-                      : 'border-slate-200 dark:border-slate-800'
-                  }`}
-                >
-                  <CreditCard size={20} className="text-pink-600" />
-                  <div>
-                    <p className="font-bold text-sm text-slate-900 dark:text-white">Ví MoMo Sandbox</p>
-                    <p className="text-[11px] text-slate-500">Thanh toán 1 chạm siêu nhanh</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setStep('seats')}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-900"
-              >
-                ← Quay lại chọn ghế
-              </button>
-
-              <button
-                type="submit"
-                className="flex items-center gap-2 rounded-xl bg-[#00A86B] px-6 py-3 font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 active:scale-95 transition-all text-sm"
-              >
-                <ShieldCheck size={16} /> Thanh toán {totalPrice.toLocaleString('vi-VN')} đ
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Step 3: Instant Electronic QR Ticket */}
-        {step === 'ticket' && (
-          <div className="flex flex-col items-center gap-5 text-center py-2 animate-in zoom-in-95">
-            <div className="flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
-              <CheckCircle2 size={32} />
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Đặt Vé Thành Công!
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Vé điện tử đã được phát hành và gửi mã xác nhận qua số điện thoại {phone}
-              </p>
-            </div>
-
-            {/* Boarding Pass Card */}
-            <div className="w-full max-w-sm rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-50/50 to-white p-6 shadow-xl dark:from-slate-900 dark:to-slate-950">
-              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
-                <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  MÃ VÉ: TK-ICTU-8921
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500 font-bold">
+                  {selectedSeats.length > 0 ? `${selectedSeats.length} ghế:` : 'Chưa chọn ghế'}
                 </span>
-                <span className="text-[11px] text-slate-400">Tuyến 01</span>
+                <span className="text-xs font-black text-[#005A36]">
+                  {selectedSeats.length > 0
+                    ? selectedSeats.map((s) => s.seatNumber).join(', ')
+                    : '---'}
+                </span>
               </div>
-
-              {/* Real QR Code */}
-              <div className="my-5 flex justify-center p-3 bg-white rounded-2xl border border-slate-100 shadow-inner inline-block mx-auto">
-                <QRCodeSVG
-                  value="https://transit.ictu.edu.vn/ticket/TK-ICTU-8921"
-                  size={160}
-                  level="H"
-                  includeMargin={false}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-left text-xs border-t border-emerald-500/20 pt-3">
-                <div>
-                  <span className="text-slate-400">Hành khách:</span>
-                  <p className="font-bold text-slate-900 dark:text-white">{passengerName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400">Ghế ngồi:</span>
-                  <p className="font-bold text-[#00A86B] font-mono text-sm">{selectedSeats.join(', ')}</p>
-                </div>
-                <div className="col-span-2 mt-1">
-                  <span className="text-slate-400">Chuyến xuất bến:</span>
-                  <p className="font-semibold text-slate-900 dark:text-white">
-                    {selectedTrip} hôm nay • {initialOrigin}
-                  </p>
-                </div>
+              <div className="text-sm font-black text-slate-900 font-mono">
+                {totalPrice > 0 ? `${totalPrice.toLocaleString('vi-VN')}đ` : '5.000đ/vé SV'}
               </div>
             </div>
 
-            <div className="flex gap-3 mt-2">
-              <button
-                type="button"
-                onClick={handleClose}
-                className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-200"
-              >
-                Đóng cửa sổ
-              </button>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="flex items-center gap-1.5 rounded-xl bg-[#00A86B] px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-md shadow-emerald-500/20"
-              >
-                <Download size={14} /> Tải vé về điện thoại
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={selectedSeats.length === 0}
+              onClick={() => setStep('mobile-info')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-black text-white transition-all shadow-md',
+                selectedSeats.length > 0
+                  ? 'bg-[#005A36] active:scale-95 cursor-pointer shadow-emerald-950/20'
+                  : 'bg-slate-300 cursor-not-allowed shadow-none',
+              )}
+            >
+              <span>Tiếp tục đặt vé</span>
+              <ArrowRight size={14} />
+            </button>
           </div>
         )}
       </div>

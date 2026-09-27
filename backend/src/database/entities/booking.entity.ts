@@ -7,6 +7,7 @@ import {
   JoinColumn,
   OneToMany,
   Index,
+  type Relation,
 } from 'typeorm';
 import { UserEntity } from './user.entity.js';
 import { TripEntity } from './trip.entity.js';
@@ -39,7 +40,7 @@ export class BookingEntity {
 
   @ManyToOne(() => TripEntity, (trip) => trip.bookings, { eager: true })
   @JoinColumn({ name: 'trip_id' })
-  trip: TripEntity;
+  trip: Relation<TripEntity>;
 
   @Column({ name: 'voucher_id', type: 'uuid', nullable: true })
   voucherId: string;
@@ -67,8 +68,8 @@ export class BookingEntity {
   expiresAt: Date;
 
   @OneToMany(() => TicketEntity, (ticket) => ticket.booking, { cascade: true })
-  tickets: TicketEntity[];
+  tickets: Relation<TicketEntity[]>;
 
   @OneToMany(() => PaymentEntity, (payment) => payment.booking)
-  payments: PaymentEntity[];
+  payments: Relation<PaymentEntity[]>;
 }
