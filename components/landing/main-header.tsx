@@ -308,17 +308,15 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
                       Bảng điều hành
                     </Link>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOpen(false)
-                        onOpenModal?.('lookup')
-                      }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                    <Link
+                      href="/my-tickets"
+                      onClick={() => setOpen(false)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs"
+                      id="mobile-my-tickets-link"
                     >
                       <Ticket size={14} />
-                      <span>Ví vé của tôi</span>
-                    </button>
+                      <span>Vé của tôi</span>
+                    </Link>
                   )}
                   <button
                     type="button"
@@ -379,16 +377,14 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal }: MainHeaderProps) {
               >
                 Đăng ký vé tháng HSSV (-50%)
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  onOpenModal?.('lookup')
-                }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer"
+              <Link
+                href="/my-tickets"
+                onClick={() => setOpen(false)}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors block"
+                id="mobile-nav-my-tickets"
               >
-                Ví vé điện tử & Tra cứu
-              </button>
+                Vé của tôi & Mã QR
+              </Link>
               <button
                 type="button"
                 onClick={() => {
