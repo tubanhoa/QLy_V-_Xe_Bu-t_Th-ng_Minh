@@ -14,6 +14,8 @@ import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
+import { NotificationService } from '../notification/notification.service.js';
+import { generateQrDataUrl } from '../../common/utils/qr-code.util.js';
 import { CreatePaymentUrlDto, RefundTicketDto } from './dto/payment.dto.js';
 import {
   PaymentStatus,
@@ -38,6 +40,8 @@ export class PaymentService {
     private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
     @Optional()
     private readonly seatLockService?: SeatLockService,
+    @Optional()
+    private readonly notificationService?: NotificationService,
   ) {}
 
   async createPaymentUrl(dto: CreatePaymentUrlDto, reqIp?: string) {
@@ -205,7 +209,12 @@ export class PaymentService {
   async confirmPayment(txnRef: string, details: Record<string, any>) {
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: txnRef },
-      relations: { booking: true },
+      relations: {
+        booking: {
+          user: true,
+          trip: { route: true, vehicle: true },
+        },
+      },
     });
 
     if (!payment) return;
@@ -226,15 +235,43 @@ export class PaymentService {
       { status: TicketStatus.PAID },
     );
 
+    const tickets = await this.ticketRepository.find({
+      where: { bookingId: payment.bookingId },
+      relations: { seat: true },
+    });
+
     // Cập nhật trạng thái SeatHoldEntity sang 'booked'
     if (this.seatHoldRepository && payment.booking?.tripId) {
-      const tickets = await this.ticketRepository.find({ where: { bookingId: payment.bookingId } });
       const seatIds = tickets.map((t) => t.seatId);
       if (seatIds.length > 0) {
         await this.seatHoldRepository.update(
           { tripId: payment.booking.tripId, seatId: In(seatIds) },
           { status: 'booked' },
         );
+      }
+    }
+
+    // Tự động gửi Email/Thông báo kèm vé điện tử và hình ảnh mã QR sau khi thanh toán thành công
+    if (this.notificationService && payment.booking?.user?.email) {
+      for (const ticket of tickets) {
+        let qrDataUrl = '';
+        if (ticket.qrData) {
+          qrDataUrl = await generateQrDataUrl(ticket.qrData);
+        }
+        await this.notificationService.sendTicketConfirmationEmail({
+          recipientEmail: payment.booking.user.email,
+          passengerName: ticket.passengerName || payment.booking.user.fullName,
+          bookingCode: payment.booking.bookingCode,
+          ticketCode: ticket.ticketCode,
+          routeName: payment.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+          origin: payment.booking.trip?.route?.origin,
+          destination: payment.booking.trip?.route?.destination,
+          departureTime: payment.booking.trip?.departureTime || new Date(),
+          seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
+          vehiclePlate: payment.booking.trip?.vehicle?.licensePlate,
+          price: ticket.originalPrice,
+          qrDataUrl,
+        });
       }
     }
   }

@@ -25,8 +25,10 @@ import {
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { BookingStatus, TicketStatus, TripStatus } from '../../common/constants/status.constant.js';
+import { Role } from '../../common/constants/roles.constant.js';
 import { generateBookingCode, generateTicketCode } from '../../common/utils/booking-code.util.js';
 import { signQrPayload, generateQrDataUrl } from '../../common/utils/qr-code.util.js';
+import { NotificationService } from '../notification/notification.service.js';
 
 @Injectable()
 export class BookingService {
@@ -49,6 +51,8 @@ export class BookingService {
     private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
     @Optional()
     private readonly dataSource?: DataSource,
+    @Optional()
+    private readonly notificationService?: NotificationService,
   ) {}
 
   async searchTrips(dto: SearchTripsDto) {
@@ -493,6 +497,7 @@ export class BookingService {
 
         const qrPayload = {
           ticketCode,
+          bookingCode: savedBooking.bookingCode,
           tripId: trip.id,
           seatNumber: seat.seatNumber,
           passengerName: passenger.passengerName,
@@ -600,11 +605,17 @@ export class BookingService {
     };
   }
 
-  async getTicketDetail(ticketId: string, userId: string) {
+  async getTicketDetail(ticketId: string, userId?: string, userRole?: string) {
+    const isPrivileged =
+      userRole === Role.ADMIN ||
+      userRole === Role.MANAGER ||
+      userRole === Role.DRIVER;
+
     const ticket = await this.ticketRepository.findOne({
-      where: { id: ticketId },
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
       relations: {
         booking: {
+          user: true,
           trip: {
             route: true,
             vehicle: true,
@@ -618,7 +629,7 @@ export class BookingService {
       throw new NotFoundException('Không tìm thấy vé xe');
     }
 
-    if (ticket.booking.userId !== userId) {
+    if (userId && !isPrivileged && ticket.booking.userId !== userId) {
       throw new ForbiddenException('Bạn không có quyền truy cập vé này');
     }
 
@@ -642,9 +653,126 @@ export class BookingService {
       destination: ticket.booking?.trip?.route?.destination,
       departureTime: ticket.booking?.trip?.departureTime,
       vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+      qrData: ticket.qrData,
       qrDataUrl,
+      signature: ticket.qrSignatureHash,
       checkedInAt: ticket.checkedInAt,
+      checkedInBy: ticket.checkedInBy,
       createdAt: ticket.createdAt,
+    };
+  }
+
+  async getTicketQr(ticketId: string, userId?: string, userRole?: string) {
+    const isPrivileged =
+      userRole === Role.ADMIN ||
+      userRole === Role.MANAGER ||
+      userRole === Role.DRIVER;
+
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: true,
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe');
+    }
+
+    if (userId && !isPrivileged && ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền truy cập vé này');
+    }
+
+    let qrData = ticket.qrData;
+    let signature = ticket.qrSignatureHash;
+    if (!qrData) {
+      const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
+      const signed = signQrPayload(
+        {
+          ticketCode: ticket.ticketCode,
+          bookingCode: ticket.booking?.bookingCode,
+          tripId: ticket.booking?.tripId,
+          seatNumber: ticket.seat?.seatNumber || '',
+          passengerName: ticket.passengerName,
+          issuedAt: ticket.createdAt?.getTime() || Date.now(),
+        },
+        qrSecret,
+      );
+      qrData = signed.qrData;
+      signature = signed.signature;
+      ticket.qrData = qrData;
+      ticket.qrSignatureHash = signature;
+      await this.ticketRepository.save(ticket);
+    }
+
+    const qrDataUrl = await generateQrDataUrl(qrData);
+
+    return {
+      ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      bookingCode: ticket.booking?.bookingCode,
+      passengerName: ticket.passengerName,
+      seatNumber: ticket.seat?.seatNumber,
+      status: ticket.status,
+      qrData,
+      qrDataUrl,
+      signature,
+      issuedAt: ticket.createdAt,
+    };
+  }
+
+  async resendTicketEmail(ticketId: string, userId: string, customEmail?: string) {
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: {
+          user: true,
+          trip: { route: true, vehicle: true },
+        },
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe');
+    }
+
+    if (ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thao tác trên vé này');
+    }
+
+    const recipientEmail = customEmail || ticket.booking.user?.email;
+    if (!recipientEmail) {
+      throw new BadRequestException('Không tìm thấy địa chỉ email để gửi vé');
+    }
+
+    let qrDataUrl = '';
+    if (ticket.qrData) {
+      qrDataUrl = await generateQrDataUrl(ticket.qrData);
+    }
+
+    if (this.notificationService) {
+      await this.notificationService.sendTicketConfirmationEmail({
+        recipientEmail,
+        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+        bookingCode: ticket.booking.bookingCode,
+        ticketCode: ticket.ticketCode,
+        routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+        origin: ticket.booking.trip?.route?.origin,
+        destination: ticket.booking.trip?.route?.destination,
+        departureTime: ticket.booking.trip?.departureTime || new Date(),
+        seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
+        vehiclePlate: ticket.booking.trip?.vehicle?.licensePlate,
+        price: ticket.originalPrice,
+        qrDataUrl,
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã gửi lại vé điện tử thành công tới email ${recipientEmail}`,
+      recipientEmail,
     };
   }
 

@@ -358,15 +358,27 @@ export class TripsService {
       throw new BadRequestException(`Vé đã bị hủy hoặc hết hạn (${ticket.status})`);
     }
 
+    // Bắt buộc vé phải ở trạng thái đã thanh toán (PAID) mới được soát vé lên xe
+    if (ticket.status === TicketStatus.RESERVED) {
+      throw new BadRequestException('Vé chưa được thanh toán thành công. Không thể soát vé lên xe!');
+    }
+
     if (ticket.status === TicketStatus.CHECKED_IN) {
       return {
+        success: false,
         valid: false,
         alreadyCheckedIn: true,
         message: 'CẢNH BÁO: Vé này đã được soát trước đó!',
         checkedInAt: ticket.checkedInAt,
+        checkedInBy: ticket.checkedInBy,
         passenger: ticket.passengerName,
         seat: ticket.seat?.seatNumber,
+        ticketCode: ticket.ticketCode,
       };
+    }
+
+    if (ticket.status !== TicketStatus.PAID) {
+      throw new BadRequestException(`Trạng thái vé không hợp lệ để soát vé: ${ticket.status}`);
     }
 
     ticket.status = TicketStatus.CHECKED_IN;
@@ -384,7 +396,10 @@ export class TripsService {
       passenger: ticket.passengerName,
       seat: ticket.seat?.seatNumber,
       ticketCode: ticket.ticketCode,
+      bookingCode: ticket.booking?.bookingCode,
+      status: ticket.status,
       checkedInAt: ticket.checkedInAt,
+      checkedInBy: ticket.checkedInBy,
     };
   }
 
