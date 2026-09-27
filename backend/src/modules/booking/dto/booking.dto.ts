@@ -6,6 +6,8 @@ import {
   IsDateString,
   ValidateNested,
   IsEmail,
+  ArrayNotEmpty,
+  ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -18,9 +20,12 @@ export class HoldSeatsDto {
 
   @ApiProperty({ example: ['uuid-seat-1', 'uuid-seat-2'], description: 'Danh sách ID các ghế muốn giữ chỗ' })
   @IsArray()
+  @ArrayNotEmpty({ message: 'Danh sách ghế không được để trống' })
+  @ArrayMaxSize(5, { message: 'Chỉ được giữ tối đa 5 ghế trong một lần đặt' })
   @IsString({ each: true })
   seatIds: string[];
 }
+
 
 export class PassengerInfoDto {
   @ApiProperty({ description: 'ID ghế được chọn' })

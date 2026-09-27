@@ -5,9 +5,10 @@ import {
   ConflictException,
   ForbiddenException,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, Between, In, DataSource } from 'typeorm';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
@@ -42,6 +43,8 @@ export class BookingService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly seatLockService: SeatLockService,
+    @Optional()
+    private readonly dataSource?: DataSource,
   ) {}
 
   async searchTrips(dto: SearchTripsDto) {
@@ -162,15 +165,43 @@ export class BookingService {
   }
 
   async holdSeats(dto: HoldSeatsDto, userId: string) {
-    const trip = await this.tripRepository.findOne({ where: { id: dto.tripId } });
+    const trip = await this.tripRepository.findOne({
+      where: { id: dto.tripId },
+      relations: { vehicle: true },
+    });
     if (!trip) {
       throw new NotFoundException('Không tìm thấy chuyến xe');
     }
+
+    if (
+      trip.status === TripStatus.CANCELLED ||
+      trip.status === TripStatus.COMPLETED ||
+      trip.status === TripStatus.DEPARTED
+    ) {
+      throw new BadRequestException('Chuyến xe không ở trạng thái nhận đặt vé');
+    }
+
+    const seats = await this.seatRepository.find({
+      where: { id: In(dto.seatIds) },
+    });
+    if (seats.length !== dto.seatIds.length) {
+      throw new BadRequestException('Một hoặc nhiều ghế được chọn không tồn tại');
+    }
+
+    if (trip.vehicleId) {
+      const invalidSeats = seats.filter((s) => s.vehicleId !== trip.vehicleId);
+      if (invalidSeats.length > 0) {
+        throw new BadRequestException('Một hoặc nhiều ghế không thuộc phương tiện của chuyến xe này');
+      }
+    }
+
+    const seatNumberMap = new Map(seats.map((s) => [s.id, s.seatNumber]));
 
     // Check if any seat is already booked in database
     const alreadyBooked = await this.ticketRepository
       .createQueryBuilder('ticket')
       .innerJoin('ticket.booking', 'booking')
+      .leftJoinAndSelect('ticket.seat', 'seat')
       .where('booking.tripId = :tripId', { tripId: dto.tripId })
       .andWhere('ticket.seatId IN (:...seatIds)', { seatIds: dto.seatIds })
       .andWhere('ticket.status NOT IN (:...excluded)', {
@@ -179,13 +210,21 @@ export class BookingService {
       .getMany();
 
     if (alreadyBooked.length > 0) {
-      throw new ConflictException('Một số ghế đã có người đặt, vui lòng chọn ghế khác');
+      const failedSeatNumbers = alreadyBooked.map((t) => t.seat?.seatNumber || t.seatId);
+      throw new ConflictException({
+        message: 'Một số ghế đã có người đặt mua trước, vui lòng chọn ghế khác',
+        failedSeats: failedSeatNumbers,
+      });
     }
 
     const result = await this.seatLockService.holdSeats(dto.tripId, dto.seatIds, userId, 600);
 
     if (!result.success) {
-      throw new ConflictException('Ghế đang được giữ bởi hành khách khác. Vui lòng thử lại sau');
+      const failedSeatNumbers = result.failedSeats.map((id) => seatNumberMap.get(id) || id);
+      throw new ConflictException({
+        message: 'Ghế đang được giữ bởi hành khách khác. Vui lòng thử lại sau',
+        failedSeats: failedSeatNumbers,
+      });
     }
 
     const expiresAt = new Date(Date.now() + 600 * 1000);
@@ -195,6 +234,7 @@ export class BookingService {
       message: 'Giữ chỗ thành công trong 10 phút!',
       tripId: dto.tripId,
       lockedSeats: result.lockedSeats,
+      lockedSeatNumbers: result.lockedSeats.map((id) => seatNumberMap.get(id) || id),
       expiresAt,
     };
   }
@@ -219,6 +259,14 @@ export class BookingService {
       throw new NotFoundException('Không tìm thấy chuyến xe');
     }
 
+    if (
+      trip.status === TripStatus.CANCELLED ||
+      trip.status === TripStatus.COMPLETED ||
+      trip.status === TripStatus.DEPARTED
+    ) {
+      throw new BadRequestException('Chuyến xe không ở trạng thái nhận đặt vé');
+    }
+
     const seatIds = dto.passengers.map((p) => p.seatId);
     const seats = await this.seatRepository.find({
       where: { id: In(seatIds) },
@@ -228,19 +276,26 @@ export class BookingService {
       throw new BadRequestException('Một hoặc nhiều ghế được chọn không tồn tại');
     }
 
-    // Check if seats already booked in database
-    const existingTickets = await this.ticketRepository
-      .createQueryBuilder('ticket')
-      .innerJoin('ticket.booking', 'booking')
-      .where('booking.tripId = :tripId', { tripId: dto.tripId })
-      .andWhere('ticket.seatId IN (:...seatIds)', { seatIds })
-      .andWhere('ticket.status NOT IN (:...excluded)', {
-        excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
-      })
-      .getMany();
+    if (trip.vehicleId) {
+      const invalidSeats = seats.filter((s) => s.vehicleId !== trip.vehicleId);
+      if (invalidSeats.length > 0) {
+        throw new BadRequestException('Một hoặc nhiều ghế không thuộc phương tiện của chuyến xe này');
+      }
+    }
 
-    if (existingTickets.length > 0) {
-      throw new ConflictException('Một số ghế đã có người đặt mua trước');
+    const seatMap = new Map<string, SeatEntity>();
+    seats.forEach((s) => seatMap.set(s.id, s));
+
+    // Chống Race Condition: Kiểm tra quyền sở hữu lock ghế, ngăn chặn cướp ghế đang giữ
+    for (const seatId of seatIds) {
+      const lockInfo = await this.seatLockService.isSeatLocked(dto.tripId, seatId);
+      if (lockInfo.isLocked && lockInfo.userId && lockInfo.userId !== userId) {
+        const seat = seatMap.get(seatId);
+        throw new ConflictException({
+          message: `Ghế ${seat?.seatNumber || seatId} đang được giữ bởi hành khách khác. Không thể đặt vé.`,
+          failedSeats: [seat?.seatNumber || seatId],
+        });
+      }
     }
 
     // Calculate prices
@@ -253,110 +308,159 @@ export class BookingService {
     let discountAmount = 0;
     let voucher: VoucherEntity | null = null;
 
-    if (dto.voucherCode) {
-      voucher = await this.voucherRepository.findOne({
-        where: { code: dto.voucherCode.toUpperCase(), status: 'active' },
-      });
+    // Sử dụng Database Transaction khi có DataSource để đảm bảo tính toàn vẹn tuyệt đối
+    const queryRunner = this.dataSource ? this.dataSource.createQueryRunner() : null;
+    if (queryRunner) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
-      if (voucher) {
-        const today = new Date().toISOString().slice(0, 10);
-        if (voucher.startDate <= today && voucher.endDate >= today) {
-          if (totalAmount >= Number(voucher.minOrderValue)) {
-            if (voucher.discountType === 'percentage') {
-              discountAmount = Math.round((totalAmount * Number(voucher.discountValue)) / 100);
-              if (voucher.maxDiscountAmount && discountAmount > Number(voucher.maxDiscountAmount)) {
-                discountAmount = Number(voucher.maxDiscountAmount);
+    try {
+      const manager = queryRunner ? queryRunner.manager : null;
+      const ticketRepo = manager ? manager.getRepository(TicketEntity) : this.ticketRepository;
+      const bookingRepo = manager ? manager.getRepository(BookingEntity) : this.bookingRepository;
+      const voucherRepo = manager ? manager.getRepository(VoucherEntity) : this.voucherRepository;
+
+      // Double check bên trong transaction xem ghế đã bị ai mua trước chưa
+      const existingTickets = await ticketRepo
+        .createQueryBuilder('ticket')
+        .innerJoin('ticket.booking', 'booking')
+        .leftJoinAndSelect('ticket.seat', 'seat')
+        .where('booking.tripId = :tripId', { tripId: dto.tripId })
+        .andWhere('ticket.seatId IN (:...seatIds)', { seatIds })
+        .andWhere('ticket.status NOT IN (:...excluded)', {
+          excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+        })
+        .getMany();
+
+      if (existingTickets.length > 0) {
+        const failedSeatNumbers = existingTickets.map((t) => t.seat?.seatNumber || t.seatId);
+        throw new ConflictException({
+          message: 'Một số ghế đã có người đặt mua trước',
+          failedSeats: failedSeatNumbers,
+        });
+      }
+
+      if (dto.voucherCode) {
+        voucher = await voucherRepo.findOne({
+          where: { code: dto.voucherCode.toUpperCase(), status: 'active' },
+        });
+
+        if (voucher) {
+          const today = new Date().toISOString().slice(0, 10);
+          if (voucher.startDate <= today && voucher.endDate >= today) {
+            if (totalAmount >= Number(voucher.minOrderValue)) {
+              if (voucher.discountType === 'percentage') {
+                discountAmount = Math.round((totalAmount * Number(voucher.discountValue)) / 100);
+                if (voucher.maxDiscountAmount && discountAmount > Number(voucher.maxDiscountAmount)) {
+                  discountAmount = Number(voucher.maxDiscountAmount);
+                }
+              } else {
+                discountAmount = Number(voucher.discountValue);
               }
-            } else {
-              discountAmount = Number(voucher.discountValue);
+              // Increment usage
+              voucher.usedCount += 1;
+              await voucherRepo.save(voucher);
             }
-            // Increment usage
-            voucher.usedCount += 1;
-            await this.voucherRepository.save(voucher);
           }
         }
       }
-    }
 
-    const finalAmount = Math.max(0, totalAmount - discountAmount);
-    const bookingCode = generateBookingCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      const finalAmount = Math.max(0, totalAmount - discountAmount);
+      const bookingCode = generateBookingCode();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    const booking = this.bookingRepository.create({
-      bookingCode,
-      userId,
-      tripId: trip.id,
-      voucherId: voucher?.id,
-      totalAmount,
-      discountAmount,
-      finalAmount,
-      status: BookingStatus.PENDING,
-      expiresAt,
-    });
-
-    const savedBooking = await this.bookingRepository.save(booking);
-
-    // Create tickets with signed QR
-    const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
-    const ticketsToSave: TicketEntity[] = [];
-
-    const seatMap = new Map<string, SeatEntity>();
-    seats.forEach((s) => seatMap.set(s.id, s));
-
-    for (const passenger of dto.passengers) {
-      const seat = seatMap.get(passenger.seatId)!;
-      const ticketCode = generateTicketCode();
-
-      const qrPayload = {
-        ticketCode,
+      const booking = bookingRepo.create({
+        bookingCode,
+        userId,
         tripId: trip.id,
-        seatNumber: seat.seatNumber,
-        passengerName: passenger.passengerName,
-        issuedAt: Date.now(),
-      };
+        voucherId: voucher?.id,
+        totalAmount,
+        discountAmount,
+        finalAmount,
+        status: BookingStatus.PENDING,
+        expiresAt,
+      });
 
-      const { qrData, signature } = signQrPayload(qrPayload, qrSecret);
+      const savedBooking = await bookingRepo.save(booking);
 
-      ticketsToSave.push(
-        this.ticketRepository.create({
-          bookingId: savedBooking.id,
-          seatId: seat.id,
+      // Create tickets with signed QR
+      const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
+      const ticketsToSave: TicketEntity[] = [];
+
+      for (const passenger of dto.passengers) {
+        const seat = seatMap.get(passenger.seatId)!;
+        const ticketCode = generateTicketCode();
+
+        const qrPayload = {
           ticketCode,
-          qrData,
-          qrSignatureHash: signature,
+          tripId: trip.id,
+          seatNumber: seat.seatNumber,
           passengerName: passenger.passengerName,
-          passengerPhone: passenger.passengerPhone || user.phoneNumber,
-          originalPrice: unitPrice,
-          discountPrice: unitPrice,
-          status: TicketStatus.RESERVED,
-        }),
-      );
+          issuedAt: Date.now(),
+        };
+
+        const { qrData, signature } = signQrPayload(qrPayload, qrSecret);
+
+        ticketsToSave.push(
+          ticketRepo.create({
+            bookingId: savedBooking.id,
+            seatId: seat.id,
+            ticketCode,
+            qrData,
+            qrSignatureHash: signature,
+            passengerName: passenger.passengerName,
+            passengerPhone: passenger.passengerPhone || user.phoneNumber,
+            originalPrice: unitPrice,
+            discountPrice: unitPrice,
+            status: TicketStatus.RESERVED,
+          }),
+        );
+      }
+
+      const savedTickets = await ticketRepo.save(ticketsToSave);
+
+      if (queryRunner) {
+        await queryRunner.commitTransaction();
+      }
+
+      // Sau khi transaction commit thành công, giải phóng lock ghế ngay lập tức
+      await this.seatLockService.releaseSeats(dto.tripId, seatIds, userId);
+
+      return {
+        bookingId: savedBooking.id,
+        bookingCode: savedBooking.bookingCode,
+        totalAmount: savedBooking.totalAmount,
+        discountAmount: savedBooking.discountAmount,
+        finalAmount: savedBooking.finalAmount,
+        status: savedBooking.status,
+        expiresAt: savedBooking.expiresAt,
+        trip: {
+          id: trip.id,
+          routeName: trip.route?.name,
+          departureTime: trip.departureTime,
+        },
+        tickets: savedTickets.map((t) => ({
+          id: t.id,
+          ticketCode: t.ticketCode,
+          passengerName: t.passengerName,
+          seatNumber: seatMap.get(t.seatId)?.seatNumber,
+          price: t.originalPrice,
+        })),
+      };
+    } catch (error) {
+      if (queryRunner) {
+        await queryRunner.rollbackTransaction();
+      }
+      throw error;
+    } finally {
+      if (queryRunner) {
+        await queryRunner.release();
+      }
     }
-
-    const savedTickets = await this.ticketRepository.save(ticketsToSave);
-
-    return {
-      bookingId: savedBooking.id,
-      bookingCode: savedBooking.bookingCode,
-      totalAmount: savedBooking.totalAmount,
-      discountAmount: savedBooking.discountAmount,
-      finalAmount: savedBooking.finalAmount,
-      status: savedBooking.status,
-      expiresAt: savedBooking.expiresAt,
-      trip: {
-        id: trip.id,
-        routeName: trip.route?.name,
-        departureTime: trip.departureTime,
-      },
-      tickets: savedTickets.map((t) => ({
-        id: t.id,
-        ticketCode: t.ticketCode,
-        passengerName: t.passengerName,
-        seatNumber: seatMap.get(t.seatId)?.seatNumber,
-        price: t.originalPrice,
-      })),
-    };
   }
+
+
 
   async getMyTickets(userId: string, pagination: PaginationDto) {
     const page = pagination.page || 1;
