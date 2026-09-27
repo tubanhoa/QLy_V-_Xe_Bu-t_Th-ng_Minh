@@ -46,7 +46,9 @@ describe('BookingService - Invalid Date Parsing & Fallback (STT 3)', () => {
       {} as Repository<VoucherEntity>,
       {} as Repository<UserEntity>,
       {} as SeatLockService,
+      {} as any,
     );
+
   });
 
   it('should throw BadRequestException when date is malformed string like "32/13/2026"', async () => {

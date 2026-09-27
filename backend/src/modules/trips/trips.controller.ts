@@ -89,9 +89,13 @@ export class TripsController {
   @Public()
   @Get(':id/seat-map')
   @ApiOperation({ summary: 'Lấy sơ đồ ghế và tình trạng đặt chỗ realtime của chuyến' })
-  async getSeatMap(@Param('id') id: string) {
-    return this.tripsService.getSeatMap(id);
+  async getSeatMap(
+    @Param('id') id: string,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
+    return this.tripsService.getSeatMap(id, currentUserId);
   }
+
 
   @Public()
   @Get(':id')

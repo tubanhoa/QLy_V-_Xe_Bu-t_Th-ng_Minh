@@ -25,6 +25,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.';
     let errorCode = 'INTERNAL_ERROR';
+    const extraFields: Record<string, unknown> = {};
 
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
@@ -32,6 +33,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
+        errorCode = (HttpStatus[statusCode] as unknown as string) || errorCode;
       } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj['message'] as string) || message;
@@ -41,7 +43,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message = (responseObj['message'] as string[]).join('; ');
         }
 
-        errorCode = (responseObj['error'] as string) || errorCode;
+        errorCode = (responseObj['error'] as string) || (HttpStatus[statusCode] as unknown as string) || errorCode;
+
+        if (responseObj['failedSeats']) {
+          extraFields['failedSeats'] = responseObj['failedSeats'];
+        }
       }
 
       // Nếu là lỗi máy chủ (>= 500) trong production, ẩn chi tiết kỹ thuật nội bộ
@@ -76,7 +82,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode,
       timestamp: new Date().toISOString(),
       path: request.url,
+      ...extraFields,
     });
+
   }
 }
 

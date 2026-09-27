@@ -55,7 +55,9 @@ describe('Route Stations Sequence & Reverse Direction Order (STT 2)', () => {
       {} as Repository<VoucherEntity>,
       {} as Repository<UserEntity>,
       {} as SeatLockService,
+      {} as any,
     );
+
   });
 
   it('should attach NOT EXISTS clause preventing routes where destination stop is before or equal to origin stop', async () => {
