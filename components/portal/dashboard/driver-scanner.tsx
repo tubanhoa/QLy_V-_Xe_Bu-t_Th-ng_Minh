@@ -13,6 +13,8 @@ import {
   XCircle,
   ArrowLeft,
   ScanLine,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react'
 
 interface DriverScannerProps {
@@ -20,7 +22,7 @@ interface DriverScannerProps {
 }
 
 interface ScanResult {
-  status: 'valid' | 'invalid'
+  status: 'valid' | 'invalid' | 'duplicate'
   passengerName?: string
   ticketCode: string
   seatNumber?: string
@@ -28,6 +30,8 @@ interface ScanResult {
   pickupStation?: string
   message: string
   timestamp: string
+  firstScannedAt?: string
+  scanCount?: number
 }
 
 export function DriverScanner({ onBack }: DriverScannerProps) {
@@ -35,25 +39,64 @@ export function DriverScanner({ onBack }: DriverScannerProps) {
   const [manualCode, setManualCode] = useState('')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(true)
+  // Bộ nhớ đệm cục bộ lưu các vé đã check-in trên chuyến xe (Chống Replay Attack / Quét trùng lặp)
+  const [checkedInHistory, setCheckedInHistory] = useState<Record<string, { scannedAt: string; passengerName: string; count: number }>>({})
 
-  const handleSimulateScan = (type: 'valid' | 'invalid') => {
+  const handleSimulateScan = (type: 'valid' | 'invalid' | 'duplicate') => {
+    const nowStr = new Date().toLocaleTimeString('vi-VN')
+
+    if (type === 'duplicate') {
+      const code = 'TK-ICTU-8921'
+      const existing = checkedInHistory[code] || { scannedAt: '07:15:30', passengerName: 'Nguyễn Hoàng Long', count: 1 }
+      const newCount = existing.count + 1
+
+      setCheckedInHistory((prev) => ({
+        ...prev,
+        [code]: { ...existing, count: newCount },
+      }))
+
+      setScanResult({
+        status: 'duplicate',
+        ticketCode: code,
+        passengerName: existing.passengerName,
+        firstScannedAt: existing.scannedAt,
+        scanCount: newCount,
+        message: `CẢNH BÁO GIAN LẬN: Vé này đã được check-in lúc ${existing.scannedAt}! Phát hiện quét lần thứ ${newCount}. Từ chối cho lên xe!`,
+        timestamp: nowStr,
+      })
+      return
+    }
+
     if (type === 'valid') {
+      const code = 'TK-ICTU-8921'
+      // Kiểm tra nếu mã vé này ĐÃ được quét trước đó trong phiên
+      if (checkedInHistory[code]) {
+        handleSimulateScan('duplicate')
+        return
+      }
+
+      setCheckedInHistory((prev) => ({
+        ...prev,
+        [code]: { scannedAt: nowStr, passengerName: 'Nguyễn Hoàng Long', count: 1 },
+      }))
+
       setScanResult({
         status: 'valid',
         passengerName: 'Nguyễn Hoàng Long',
-        ticketCode: 'TK-ICTU-8921',
+        ticketCode: code,
         seatNumber: 'Ghế 14A (Cạnh cửa sổ)',
         route: 'Tuyến 01: KTX ICTU → Bến xe Trung tâm',
         pickupStation: 'Trạm Cổng chính ĐH CNTT & TT',
         message: 'Vé hợp lệ - Đã check-in thành công',
-        timestamp: new Date().toLocaleTimeString('vi-VN'),
+        timestamp: nowStr,
+        scanCount: 1,
       })
     } else {
       setScanResult({
         status: 'invalid',
         ticketCode: 'TK-ICTU-0042',
-        message: 'Vé đã được sử dụng lúc 06:45 sáng nay hoặc không thuộc chuyến xe này!',
-        timestamp: new Date().toLocaleTimeString('vi-VN'),
+        message: 'Vé không hợp lệ: Mã chữ ký bảo mật không khớp hoặc không thuộc chuyến xe này!',
+        timestamp: nowStr,
       })
     }
   }
@@ -162,24 +205,32 @@ export function DriverScanner({ onBack }: DriverScannerProps) {
       <div className="rounded-2xl border border-border bg-card p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
           <Sparkles size={14} className="text-emerald-500" />
-          Bộ thử nghiệm nhanh (Demo Barcode Simulator)
+          Bộ thử nghiệm nhanh (Demo Barcode Simulator - SEC-04)
         </p>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           <button
             type="button"
             onClick={() => handleSimulateScan('valid')}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all cursor-pointer"
           >
             <CheckCircle2 size={16} />
             Quét vé hợp lệ
           </button>
           <button
             type="button"
+            onClick={() => handleSimulateScan('duplicate')}
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-amber-600/20 hover:bg-amber-700 active:scale-95 transition-all cursor-pointer"
+          >
+            <ShieldAlert size={16} />
+            Thử quét trùng (Replay)
+          </button>
+          <button
+            type="button"
             onClick={() => handleSimulateScan('invalid')}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-all"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs sm:text-sm font-semibold text-white shadow-md shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-all cursor-pointer"
           >
             <XCircle size={16} />
-            Quét vé lỗi / đã dùng
+            Quét vé lỗi / sai
           </button>
         </div>
       </div>
@@ -190,12 +241,16 @@ export function DriverScanner({ onBack }: DriverScannerProps) {
           className={`animate-in fade-in slide-in-from-top-2 rounded-2xl border p-5 shadow-lg ${
             scanResult.status === 'valid'
               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100'
+              : scanResult.status === 'duplicate'
+              ? 'border-amber-500/50 bg-amber-500/15 text-amber-950 dark:text-amber-100'
               : 'border-red-500/30 bg-red-500/10 text-red-950 dark:text-red-100'
           }`}
         >
           <div className="flex items-start gap-3">
             {scanResult.status === 'valid' ? (
               <CheckCircle2 size={24} className="text-emerald-500 shrink-0 mt-0.5" />
+            ) : scanResult.status === 'duplicate' ? (
+              <AlertTriangle size={24} className="text-amber-600 shrink-0 mt-0.5 animate-bounce" />
             ) : (
               <XCircle size={24} className="text-red-500 shrink-0 mt-0.5" />
             )}
@@ -207,6 +262,18 @@ export function DriverScanner({ onBack }: DriverScannerProps) {
                 <span className="text-[11px] opacity-75">{scanResult.timestamp}</span>
               </div>
               <p className="mt-1 font-bold text-base">{scanResult.message}</p>
+
+              {scanResult.status === 'duplicate' && (
+                <div className="mt-3 p-3 rounded-xl bg-amber-100/90 border border-amber-300 text-amber-950 text-xs font-medium space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                    <ShieldAlert size={14} className="text-amber-700" />
+                    <span>Lịch sử đối soát vé trong chuyến:</span>
+                  </div>
+                  <p>• Lần quét đầu tiên: <strong>{scanResult.firstScannedAt}</strong> (Hành khách: {scanResult.passengerName})</p>
+                  <p>• Tổng số lần phát hiện quét lại: <strong className="text-rose-700 font-black">{scanResult.scanCount} lần</strong></p>
+                  <p className="text-[11px] text-amber-800 italic">Khuyến nghị: Yêu cầu hành khách xuất trình vé chính chủ trên ứng dụng di động!</p>
+                </div>
+              )}
 
               {scanResult.status === 'valid' && (
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs border-t border-emerald-500/20 pt-3">

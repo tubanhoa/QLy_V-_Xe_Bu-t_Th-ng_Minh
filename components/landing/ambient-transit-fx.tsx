@@ -120,11 +120,17 @@ const LEAF_ITEMS = [
   { id: 14, left: '72%', anim: 'tea-leaf-fall-2', dur: 11, delay: -4.5, size: 17, blur: 0.4, opacity: 0.7, type: 'b' },
 ]
 
-export const AmbientTransitFx = memo(function AmbientTransitFx() {
+interface AmbientTransitFxProps {
+  isPaused?: boolean
+}
+
+export const AmbientTransitFx = memo(function AmbientTransitFx({ isPaused = false }: AmbientTransitFxProps) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden select-none"
+      className={`pointer-events-none absolute inset-0 z-0 overflow-hidden select-none transition-opacity duration-500 ${
+        isPaused ? 'opacity-30' : 'opacity-100'
+      }`}
     >
       {/* ===================================================================
           ORGANIC FALLING TEA LEAVES (Mưa lá chè Tân Cương Thái Nguyên bay trong gió)
@@ -142,7 +148,7 @@ export const AmbientTransitFx = memo(function AmbientTransitFx() {
               animationTimingFunction: 'cubic-bezier(0.35, 0.1, 0.25, 1)',
               animationDelay: `${item.delay}s`,
               animationIterationCount: 'infinite',
-              animationPlayState: 'running',
+              animationPlayState: isPaused ? 'paused' : 'running',
               width: `${item.size}px`,
               height: `${item.size}px`,
               opacity: item.opacity,

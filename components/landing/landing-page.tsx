@@ -31,6 +31,15 @@ export function LandingPage() {
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
 
+  // Task PERF-01: Tạm dừng hoạt họa nền khi đang mở Cửa Sổ Nổi để giải phóng GPU/RAM
+  const isAnyModalOpen =
+    isSeatPickerOpen ||
+    isTripSearchOpen ||
+    isTicketModalOpen ||
+    isMonthlyPassModalOpen ||
+    isAuthPromptOpen ||
+    activeModal !== null
+
   // Tự động mở Cửa Sổ Nổi Vé Điện Tử hoặc Vé Tháng khi có query param
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -71,6 +80,7 @@ export function LandingPage() {
               width: '27.253%',
               aspectRatio: '375 / 220',
               transformOrigin: '50% 100%',
+              animationPlayState: isAnyModalOpen ? 'paused' : 'running',
             }}
           >
             {/* Realistic Ground Contact & Underbody Ambient Shadow (anchors tires to road) */}
@@ -137,7 +147,7 @@ export function LandingPage() {
         </div>
 
         {/* Organic Falling Tea Leaves Experience */}
-        <AmbientTransitFx />
+        <AmbientTransitFx isPaused={isAnyModalOpen} />
       </div>
 
       {/* 2-Tier Header with Transparent Background */}

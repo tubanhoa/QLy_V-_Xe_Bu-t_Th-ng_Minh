@@ -144,10 +144,31 @@ export function MonthlyPassModal({
     }
   }, [open, initialTab, loadMyPasses])
 
-  // Xử lý nạp ảnh minh chứng thẻ SV / CCCD
+  // Xử lý nạp ảnh minh chứng thẻ SV / CCCD có kiểm tra bảo mật (SEC-02 FE)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    setRegisterError(null)
+
+    // 1. Kiểm tra định dạng tệp (Chặn SVG, HTML, file thực thi)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp']
+
+    if (!allowedTypes.includes(file.type) || !allowedExts.includes(fileExtension) || file.type.includes('svg')) {
+      setRegisterError('Định dạng tệp không an toàn. Vui lòng chỉ tải ảnh định dạng JPG, PNG hoặc WebP.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    // 2. Kiểm tra kích thước tệp tối đa 3MB
+    const MAX_FILE_SIZE = 3 * 1024 * 1024 // 3MB
+    if (file.size > MAX_FILE_SIZE) {
+      setRegisterError(`Dung lượng ảnh (${(file.size / (1024 * 1024)).toFixed(1)}MB) vượt quá mức cho phép 3MB. Vui lòng chọn ảnh dung lượng nhỏ hơn.`)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
 
     setProofFileName(file.name)
     const reader = new FileReader()
@@ -504,7 +525,7 @@ export function MonthlyPassModal({
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       onChange={handleFileChange}
                       className="hidden"
                     />
