@@ -1,7 +1,10 @@
 import { authService } from './auth.service'
 import {
   BookingResultData,
+  CancelPaymentResult,
   CreateBookingPayload,
+  CreatePaymentUrlPayload,
+  CreatePaymentUrlResult,
   HoldSeatsPayload,
   HoldSeatsResult,
   SeatMapData,
@@ -172,6 +175,114 @@ class BookingService {
       return {
         success: false,
         message: error?.message || 'Lỗi kết nối khi đặt vé',
+      }
+    }
+  }
+
+  /**
+   * Tạo URL thanh toán VNPay / VietQR cho đơn đặt vé
+   * Endpoint: POST /api/v1/payment/create-url
+   */
+  async createPaymentUrl(
+    payload: CreatePaymentUrlPayload,
+  ): Promise<UnifiedApiResponse<CreatePaymentUrlResult>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/payment/create-url`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tạo cổng thanh toán',
+        }
+      }
+
+      const data: CreatePaymentUrlResult = resJson?.data || resJson
+      return {
+        success: true,
+        data,
+      }
+    } catch (error: any) {
+      console.error('[BookingService.createPaymentUrl] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối khi tạo thanh toán',
+      }
+    }
+  }
+
+  /**
+   * Hủy thanh toán đơn đặt vé và giải phóng ghế lập tức
+   * Endpoint: POST /api/v1/payment/cancel/:bookingId
+   */
+  async cancelPayment(
+    bookingId: string,
+  ): Promise<UnifiedApiResponse<CancelPaymentResult>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/payment/cancel/${bookingId}`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể hủy thanh toán',
+        }
+      }
+
+      const data: CancelPaymentResult = resJson?.data || resJson
+      return {
+        success: true,
+        data,
+      }
+    } catch (error: any) {
+      console.error('[BookingService.cancelPayment] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối khi hủy thanh toán',
+      }
+    }
+  }
+
+  /**
+   * Hủy đơn đặt vé khi chưa thanh toán (tùy chọn thay thế qua module booking)
+   * Endpoint: POST /api/v1/booking/cancel-booking/:bookingId
+   */
+  async cancelBooking(
+    bookingId: string,
+  ): Promise<UnifiedApiResponse<{ message: string; bookingId: string }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/booking/cancel-booking/${bookingId}`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể hủy đơn đặt vé',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson?.data || resJson,
+      }
+    } catch (error: any) {
+      console.error('[BookingService.cancelBooking] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối khi hủy đơn vé',
       }
     }
   }

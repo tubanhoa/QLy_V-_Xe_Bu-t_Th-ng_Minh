@@ -20,6 +20,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [holdExpiresAt, setHoldExpiresAt] = useState<number | null>(null)
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
+  const [holdToken, setHoldToken] = useState<string | null>(null)
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -94,6 +95,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
         // Hết thời gian giữ chỗ
         if (timerRef.current) clearInterval(timerRef.current)
         setHoldExpiresAt(null)
+        setHoldToken(null)
         setSelectedSeats([])
         setErrorMessage('Thời gian giữ chỗ (10 phút) đã hết. Vui lòng chọn lại ghế.')
         fetchSeatMap(false)
@@ -131,6 +133,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
           setSelectedSeats(updated)
           if (updated.length === 0) {
             setHoldExpiresAt(null)
+            setHoldToken(null)
           }
           // Cập nhật trạng thái ghế trên sơ đồ
           setSeatMap((prev) => {
@@ -217,6 +220,10 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
         }
         setSelectedSeats((prev) => [...prev, newHeldSeat])
 
+        if (res.data.holdToken) {
+          setHoldToken(res.data.holdToken)
+        }
+
         // Thiết lập đồng hồ 10 phút (TTL 600s)
         const expiresTime = res.data.expiresAt
           ? new Date(res.data.expiresAt).getTime()
@@ -260,6 +267,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     const ids = selectedSeats.map((s) => s.seatId)
     setSelectedSeats([])
     setHoldExpiresAt(null)
+    setHoldToken(null)
     try {
       await bookingService.releaseSeats({ tripId, seatIds: ids })
     } catch {
@@ -276,6 +284,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     errorMessage,
     remainingSeconds,
     holdExpiresAt,
+    holdToken,
     toggleSeat,
     releaseAllHeldSeats,
     refreshSeatMap: () => fetchSeatMap(false),
