@@ -22,13 +22,19 @@ import {
   CheckCircle2,
   Download,
   Share2,
+  ArrowLeftRight,
+  Radio,
+  Star,
 } from 'lucide-react'
+import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
 import type { TicketDetail } from '@/lib/types/ticket'
 import {
   TICKET_STATUS_COLOR,
   TICKET_STATUS_LABEL,
 } from '@/lib/types/ticket'
+import { ExchangeTicketModal } from './exchange-ticket-modal'
+import { FeedbackModal } from './feedback-modal'
 
 interface TicketDetailModalProps {
   ticketId: string | null
@@ -47,6 +53,8 @@ export function TicketDetailModal({
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelSuccess, setCancelSuccess] = useState(false)
+  const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
 
   const loadTicket = useCallback(async () => {
     if (!ticketId) return
@@ -432,21 +440,85 @@ export function TicketDetailModal({
                 </div>
               )}
 
-              {/* Cancel button */}
-              {canCancel && !cancelConfirm && !cancelSuccess && (
-                <button
-                  onClick={() => setCancelConfirm(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-sm font-medium text-red-400 hover:text-red-300 transition-all"
-                  id={`cancel-ticket-btn-${ticket.ticketId}`}
-                >
-                  <Ban className="w-4 h-4" />
-                  Hủy vé
-                </button>
-              )}
+              {/* Connected Action Buttons: Realtime Tracking, Exchange, Feedback, Cancel */}
+              <div className="space-y-2 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* Realtime GPS tracking link */}
+                  <Link
+                    href={`/tracking/${ticket.tripId || ticket.ticketId}`}
+                    target="_blank"
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all text-center"
+                    id={`track-ticket-btn-${ticket.ticketId}`}
+                  >
+                    <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                    Theo dõi xe realtime
+                  </Link>
+
+                  {/* Exchange ticket button */}
+                  {(ticket.status === 'PAID' || ticket.status === 'RESERVED') && canCancel && (
+                    <button
+                      type="button"
+                      onClick={() => setShowExchangeModal(true)}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-bold text-blue-400 hover:text-blue-300 transition-all"
+                      id={`exchange-ticket-btn-${ticket.ticketId}`}
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                      Đổi chuyến / ghế
+                    </button>
+                  )}
+
+                  {/* Feedback button */}
+                  {(ticket.status === 'CHECKED_IN' || ticket.status === 'PAID') && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFeedbackModal(true)}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-bold text-amber-400 hover:text-amber-300 transition-all"
+                      id={`feedback-ticket-btn-${ticket.ticketId}`}
+                    >
+                      <Star className="w-3.5 h-3.5" />
+                      Đánh giá chuyến đi
+                    </button>
+                  )}
+                </div>
+
+                {/* Cancel button */}
+                {canCancel && !cancelConfirm && !cancelSuccess && (
+                  <button
+                    onClick={() => setCancelConfirm(true)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-xs font-semibold text-red-400 hover:text-red-300 transition-all"
+                    id={`cancel-ticket-btn-${ticket.ticketId}`}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    Hủy vé (Hoàn tiền theo quy định)
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Exchange ticket modal */}
+      {showExchangeModal && ticket && (
+        <ExchangeTicketModal
+          ticketId={ticket.ticketId}
+          ticketCode={ticket.ticketCode}
+          onClose={() => setShowExchangeModal(false)}
+          onSuccess={() => {
+            setShowExchangeModal(false)
+            loadTicket()
+          }}
+        />
+      )}
+
+      {/* Feedback modal */}
+      {showFeedbackModal && ticket && (
+        <FeedbackModal
+          tripId={ticket.tripId || ticket.ticketId}
+          tripName={`${ticket.origin} ➔ ${ticket.destination}`}
+          onClose={() => setShowFeedbackModal(false)}
+        />
+      )}
     </div>
   )
 }

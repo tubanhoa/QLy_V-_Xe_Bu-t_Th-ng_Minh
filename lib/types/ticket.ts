@@ -17,6 +17,7 @@ export interface TicketSummary {
   routeName: string
   departureTime: string
   createdAt: string
+  tripId?: string
 }
 
 export interface TicketDetail extends TicketSummary {
