@@ -17,11 +17,14 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 
+import { TripSearchResult } from '@/lib/types/sprint1'
+
 interface SeatPickerModalProps {
   open: boolean
   onClose: () => void
   initialOrigin?: string
   initialDestination?: string
+  selectedTrip?: TripSearchResult | null
 }
 
 interface SeatInfo {
@@ -52,17 +55,20 @@ export function SeatPickerModal({
   onClose,
   initialOrigin = 'KTX ICTU',
   initialDestination = 'Bến xe Đồng Quang',
+  selectedTrip = null,
 }: SeatPickerModalProps) {
   const [step, setStep] = useState<'seats' | 'info' | 'ticket'>('seats')
   const [selectedSeats, setSelectedSeats] = useState<string[]>(['02B'])
-  const [selectedTrip, setSelectedTrip] = useState('07:45')
+  const [selectedTripTime, setSelectedTripTime] = useState('07:45')
   const [passengerName, setPassengerName] = useState('Nguyễn Hoàng Long')
   const [phone, setPhone] = useState('0981.234.567')
   const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo'>('vnpay')
 
   if (!open) return null
 
-  const basePrice = 10000
+  const originName = selectedTrip?.origin || initialOrigin
+  const destinationName = selectedTrip?.destination || initialDestination
+  const basePrice = selectedTrip ? Number(selectedTrip.basePrice) : 10000
   const totalPrice = selectedSeats.length * basePrice
 
   const toggleSeat = (id: string, status: string) => {
@@ -102,42 +108,59 @@ export function SeatPickerModal({
           <div className="flex flex-col gap-6">
             <div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <Bus size={13} /> Tuyến 01: Xe Buýt Điện Thông Minh
+                <Bus size={13} /> {selectedTrip ? `${selectedTrip.routeCode}: ${selectedTrip.routeName}` : 'Tuyến 01: Xe Buýt Điện Thông Minh'}
               </span>
               <h2 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Chọn Chuyến & Vị Trí Ghế Ngồi
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                {initialOrigin} ⇄ {initialDestination}
+                {originName} ⇄ {destinationName}
               </p>
             </div>
 
             {/* Trip Selector Chips */}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">
-                Chọn giờ xuất bến hôm nay
+                {selectedTrip ? 'Chuyến xe đã chọn' : 'Chọn giờ xuất bến hôm nay'}
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { time: '07:45', available: '6 chỗ' },
-                  { time: '08:15', available: '14 chỗ' },
-                  { time: '08:45', available: '18 chỗ' },
-                ].map((t) => (
-                  <button
-                    key={t.time}
-                    type="button"
-                    onClick={() => setSelectedTrip(t.time)}
-                    className={`flex flex-col items-center justify-center rounded-2xl border p-3 transition-all ${
-                      selectedTrip === t.time
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-200'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'
-                    }`}
-                  >
-                    <span className="font-mono text-base font-bold">{t.time}</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Còn {t.available}</span>
-                  </button>
-                ))}
-              </div>
+              {selectedTrip ? (
+                <div className="rounded-2xl border border-emerald-500 bg-emerald-50/70 p-3.5 text-xs text-emerald-900 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-base font-black text-[#005A36]">
+                      {new Date(selectedTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                    <div>
+                      <span className="font-bold text-slate-900 block">{selectedTrip.routeName}</span>
+                      <span className="text-[11px] text-slate-500">Biển số: {selectedTrip.vehiclePlate || '20B-EV'} · Còn {selectedTrip.availableSeats} chỗ</span>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-emerald-200/80 px-2.5 py-1 text-[11px] font-bold text-emerald-900">
+                    Xe Buýt Điện
+                  </span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { time: '07:45', available: '6 chỗ' },
+                    { time: '08:15', available: '14 chỗ' },
+                    { time: '08:45', available: '18 chỗ' },
+                  ].map((t) => (
+                    <button
+                      key={t.time}
+                      type="button"
+                      onClick={() => setSelectedTripTime(t.time)}
+                      className={`flex flex-col items-center justify-center rounded-2xl border p-3 transition-all ${
+                        selectedTripTime === t.time
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-200'
+                          : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'
+                      }`}
+                    >
+                      <span className="font-mono text-base font-bold">{t.time}</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">Còn {t.available}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Interactive 28-Seat Bus Map */}
@@ -227,7 +250,7 @@ export function SeatPickerModal({
                 Thông Tin Hành Khách & Thanh Toán
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Chuyến {selectedTrip} • Ghế {selectedSeats.join(', ')} • Tổng:{' '}
+                Chuyến {selectedTrip ? `${new Date(selectedTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} (${selectedTrip.routeCode})` : selectedTripTime} • Ghế {selectedSeats.join(', ')} • Tổng:{' '}
                 {totalPrice.toLocaleString('vi-VN')} đ
               </p>
             </div>
@@ -366,7 +389,7 @@ export function SeatPickerModal({
                 <div className="col-span-2 mt-1">
                   <span className="text-slate-400">Chuyến xuất bến:</span>
                   <p className="font-semibold text-slate-900 dark:text-white">
-                    {selectedTrip} hôm nay • {initialOrigin}
+                    {selectedTrip ? `${new Date(selectedTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} (${selectedTrip.routeCode})` : `${selectedTripTime} hôm nay`} • {originName}
                   </p>
                 </div>
               </div>

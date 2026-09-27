@@ -9,11 +9,17 @@ import { QuickAccessBar } from './quick-access-bar'
 import { QuickAccessModals } from './quick-access-modals'
 import { SeatPickerModal } from './seat-picker-modal'
 import { TopUtilityBar } from './top-utility-bar'
+import { TripSearchModal } from './trip-search-modal'
 import { VietcombankHero } from './vietcombank-hero'
+import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
 
 export function LandingPage() {
   const [isSeatPickerOpen, setIsSeatPickerOpen] = useState(false)
+  const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
+  const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
+  const [searchOrigin, setSearchOrigin] = useState('')
+  const [searchDestination, setSearchDestination] = useState('')
 
   return (
     <div className="relative h-screen max-h-screen w-full overflow-hidden bg-[#EBF5FB] flex flex-col justify-between select-none font-sans text-slate-900">
@@ -114,19 +120,29 @@ export function LandingPage() {
       {/* 2-Tier Header with Transparent Background */}
       <div className="relative shrink-0 z-30">
         <TopUtilityBar />
-        <MainHeader onOpenSeatPicker={() => setIsSeatPickerOpen(true)} />
+        <MainHeader onOpenSeatPicker={() => setIsTripSearchOpen(true)} />
       </div>
 
       {/* Middle Hero Viewport Stage */}
       <main className="relative z-10 flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
         <VietcombankHero
-          onOpenSeatPicker={() => setIsSeatPickerOpen(true)}
-          onSearchRoute={() => setIsSeatPickerOpen(true)}
+          onOpenSeatPicker={() => {
+            setSelectedTrip(null)
+            setIsTripSearchOpen(true)
+          }}
+          onSearchRoute={(query) => {
+            setSearchOrigin(query)
+            setSearchDestination('')
+            setIsTripSearchOpen(true)
+          }}
         />
 
         {/* Floating Quick Access Bar with strong mobile app glassmorphism */}
         <QuickAccessBar
-          onOpenSeatPicker={() => setIsSeatPickerOpen(true)}
+          onOpenSeatPicker={() => {
+            setSelectedTrip(null)
+            setIsTripSearchOpen(true)
+          }}
           onOpenModal={(modal) => setActiveModal(modal)}
         />
       </main>
@@ -134,20 +150,46 @@ export function LandingPage() {
       {/* Fixed 24/7 Support Bot Mascot in Bottom Right */}
       <FloatingSupportBot />
 
+      {/* Interactive Trip Search & Realtime Schedules Modal */}
+      <TripSearchModal
+        open={isTripSearchOpen}
+        onClose={() => setIsTripSearchOpen(false)}
+        initialOrigin={searchOrigin}
+        initialDestination={searchDestination}
+        onSelectTrip={(trip) => {
+          setSelectedTrip(trip)
+          setSearchOrigin(trip.origin)
+          setSearchDestination(trip.destination)
+          setIsTripSearchOpen(false)
+          setIsSeatPickerOpen(true)
+        }}
+      />
+
       {/* Interactive 28-Seat Bus Booking & QR Ticket Modal */}
       <SeatPickerModal
         open={isSeatPickerOpen}
-        onClose={() => setIsSeatPickerOpen(false)}
-        initialOrigin="KTX ICTU"
-        initialDestination="Bến xe Thái Nguyên"
+        onClose={() => {
+          setIsSeatPickerOpen(false)
+          setSelectedTrip(null)
+        }}
+        initialOrigin={searchOrigin || 'ĐH CNTT & TT Thái Nguyên'}
+        initialDestination={searchDestination || 'Bến Xe Trung Tâm Thái Nguyên'}
+        selectedTrip={selectedTrip}
       />
 
       {/* Interactive Quick Access Modals (Routes, News, Student Pass, Lookup) */}
       <QuickAccessModals
         activeModal={activeModal}
         onClose={() => setActiveModal(null)}
-        onBookSeat={() => setIsSeatPickerOpen(true)}
+        onBookSeat={(route?: BusRoute) => {
+          if (route) {
+            setSearchOrigin(route.origin)
+            setSearchDestination(route.destination)
+          }
+          setIsTripSearchOpen(true)
+        }}
       />
     </div>
   )
 }
+

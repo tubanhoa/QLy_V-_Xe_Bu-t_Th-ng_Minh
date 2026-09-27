@@ -1,15 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
+  AlertCircle,
   Calendar,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   FileText,
   GraduationCap,
+  Loader2,
   MapPin,
   Megaphone,
   QrCode,
+  RefreshCw,
   Route,
   Search,
   ShieldCheck,
@@ -19,11 +24,13 @@ import {
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { searchService } from '@/lib/services/search.service'
+import { BusRoute } from '@/lib/types/sprint1'
 
 interface QuickAccessModalsProps {
   activeModal: 'routes' | 'news' | 'student-pass' | 'lookup' | null
   onClose: () => void
-  onBookSeat?: () => void
+  onBookSeat?: (route?: BusRoute) => void
 }
 
 interface LookupResult {
@@ -39,11 +46,48 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null)
   const [studentFormSubmitted, setStudentFormSubmitted] = useState(false)
 
+  // State cho danh sách tuyến buýt lấy từ Backend thật
+  const [routes, setRoutes] = useState<BusRoute[]>([])
+  const [routesLoading, setRoutesLoading] = useState(false)
+  const [routesError, setRoutesError] = useState<string | null>(null)
+  const [routeSearchKeyword, setRouteSearchKeyword] = useState('')
+  const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (activeModal === 'routes') {
+      loadRoutes()
+    }
+  }, [activeModal])
+
+  const loadRoutes = async (keyword?: string) => {
+    setRoutesLoading(true)
+    setRoutesError(null)
+    try {
+      const res = await searchService.getRoutes(keyword ? { keyword } : undefined)
+      if (res.success && res.data) {
+        setRoutes(res.data)
+      } else {
+        setRoutesError(res.message || 'Không thể tải danh sách tuyến buýt từ máy chủ')
+      }
+    } catch (err: any) {
+      setRoutesError(err?.message || 'Lỗi kết nối máy chủ')
+    } finally {
+      setRoutesLoading(false)
+    }
+  }
+
+  const handleRouteSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    loadRoutes(routeSearchKeyword)
+  }
+
   const handleClose = () => {
     onClose()
     setLookupCode('')
     setLookupResult(null)
     setStudentFormSubmitted(false)
+    setRouteSearchKeyword('')
+    setExpandedRouteId(null)
   }
 
   if (!activeModal) return null
@@ -85,73 +129,192 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
 
         {/* Modal Content */}
         <div className="overflow-y-auto p-6 space-y-4 text-slate-700 text-sm">
-          {/* Modal 1: Routes List */}
+          {/* Modal 1: Routes List - Lấy dữ liệu thật từ Backend */}
           {activeModal === 'routes' && (
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 transition-colors hover:border-[#005A36]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-[#005A36] px-2.5 py-1 text-xs font-black text-white">CT-01</span>
-                    <span className="font-bold text-slate-900">KTX ICTU ➔ Bến xe Thái Nguyên</span>
-                  </div>
-                  <span className="text-xs font-bold text-[#005A36]">15.000đ</span>
+            <div className="space-y-3.5">
+              {/* Thanh tìm kiếm tuyến nhanh */}
+              <form onSubmit={handleRouteSearch} className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={routeSearchKeyword}
+                    onChange={(e) => setRouteSearchKeyword(e.target.value)}
+                    placeholder="Tìm theo mã tuyến (CT-01) hoặc tên trạm..."
+                    className="w-full rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 text-xs text-slate-800 outline-none focus:border-[#005A36] focus:ring-1 focus:ring-[#005A36]/20"
+                  />
+                  {routeSearchKeyword && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRouteSearchKeyword('')
+                        loadRoutes('')
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
-                <p className="mt-2 text-xs text-slate-600">
-                  Lộ trình: Ký túc xá ➔ Giảng đường C1 ➔ Viện CNTT ➔ Cổng chính ➔ Bến xe Đồng Quang ➔ Quảng trường Võ Nguyên Giáp.
-                </p>
-                <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-500 border-t border-emerald-100 pt-2">
-                  <span>Tần suất: 15 phút/chuyến</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose()
-                      onBookSeat?.()
-                    }}
-                    className="font-bold text-[#005A36] hover:underline"
-                  >
-                    Chọn chỗ chuyến này ➔
-                  </button>
-                </div>
-              </div>
+                <button
+                  type="submit"
+                  disabled={routesLoading}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#005A36] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#004529] active:scale-95 disabled:opacity-70 transition-all"
+                >
+                  {routesLoading ? <Loader2 size={14} className="animate-spin" /> : <span>Lọc</span>}
+                </button>
+              </form>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#005A36]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-black text-white">CT-02</span>
-                    <span className="font-bold text-slate-900">Campus Loop Liên Trường</span>
+              {/* Trạng thái Loading */}
+              {routesLoading && (
+                <div className="space-y-3 py-2">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 animate-pulse">
+                    <div className="h-5 w-48 rounded-md bg-slate-200" />
+                    <div className="mt-3 h-3 w-full rounded-md bg-slate-200" />
+                    <div className="mt-2 h-3 w-3/4 rounded-md bg-slate-200" />
                   </div>
-                  <span className="text-xs font-bold text-teal-700">10.000đ</span>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 animate-pulse">
+                    <div className="h-5 w-44 rounded-md bg-slate-200" />
+                    <div className="mt-3 h-3 w-full rounded-md bg-slate-200" />
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-600">
-                  Kết nối: ĐH CNTT & TT ➔ ĐH Sư Phạm ➔ ĐH Y Dược ➔ ĐH Kỹ Thuật Công Nghiệp Thái Nguyên.
-                </p>
-                <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-500 border-t border-slate-100 pt-2">
-                  <span>Tần suất: 20 phút/chuyến</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose()
-                      onBookSeat?.()
-                    }}
-                    className="font-bold text-[#005A36] hover:underline"
-                  >
-                    Chọn chỗ chuyến này ➔
-                  </button>
-                </div>
-              </div>
+              )}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#005A36]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-black text-white">CT-03</span>
-                    <span className="font-bold text-slate-900">Xe Buýt Điện Xanh EV Express</span>
+              {/* Trạng thái Lỗi */}
+              {!routesLoading && routesError && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 text-xs text-rose-800 space-y-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>Không thể tải dữ liệu tuyến xe</span>
                   </div>
-                  <span className="text-xs font-bold text-emerald-800">12.000đ</span>
+                  <p className="text-[11px] text-rose-600 pl-6">{routesError}</p>
+                  <div className="pl-6 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => loadRoutes(routeSearchKeyword)}
+                      className="inline-flex items-center gap-1.5 font-bold text-rose-800 underline hover:text-rose-950"
+                    >
+                      <RefreshCw size={12} />
+                      <span>Thử lại</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-600">
-                  Tuyến chuyên gia & giảng viên không phát thải kết nối các khu công nghệ cao và trung tâm nghiên cứu AI.
-                </p>
-              </div>
+              )}
+
+              {/* Trạng thái Không có kết quả */}
+              {!routesLoading && !routesError && routes.length === 0 && (
+                <div className="py-8 text-center text-slate-400 text-xs space-y-2">
+                  <Route size={36} className="mx-auto text-slate-300" />
+                  <p className="font-semibold text-slate-600">Không tìm thấy tuyến xe nào phù hợp</p>
+                  <p className="text-[11px]">Hãy thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.</p>
+                </div>
+              )}
+
+              {/* Danh sách Tuyến xe thật từ Backend */}
+              {!routesLoading && !routesError && routes.map((route) => {
+                const isExpanded = expandedRouteId === route.id
+                const stations = route.routeStations || []
+                const basePriceNum = Number(route.basePrice || 10000)
+                const studentPriceNum = Number(route.studentPrice || 5000)
+                const startHour = route.operatingStart?.substring(0, 5) || '05:30'
+                const endHour = route.operatingEnd?.substring(0, 5) || '21:00'
+
+                return (
+                  <div
+                    key={route.id}
+                    className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-4 transition-all hover:border-[#005A36] hover:bg-emerald-50/70"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="rounded-lg bg-[#005A36] px-2.5 py-1 text-xs font-black text-white shadow-xs">
+                          {route.routeCode}
+                        </span>
+                        <div>
+                          <h4 className="font-bold text-slate-900 leading-snug">{route.name}</h4>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {route.distanceKm ? `${route.distanceKm} km · ` : ''}
+                            Tần suất: {route.frequencyMinutes || 15} phút/chuyến
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="block text-xs font-extrabold text-[#005A36]">
+                          {basePriceNum.toLocaleString('vi-VN')}đ
+                        </span>
+                        <span className="inline-block rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                          HSSV: {studentPriceNum.toLocaleString('vi-VN')}đ
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Lộ trình tóm tắt */}
+                    <div className="mt-2.5 text-xs text-slate-600 bg-white/70 rounded-xl p-2.5 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 text-slate-500 font-medium text-[11px]">
+                        <Clock size={12} className="text-[#005A36]" />
+                        <span>Giờ hoạt động: <strong>{startHour} - {endHour}</strong></span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-700">
+                        <strong>Xuất phát:</strong> {route.origin} ➔ <strong>Đích:</strong> {route.destination}
+                      </p>
+                    </div>
+
+                    {/* Chi tiết các trạm dừng (Collapsible) */}
+                    {stations.length > 0 && (
+                      <div className="mt-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-[#005A36]"
+                        >
+                          <span>{isExpanded ? 'Ẩn lộ trình chi tiết' : `Xem toàn bộ ${stations.length} trạm dừng`}</span>
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2.5 space-y-2 border-l-2 border-emerald-400 pl-3 ml-1.5 py-1 text-xs">
+                            {stations
+                              .sort((a, b) => a.stopOrder - b.stopOrder)
+                              .map((rs, idx) => (
+                                <div key={rs.id || idx} className="relative flex items-start gap-2">
+                                  <span className="size-2 rounded-full bg-[#005A36] ring-4 ring-emerald-100 mt-1 shrink-0 -ml-[17px]" />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-slate-900">{rs.station?.name}</span>
+                                      {rs.station?.isHub && (
+                                        <span className="rounded bg-teal-100 px-1.5 py-0.2 text-[9px] font-bold text-teal-800">
+                                          Trạm trung chuyển
+                                        </span>
+                                      )}
+                                    </div>
+                                    {rs.station?.address && (
+                                      <p className="text-[10px] text-slate-500">{rs.station.address}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer card */}
+                    <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-500 border-t border-emerald-100/80 pt-2.5">
+                      <span className="text-[11px] text-slate-500">100% Xe Buýt Điện Xanh</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose()
+                          onBookSeat?.(route)
+                        }}
+                        className="inline-flex items-center gap-1 font-bold text-[#005A36] hover:underline hover:text-emerald-800"
+                      >
+                        <span>Đặt chỗ chuyến này</span>
+                        <span>➔</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
