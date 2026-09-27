@@ -75,7 +75,7 @@ export class SearchTripsDto {
 
   @ApiPropertyOptional({ example: '2026-09-26', description: 'Ngày đi (YYYY-MM-DD), mặc định hôm nay nếu bỏ trống' })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: 'Định dạng ngày không hợp lệ' })
   date?: string;
 }
 
