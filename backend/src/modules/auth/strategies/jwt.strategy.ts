@@ -19,7 +19,25 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly userRepository: Repository<UserEntity>,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: any) => {
+          if (!req) return null;
+          if (req.cookies && (req.cookies['access_token'] || req.cookies['token'])) {
+            return req.cookies['access_token'] || req.cookies['token'];
+          }
+          if (req.headers && req.headers.cookie) {
+            const raw = req.headers.cookie;
+            const cookies = raw.split(';').reduce((acc: any, c: string) => {
+              const [k, v] = c.trim().split('=');
+              if (k && v) acc[k] = decodeURIComponent(v);
+              return acc;
+            }, {});
+            return cookies['access_token'] || cookies['token'] || null;
+          }
+          return null;
+        },
+      ]),
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_SECRET || 'smart-bus-jwt-access-secret-key-2026',
     });

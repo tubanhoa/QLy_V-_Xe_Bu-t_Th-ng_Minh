@@ -15,6 +15,7 @@ import { ReportsModule } from './modules/reports/reports.module.js';
 import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { NotificationModule } from './modules/notification/notification.module.js';
+import { UploadModule } from './modules/upload/upload.module.js';
 import { SeedModule } from './database/seeds/seed.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -40,6 +41,7 @@ import { AppService } from './app.service.js';
     FeedbackModule,
     AuditModule,
     NotificationModule,
+    UploadModule,
     SeedModule,
   ],
   controllers: [AppController],

@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Query,
+  Headers,
   UseGuards,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RateLimitGuard, RateLimit } from '../../common/guards/rate-limit.guard.js';
 
 @ApiTags('Booking & Tickets')
 // TODO: xoá alias VERSION_NEUTRAL và alias 'bookings' sau khi Frontend xác nhận đã đổi hoàn toàn sang /api/v1/booking
@@ -104,10 +106,11 @@ export class BookingController {
     return this.bookingService.getTicketQr(ticketId, userId, userRole);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({ limit: 3, windowSeconds: 600, actionName: 'gửi lại email vé điện tử' })
   @ApiBearerAuth('JWT')
   @Post('tickets/:id/resend-email')
-  @ApiOperation({ summary: 'Gửi lại email vé điện tử kèm mã QR' })
+  @ApiOperation({ summary: 'Gửi lại email vé điện tử kèm mã QR (Giới hạn 3 lần/10 phút)' })
   async resendTicketEmail(
     @Param('id') ticketId: string,
     @CurrentUser('id') userId: string,
@@ -135,8 +138,11 @@ export class BookingController {
     @Param('ticketId') ticketId: string,
     @Body() dto: CancelTicketDto,
     @CurrentUser('id') userId: string,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyKeyHeader?: string,
   ) {
-    return this.bookingService.cancelTicket(ticketId, userId, dto);
+    const key = idempotencyKeyHeader || xIdempotencyKeyHeader || dto?.idempotencyKey;
+    return this.bookingService.cancelTicket(ticketId, userId, { ...dto, idempotencyKey: key });
   }
 
   @UseGuards(JwtAuthGuard)
@@ -171,9 +177,13 @@ export class BookingController {
     @Param('ticketId') ticketId: string,
     @Body() dto: ConfirmExchangeDto,
     @CurrentUser('id') userId: string,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
+    @Headers('x-idempotency-key') xIdempotencyKeyHeader?: string,
   ) {
-    return this.bookingService.confirmExchange(ticketId, dto, userId);
+    const key = idempotencyKeyHeader || xIdempotencyKeyHeader || dto?.idempotencyKey;
+    return this.bookingService.confirmExchange(ticketId, { ...dto, idempotencyKey: key }, userId);
   }
+
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')

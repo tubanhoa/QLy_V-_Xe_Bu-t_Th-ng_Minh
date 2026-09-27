@@ -62,6 +62,9 @@ export class BookingService {
     private readonly notificationService?: NotificationService,
   ) {}
 
+  private readonly activeTicketLocks = new Set<string>();
+  private readonly idempotencyRecords = new Map<string, { result: any; createdAt: number }>();
+
   async searchTrips(dto: SearchTripsDto) {
     let targetDateStr = dto?.date?.trim();
     if (!targetDateStr) {
@@ -934,107 +937,140 @@ export class BookingService {
 
   /**
    * API Hủy vé: Cập nhật trạng thái vé, giải phóng ghế trống lập tức và tự động hoàn tiền
+   * Tích hợp Idempotency Key và Khóa bi quan (Pessimistic Lock / Concurrency Control) ngăn chặn race condition & hoàn tiền kép
    */
   async cancelTicket(ticketId: string, userId: string, dto?: CancelTicketDto) {
-    const ticket = await this.ticketRepository.findOne({
-      where: [{ id: ticketId }, { ticketCode: ticketId }],
-      relations: {
-        booking: {
-          trip: { route: true },
-          user: true,
-          payments: true,
-        },
-        seat: true,
-      },
-    });
-
-    if (!ticket) {
-      throw new NotFoundException('Không tìm thấy vé xe');
+    // 1. Kiểm tra Idempotency Key: Nếu request trùng lặp đã xử lý thành công, trả về kết quả đã lưu ngay lập tức
+    if (dto?.idempotencyKey && this.idempotencyRecords.has(dto.idempotencyKey)) {
+      return this.idempotencyRecords.get(dto.idempotencyKey)!.result;
     }
 
-    if (ticket.booking.userId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền hủy vé này');
-    }
-
-    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
-    if (!policy.canCancel) {
-      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để hủy');
-    }
-
-    const previousStatus = ticket.status;
-    ticket.status = TicketStatus.CANCELLED;
-    await this.ticketRepository.save(ticket);
-
-    // 1. Giải phóng ghế trống lập tức trong CSDL và in-memory
-    if (this.seatHoldRepository) {
-      await this.seatHoldRepository.update(
-        { tripId: ticket.booking.tripId, seatId: ticket.seatId },
-        { status: 'released' },
+    // 2. Concurrency Lock: Ngăn chặn 2 request hủy cùng một vé gửi đến đồng thời (Pessimistic Lock)
+    if (this.activeTicketLocks.has(ticketId)) {
+      throw new ConflictException(
+        'Yêu cầu hủy vé này đang được xử lý đồng thời. Vui lòng không gửi yêu cầu trùng lặp.',
       );
     }
-    if (this.seatLockService) {
-      await this.seatLockService.releaseSeats(ticket.booking.tripId, [ticket.seatId]);
-    }
+    this.activeTicketLocks.add(ticketId);
 
-    // 2. Tự động xử lý quy trình hoàn tiền qua cổng thanh toán
-    let refundProcessed = false;
-    if (previousStatus === TicketStatus.PAID) {
-      const payment =
-        ticket.booking.payments?.[0] ||
-        (this.paymentRepository ? await this.paymentRepository.findOne({ where: { bookingId: ticket.bookingId } }) : null);
-      if (payment) {
-        payment.status = PaymentStatus.REFUNDED;
-        payment.refundTime = new Date();
-        payment.refundAmount = policy.refundAmount;
-        payment.refundReason = dto?.reason || 'Hành khách hủy vé theo quy định';
-        if (this.paymentRepository) {
-          await this.paymentRepository.save(payment);
-        }
-        refundProcessed = true;
+    try {
+      const ticket = await this.ticketRepository.findOne({
+        where: [{ id: ticketId }, { ticketCode: ticketId }],
+        relations: {
+          booking: {
+            trip: { route: true },
+            user: true,
+            payments: true,
+          },
+          seat: true,
+        },
+      });
+
+      if (!ticket) {
+        throw new NotFoundException('Không tìm thấy vé xe');
       }
-    }
 
-    // 3. Nếu toàn bộ vé trong đơn đặt đều đã bị hủy -> cập nhật booking sang CANCELLED
-    const remainingActiveTickets = await this.ticketRepository.count({
-      where: {
-        bookingId: ticket.bookingId,
-        status: In([TicketStatus.RESERVED, TicketStatus.PAID, TicketStatus.CHECKED_IN]),
-      },
-    });
-    if (remainingActiveTickets === 0) {
-      ticket.booking.status = BookingStatus.CANCELLED;
-      await this.bookingRepository.save(ticket.booking);
-    }
+      if (ticket.booking.userId !== userId) {
+        throw new ForbiddenException('Bạn không có quyền hủy vé này');
+      }
 
-    // 4. Tự động gửi Email xác nhận hủy vé và hoàn tiền cho hành khách
-    const recipientEmail = ticket.booking.user?.email;
-    if (this.notificationService && recipientEmail) {
-      await this.notificationService.sendTicketCancellationEmail({
-        recipientEmail,
-        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
-        bookingCode: ticket.booking.bookingCode,
+      // 3. Ngăn chặn hủy vé đã bị hủy trước đó
+      if (ticket.status === TicketStatus.CANCELLED) {
+        throw new BadRequestException('Vé này đã bị hủy trước đó');
+      }
+
+      const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+      if (!policy.canCancel) {
+        throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để hủy');
+      }
+
+      const previousStatus = ticket.status;
+      ticket.status = TicketStatus.CANCELLED;
+      await this.ticketRepository.save(ticket);
+
+      // 4. Giải phóng ghế trống lập tức trong CSDL và in-memory
+      if (this.seatHoldRepository) {
+        await this.seatHoldRepository.update(
+          { tripId: ticket.booking.tripId, seatId: ticket.seatId },
+          { status: 'released' },
+        );
+      }
+      if (this.seatLockService) {
+        await this.seatLockService.releaseSeats(ticket.booking.tripId, [ticket.seatId]);
+      }
+
+      // 5. Tự động xử lý quy trình hoàn tiền qua cổng thanh toán (chống hoàn tiền gấp đôi tuyệt đối)
+      let refundProcessed = false;
+      if (previousStatus === TicketStatus.PAID) {
+        const payment =
+          ticket.booking.payments?.[0] ||
+          (this.paymentRepository ? await this.paymentRepository.findOne({ where: { bookingId: ticket.bookingId } }) : null);
+        if (payment && payment.status !== PaymentStatus.REFUNDED) {
+          payment.status = PaymentStatus.REFUNDED;
+          payment.refundTime = new Date();
+          payment.refundAmount = policy.refundAmount;
+          payment.refundReason = dto?.reason || 'Hành khách hủy vé theo quy định';
+          if (this.paymentRepository) {
+            await this.paymentRepository.save(payment);
+          }
+          refundProcessed = true;
+        }
+      }
+
+      // 6. Nếu toàn bộ vé trong đơn đặt đều đã bị hủy -> cập nhật booking sang CANCELLED
+      const remainingActiveTickets = await this.ticketRepository.count({
+        where: {
+          bookingId: ticket.bookingId,
+          status: In([TicketStatus.RESERVED, TicketStatus.PAID, TicketStatus.CHECKED_IN]),
+        },
+      });
+      if (remainingActiveTickets === 0) {
+        ticket.booking.status = BookingStatus.CANCELLED;
+        await this.bookingRepository.save(ticket.booking);
+      }
+
+      // 7. Tự động gửi Email xác nhận hủy vé và hoàn tiền cho hành khách
+      const recipientEmail = ticket.booking.user?.email;
+      if (this.notificationService && recipientEmail) {
+        await this.notificationService.sendTicketCancellationEmail({
+          recipientEmail,
+          passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+          bookingCode: ticket.booking.bookingCode,
+          ticketCode: ticket.ticketCode,
+          routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh',
+          originalPrice: policy.originalPrice,
+          cancellationFee: policy.cancellationFeeAmount,
+          refundAmount: policy.refundAmount,
+          cancelledAt: new Date(),
+        });
+      }
+
+      const result = {
+        success: true,
+        message: `Hủy vé ${ticket.ticketCode} thành công. ${policy.refundAmount > 0 ? `Số tiền hoàn lại là ${policy.refundAmount.toLocaleString('vi-VN')} VND.` : 'Vé không được hoàn tiền theo chính sách.'}`,
+        ticketId: ticket.id,
         ticketCode: ticket.ticketCode,
-        routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh',
+        status: ticket.status,
         originalPrice: policy.originalPrice,
         cancellationFee: policy.cancellationFeeAmount,
         refundAmount: policy.refundAmount,
-        cancelledAt: new Date(),
-      });
-    }
+        refundProcessed,
+        seatReleased: true,
+      };
 
-    return {
-      success: true,
-      message: `Hủy vé ${ticket.ticketCode} thành công. ${policy.refundAmount > 0 ? `Số tiền hoàn lại là ${policy.refundAmount.toLocaleString('vi-VN')} VND.` : 'Vé không được hoàn tiền theo chính sách.'}`,
-      ticketId: ticket.id,
-      ticketCode: ticket.ticketCode,
-      status: ticket.status,
-      originalPrice: policy.originalPrice,
-      cancellationFee: policy.cancellationFeeAmount,
-      refundAmount: policy.refundAmount,
-      refundProcessed,
-      seatReleased: true,
-    };
+      if (dto?.idempotencyKey) {
+        this.idempotencyRecords.set(dto.idempotencyKey, {
+          result,
+          createdAt: Date.now(),
+        });
+      }
+
+      return result;
+    } finally {
+      this.activeTicketLocks.delete(ticketId);
+    }
   }
+
 
   /**
    * API Tìm kiếm chuyến mới cho luồng đổi chuyến
@@ -1242,164 +1278,189 @@ export class BookingService {
    * API Xác nhận đổi chuyến: Tính chênh lệch giá, giải phóng ghế cũ, cấp ghế mới, ký số lại QR và gửi email vé mới
    */
   async confirmExchange(ticketId: string, dto: ConfirmExchangeDto, userId: string) {
-    const ticket = await this.ticketRepository.findOne({
-      where: [{ id: ticketId }, { ticketCode: ticketId }],
-      relations: {
-        booking: {
-          trip: { route: true, vehicle: true },
-          user: true,
-        },
-        seat: true,
-      },
-    });
-
-    if (!ticket) {
-      throw new NotFoundException('Không tìm thấy vé xe');
+    if (dto?.idempotencyKey && this.idempotencyRecords.has(dto.idempotencyKey)) {
+      return this.idempotencyRecords.get(dto.idempotencyKey)!.result;
     }
 
-    if (ticket.booking.userId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền đổi vé này');
-    }
-
-    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
-    if (!policy.canExchange) {
-      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để đổi chuyến');
-    }
-
-    const oldTripId = ticket.booking.tripId;
-    const oldSeatId = ticket.seatId;
-    const oldSeatNumber = ticket.seat?.seatNumber;
-    const oldRouteName = ticket.booking.trip?.route?.name;
-
-    const newTrip = await this.tripRepository.findOne({
-      where: { id: dto.newTripId },
-      relations: { route: true, vehicle: true },
-    });
-    if (!newTrip) {
-      throw new NotFoundException('Không tìm thấy chuyến xe mới');
-    }
-
-    const newSeat = await this.seatRepository.findOne({ where: { id: dto.newSeatId } });
-    if (!newSeat) {
-      throw new NotFoundException('Không tìm thấy ghế mới');
-    }
-
-    // Kiểm tra trùng ghế trên chuyến mới
-    const existing = await this.ticketRepository
-      .createQueryBuilder('ticket')
-      .innerJoin('ticket.booking', 'booking')
-      .where('booking.tripId = :tripId', { tripId: dto.newTripId })
-      .andWhere('ticket.seatId = :seatId', { seatId: dto.newSeatId })
-      .andWhere('ticket.id != :ticketId', { ticketId: ticket.id })
-      .andWhere('ticket.status NOT IN (:...excluded)', {
-        excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
-      })
-      .getOne();
-
-    if (existing) {
-      throw new ConflictException('Ghế này trên chuyến mới đã có người đặt');
-    }
-
-    // Tính toán chênh lệch giá vé và phí đổi vé
-    const oldPrice = Number(ticket.originalPrice);
-    const newTripPrice = Number(newTrip.route?.basePrice) || oldPrice;
-    const exchangeFee = policy.exchangeFeeAmount;
-    const totalNewCost = newTripPrice + exchangeFee;
-    const priceDifference = totalNewCost - oldPrice;
-
-    // 1. Giải phóng ghế cũ trên chuyến cũ
-    if (this.seatHoldRepository) {
-      await this.seatHoldRepository.update(
-        { tripId: oldTripId, seatId: oldSeatId },
-        { status: 'released' },
+    if (this.activeTicketLocks.has(ticketId)) {
+      throw new ConflictException(
+        'Yêu cầu đổi vé này đang được xử lý đồng thời. Vui lòng không gửi yêu cầu trùng lặp.',
       );
     }
-    if (this.seatLockService) {
-      await this.seatLockService.releaseSeats(oldTripId, [oldSeatId]);
-    }
+    this.activeTicketLocks.add(ticketId);
 
-    // 2. Chuyển seat hold ghế mới sang 'booked'
-    if (this.seatHoldRepository) {
-      const activeHold = await this.seatHoldRepository.findOne({
-        where: { tripId: dto.newTripId, seatId: dto.newSeatId, status: 'holding' },
+    try {
+      const ticket = await this.ticketRepository.findOne({
+        where: [{ id: ticketId }, { ticketCode: ticketId }],
+        relations: {
+          booking: {
+            trip: { route: true, vehicle: true },
+            user: true,
+          },
+          seat: true,
+        },
       });
-      if (activeHold) {
-        activeHold.status = 'booked';
-        await this.seatHoldRepository.save(activeHold);
-      } else {
-        const bookedHold = this.seatHoldRepository.create({
-          tripId: dto.newTripId,
-          seatId: dto.newSeatId,
-          userId,
-          holdToken: `booked-${Date.now()}`,
-          status: 'booked',
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        });
-        await this.seatHoldRepository.save(bookedHold);
+
+      if (!ticket) {
+        throw new NotFoundException('Không tìm thấy vé xe');
       }
-    }
 
-    // 3. Cập nhật TicketEntity sang chuyến mới & ghế mới
-    ticket.seatId = newSeat.id;
-    ticket.booking.tripId = newTrip.id;
-    await this.bookingRepository.save(ticket.booking);
+      if (ticket.booking.userId !== userId) {
+        throw new ForbiddenException('Bạn không có quyền đổi vé này');
+      }
 
-    // 4. Ký số lại mã QR mới
-    const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
-    const { qrData, signature } = signQrPayload(
-      {
+      const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+      if (!policy.canExchange) {
+        throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để đổi chuyến');
+      }
+
+      const oldTripId = ticket.booking.tripId;
+      const oldSeatId = ticket.seatId;
+      const oldSeatNumber = ticket.seat?.seatNumber;
+      const oldRouteName = ticket.booking.trip?.route?.name;
+
+      const newTrip = await this.tripRepository.findOne({
+        where: { id: dto.newTripId },
+        relations: { route: true, vehicle: true },
+      });
+      if (!newTrip) {
+        throw new NotFoundException('Không tìm thấy chuyến xe mới');
+      }
+
+      const newSeat = await this.seatRepository.findOne({ where: { id: dto.newSeatId } });
+      if (!newSeat) {
+        throw new NotFoundException('Không tìm thấy ghế mới');
+      }
+
+      // Kiểm tra trùng ghế trên chuyến mới
+      const existing = await this.ticketRepository
+        .createQueryBuilder('ticket')
+        .innerJoin('ticket.booking', 'booking')
+        .where('booking.tripId = :tripId', { tripId: dto.newTripId })
+        .andWhere('ticket.seatId = :seatId', { seatId: dto.newSeatId })
+        .andWhere('ticket.id != :ticketId', { ticketId: ticket.id })
+        .andWhere('ticket.status NOT IN (:...excluded)', {
+          excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+        })
+        .getOne();
+
+      if (existing) {
+        throw new ConflictException('Ghế này trên chuyến mới đã có người đặt');
+      }
+
+      // Tính toán chênh lệch giá vé và phí đổi vé
+      const oldPrice = Number(ticket.originalPrice);
+      const newTripPrice = Number(newTrip.route?.basePrice) || oldPrice;
+      const exchangeFee = policy.exchangeFeeAmount;
+      const totalNewCost = newTripPrice + exchangeFee;
+      const priceDifference = totalNewCost - oldPrice;
+
+      // 1. Giải phóng ghế cũ trên chuyến cũ
+      if (this.seatHoldRepository) {
+        await this.seatHoldRepository.update(
+          { tripId: oldTripId, seatId: oldSeatId },
+          { status: 'released' },
+        );
+      }
+      if (this.seatLockService) {
+        await this.seatLockService.releaseSeats(oldTripId, [oldSeatId]);
+      }
+
+      // 2. Chuyển seat hold ghế mới sang 'booked'
+      if (this.seatHoldRepository) {
+        const activeHold = await this.seatHoldRepository.findOne({
+          where: { tripId: dto.newTripId, seatId: dto.newSeatId, status: 'holding' },
+        });
+        if (activeHold) {
+          activeHold.status = 'booked';
+          await this.seatHoldRepository.save(activeHold);
+        } else {
+          const bookedHold = this.seatHoldRepository.create({
+            tripId: dto.newTripId,
+            seatId: dto.newSeatId,
+            userId,
+            holdToken: `booked-${Date.now()}`,
+            status: 'booked',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+          await this.seatHoldRepository.save(bookedHold);
+        }
+      }
+
+      // 3. Cập nhật TicketEntity sang chuyến mới & ghế mới
+      ticket.seatId = newSeat.id;
+      ticket.booking.tripId = newTrip.id;
+      await this.bookingRepository.save(ticket.booking);
+
+      // 4. Ký số lại mã QR mới
+      const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
+      const { qrData, signature } = signQrPayload(
+        {
+          ticketCode: ticket.ticketCode,
+          bookingCode: ticket.booking.bookingCode,
+          tripId: newTrip.id,
+          seatNumber: newSeat.seatNumber,
+          passengerName: ticket.passengerName,
+          issuedAt: Date.now(),
+        },
+        qrSecret,
+      );
+
+      ticket.qrData = qrData;
+      ticket.qrSignatureHash = signature;
+      await this.ticketRepository.save(ticket);
+
+      const qrDataUrl = await generateQrDataUrl(qrData);
+
+      // 5. Tự động gửi Email thông báo đổi vé thành công
+      const recipientEmail = ticket.booking.user?.email;
+      if (this.notificationService && recipientEmail) {
+        await this.notificationService.sendTicketExchangeEmail({
+          recipientEmail,
+          passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+          ticketCode: ticket.ticketCode,
+          bookingCode: ticket.booking.bookingCode,
+          oldRouteName,
+          newRouteName: newTrip.route?.name || 'Tuyến xe buýt ICTU',
+          newOrigin: newTrip.route?.origin,
+          newDestination: newTrip.route?.destination,
+          newDepartureTime: newTrip.departureTime,
+          newSeatNumber: newSeat.seatNumber,
+          newVehiclePlate: newTrip.vehicle?.licensePlate,
+          exchangeFee,
+          priceDifference,
+          qrDataUrl,
+        });
+      }
+
+      const result = {
+        success: true,
+        message: 'Đổi vé sang chuyến mới thành công!',
+        ticketId: ticket.id,
         ticketCode: ticket.ticketCode,
-        bookingCode: ticket.booking.bookingCode,
-        tripId: newTrip.id,
-        seatNumber: newSeat.seatNumber,
-        passengerName: ticket.passengerName,
-        issuedAt: Date.now(),
-      },
-      qrSecret,
-    );
-
-    ticket.qrData = qrData;
-    ticket.qrSignatureHash = signature;
-    await this.ticketRepository.save(ticket);
-
-    const qrDataUrl = await generateQrDataUrl(qrData);
-
-    // 5. Tự động gửi Email thông báo đổi vé thành công
-    const recipientEmail = ticket.booking.user?.email;
-    if (this.notificationService && recipientEmail) {
-      await this.notificationService.sendTicketExchangeEmail({
-        recipientEmail,
-        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
-        ticketCode: ticket.ticketCode,
-        bookingCode: ticket.booking.bookingCode,
-        oldRouteName,
-        newRouteName: newTrip.route?.name || 'Tuyến xe buýt ICTU',
-        newOrigin: newTrip.route?.origin,
-        newDestination: newTrip.route?.destination,
-        newDepartureTime: newTrip.departureTime,
+        oldSeatNumber,
+        newTripId: newTrip.id,
         newSeatNumber: newSeat.seatNumber,
-        newVehiclePlate: newTrip.vehicle?.licensePlate,
+        newDepartureTime: newTrip.departureTime,
         exchangeFee,
         priceDifference,
+        qrData,
         qrDataUrl,
-      });
-    }
+      };
 
-    return {
-      success: true,
-      message: 'Đổi vé sang chuyến mới thành công!',
-      ticketId: ticket.id,
-      ticketCode: ticket.ticketCode,
-      oldSeatNumber,
-      newTripId: newTrip.id,
-      newSeatNumber: newSeat.seatNumber,
-      newDepartureTime: newTrip.departureTime,
-      exchangeFee,
-      priceDifference,
-      qrData,
-      qrDataUrl,
-    };
+      if (dto?.idempotencyKey) {
+        this.idempotencyRecords.set(dto.idempotencyKey, {
+          result,
+          createdAt: Date.now(),
+        });
+      }
+
+      return result;
+    } finally {
+      this.activeTicketLocks.delete(ticketId);
+    }
   }
+
 
   async exchangeTicket(ticketId: string, dto: ExchangeTicketDto, userId: string) {
     return this.confirmExchange(ticketId, dto, userId);

@@ -15,6 +15,7 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { RateLimitGuard, RateLimit } from '../../common/guards/rate-limit.guard.js';
 
 @ApiTags('Vouchers & Promotions')
 @Controller()
@@ -22,8 +23,10 @@ export class VoucherController {
   constructor(private readonly voucherService: VoucherService) {}
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowSeconds: 60, actionName: 'tra cứu mã giảm giá' })
   @Post('vouchers/validate')
-  @ApiOperation({ summary: 'Kiểm tra và tính toán giảm giá của mã voucher' })
+  @ApiOperation({ summary: 'Kiểm tra và tính toán giảm giá của mã voucher (Rate limit: 10 lần/phút)' })
   async validate(@Body() dto: ValidateVoucherDto) {
     return this.voucherService.validate(dto);
   }
