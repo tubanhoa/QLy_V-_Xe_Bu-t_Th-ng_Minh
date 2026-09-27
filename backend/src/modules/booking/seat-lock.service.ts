@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
 export interface MemoryLock {
@@ -13,7 +13,7 @@ export interface SeatLockInfo {
 }
 
 @Injectable()
-export class SeatLockService {
+export class SeatLockService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SeatLockService.name);
   private redisClient: Redis | null = null;
   private readonly memoryStore = new Map<string, MemoryLock>();
@@ -34,20 +34,35 @@ export class SeatLockService {
         lazyConnect: true,
       });
 
-      this.redisClient.connect().then(() => {
-        this.isRedisConnected = true;
-        this.logger.log('Redis connected successfully for Seat Locking.');
-      }).catch(() => {
-        this.isRedisConnected = false;
-        this.logger.warn('Redis not available; falling back to in-memory seat lock storage.');
-      });
-
       this.redisClient.on('error', () => {
         this.isRedisConnected = false;
       });
     } catch {
       this.isRedisConnected = false;
       this.logger.warn('Using in-memory seat lock storage.');
+    }
+  }
+
+  async onModuleInit() {
+    if (this.redisClient) {
+      try {
+        await this.redisClient.connect();
+        this.isRedisConnected = true;
+        this.logger.log('Redis connected successfully for Seat Locking.');
+      } catch {
+        this.isRedisConnected = false;
+        this.logger.warn('Redis not available; falling back to in-memory seat lock storage.');
+      }
+    }
+  }
+
+  async onModuleDestroy() {
+    if (this.redisClient && this.isRedisConnected) {
+      try {
+        await this.redisClient.quit();
+      } catch {
+        // ignore
+      }
     }
   }
 
