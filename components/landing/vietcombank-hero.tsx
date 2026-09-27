@@ -199,6 +199,27 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
               </button>
             </form>
 
+            {/* Popular Route Fast Exploration Pills */}
+            <div className="animate-hero-2 flex flex-wrap items-center gap-2 pt-0.5 text-xs">
+              <span className="text-slate-500 font-bold text-[11px]">Tuyến hot:</span>
+              <button
+                type="button"
+                onClick={() => onSearchRoute?.('CT-01')}
+                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-[#005A36] border border-emerald-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+              >
+                <Zap size={11} className="text-[#005A36]" />
+                <span>CT-01 (ICTU ↔ Bến Xe)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSearchRoute?.('CT-02')}
+                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-teal-800 border border-teal-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+              >
+                <Bus size={11} className="text-teal-700" />
+                <span>CT-02 (BX Nam ↔ KCN Sông Công)</span>
+              </button>
+            </div>
+
             {/* Sub-actions: Transparent Outline seat picker + Live fleet text indicator */}
             <div className="animate-hero-2 flex flex-col gap-2.5 pt-0.5">
               <div className="flex items-center gap-3">

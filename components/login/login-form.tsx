@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { App } from 'antd'
 import { ArrowRight, CheckCircle2, GraduationCap, Lock, ShieldCheck, User } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
@@ -11,9 +11,20 @@ import { RoleSwitcher } from './role-switcher'
 import { cn } from '@/lib/utils'
 
 export function LoginForm() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">Đang tải biểu mẫu...</div>}>
+      <LoginFormContent />
+    </Suspense>
+  )
+}
+
+function LoginFormContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectParam = searchParams.get('redirect')
+
   const { message } = App.useApp()
-  const { login, logout, isAuthenticated, user, role: currentRole } = useAuth()
+  const { login, logout, isAuthenticated, user } = useAuth()
 
   // Mode: 'student' (default, matching the requested HSSV format) or 'staff' (Cổng điều hành nội bộ)
   const [portalMode, setPortalMode] = useState<'student' | 'staff'>('student')
@@ -31,7 +42,16 @@ export function LoginForm() {
 
   const handleRoleChange = (next: Role) => {
     setRole(next)
-    setIdentifier(ROLE_META[next].staff.email)
+    if (next === 'admin') {
+      setIdentifier('admin@smartbus.ictu.vn')
+    } else if (next === 'dispatcher') {
+      setIdentifier('manager@smartbus.ictu.vn')
+    } else if (next === 'driver') {
+      setIdentifier('driver.nam@smartbus.ictu.vn')
+    } else {
+      setIdentifier('student.an@ictu.edu.vn')
+    }
+    setPassword('Password@123')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,28 +67,28 @@ export function LoginForm() {
 
     setLoading(true)
     try {
-      let assignedRole: Role = role
-      if (portalMode === 'staff') {
-        const lower = identifier.toLowerCase()
-        if (lower.includes('driver') || lower.includes('taixe')) {
-          assignedRole = 'driver'
-        } else if (lower.includes('dispatcher') || lower.includes('dieuhanh')) {
-          assignedRole = 'dispatcher'
-        } else {
-          assignedRole = 'admin'
-        }
-      } else {
-        // HSSV login defaults to admin demo dashboard with student banner
-        assignedRole = 'admin'
+      let emailToLogin = identifier.trim()
+      if (portalMode === 'student' && !emailToLogin.includes('@')) {
+        emailToLogin = `${emailToLogin.toLowerCase()}@ictu.edu.vn`
       }
 
-      await login(identifier, assignedRole, remember)
-      message.success(
-        portalMode === 'student'
-          ? `Đăng nhập HSSV thành công! Chào mừng ${identifier}`
-          : `Xin chào ${ROLE_META[assignedRole].staff.name}`,
-      )
-      router.push('/dashboard')
+      const res = await login(emailToLogin, password, remember)
+      if (res.success) {
+        message.success(
+          portalMode === 'student'
+            ? `Đăng nhập HSSV thành công! Chào mừng ${user?.fullName || identifier}`
+            : `Đăng nhập Cổng Điều Hành thành công!`,
+        )
+        if (redirectParam) {
+          router.push(redirectParam)
+        } else if (portalMode === 'staff') {
+          router.push('/dashboard')
+        } else {
+          router.push('/')
+        }
+      } else {
+        message.error(res.message || 'Email hoặc mật khẩu không chính xác')
+      }
     } catch {
       message.error('Đăng nhập không thành công, vui lòng kiểm tra lại thông tin')
     } finally {
@@ -79,10 +99,13 @@ export function LoginForm() {
   const handleSsoLogin = async () => {
     setLoading(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      await login('sv.ictu@ictu.edu.vn', 'admin', false)
-      message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU!')
-      router.push('/dashboard')
+      const res = await login('student.an@ictu.edu.vn', 'Password@123', false)
+      if (res.success) {
+        message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU!')
+        router.push(redirectParam || '/')
+      } else {
+        message.error(res.message || 'Không thể kết nối dịch vụ Office 365')
+      }
     } catch {
       message.error('Không thể kết nối dịch vụ Office 365')
     } finally {
@@ -224,6 +247,24 @@ export function LoginForm() {
                 <a href="#" className="font-bold text-slate-800 dark:text-slate-200 hover:text-[#005A36] hover:underline">
                   Quên mật khẩu?
                 </a>
+              </div>
+
+              {/* Quick Fill Demo Helper */}
+              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-2.5 text-[11px] text-slate-600 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-[#005A36]">Tài khoản mẫu: </span>
+                  <span className="font-mono text-slate-700">student.an@ictu.edu.vn</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('student.an@ictu.edu.vn')
+                    setPassword('Password@123')
+                  }}
+                  className="font-bold text-[#005A36] hover:underline cursor-pointer"
+                >
+                  Điền nhanh
+                </button>
               </div>
 
               <button
@@ -375,6 +416,24 @@ export function LoginForm() {
               <a href="#" className="font-bold text-[#005A36] dark:text-emerald-400 hover:underline">
                 Quên mật khẩu?
               </a>
+            </div>
+
+            {/* Quick Fill Demo Helper for Staff */}
+            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-2.5 text-[11px] text-slate-600 flex items-center justify-between">
+              <div>
+                <span className="font-bold text-[#005A36]">Admin mẫu: </span>
+                <span className="font-mono text-slate-700">admin@smartbus.ictu.vn</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIdentifier('admin@smartbus.ictu.vn')
+                  setPassword('Password@123')
+                }}
+                className="font-bold text-[#005A36] hover:underline cursor-pointer"
+              >
+                Điền nhanh
+              </button>
             </div>
 
             <button

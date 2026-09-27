@@ -41,27 +41,85 @@ export interface RegisterResponse {
 export interface Station {
   id: string
   name: string
-  address: string
-  isHub: boolean
-  order: number
+  address?: string
+  latitude?: string | number
+  longitude?: string | number
+  isHub?: boolean
+  status?: string
+  order?: number // Tương thích ngược
+}
+
+export interface RouteStationItem {
+  id: string
+  routeId: string
+  stationId: string
+  stopOrder: number
+  distanceFromOriginKm?: string | number
+  estimatedMinutes?: number
+  distanceFromStartKm?: number
+  durationFromStartMinutes?: number
+  station: Station
 }
 
 export interface BusRoute {
   id: string
-  code: string // VD: CT-01, CT-02
+  routeCode: string // VD: CT-01, CT-02
   name: string // Tuyến KTX ICTU - Bến xe Thái Nguyên
   origin: string
   destination: string
-  distanceKm: number
-  durationMinutes: number
-  fareStandard: number
-  fareStudent: number // Trợ giá 50%
-  stations: Station[]
-  operatingHours: {
-    start: string // '05:30'
-    end: string   // '21:30'
+  distanceKm: number | string
+  basePrice: number | string
+  studentPrice: number | string // Trợ giá 50%
+  operatingStart: string // '05:30:00'
+  operatingEnd: string   // '21:00:00'
+  frequencyMinutes: number
+  status: string
+  routeStations?: RouteStationItem[]
+  
+  // Các trường alias hỗ trợ tương thích ngược Frontend cũ
+  code?: string
+  fareStandard?: number
+  fareStudent?: number
+  stations?: Station[]
+  durationMinutes?: number
+  operatingHours?: {
+    start: string
+    end: string
     frequencyMinutes: number
   }
+}
+
+// 2.1. Kết quả tìm kiếm chuyến xe theo hợp đồng API chốt (GET /api/v1/booking/search)
+export interface TripSearchResult {
+  id: string
+  routeId: string
+  routeName: string
+  routeCode: string
+  origin: string
+  destination: string
+  departureTime: string // ISO date string: 2026-09-27T07:00:00.000Z
+  arrivalTime: string   // ISO date string: 2026-09-27T07:45:00.000Z
+  status: 'scheduled' | 'running' | 'completed' | 'cancelled' | string
+  basePrice: number
+  studentPrice: number
+  totalSeats: number
+  availableSeats: number
+  vehiclePlate: string
+  vehicleType: string
+}
+
+export interface SearchTripsQuery {
+  origin?: string
+  destination?: string
+  date?: string // YYYY-MM-DD
+}
+
+export interface UnifiedApiResponse<T> {
+  success: boolean
+  data: T
+  message?: string
+  errorCode?: string
+  statusCode?: number
 }
 
 // 3. User Story 2: Chọn vị trí ghế (Seat Layout & Realtime Status)

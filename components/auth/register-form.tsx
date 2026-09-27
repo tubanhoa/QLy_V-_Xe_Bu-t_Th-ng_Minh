@@ -16,12 +16,15 @@ import {
   Upload,
   User,
 } from 'lucide-react'
-import type { RegisterPayload, RegisterResponse, UserType } from '@/lib/types/sprint1'
+import type { UserType } from '@/lib/types/sprint1'
+import { authService } from '@/lib/services/auth.service'
+import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 
 export function RegisterForm() {
   const router = useRouter()
   const { message } = App.useApp()
+  const { setUserSession } = useAuth()
 
   const [userType, setUserType] = useState<UserType>('student')
   const [fullName, setFullName] = useState('')
@@ -80,32 +83,23 @@ export function RegisterForm() {
 
     setLoading(true)
     try {
-      const payload: RegisterPayload = {
-        userType,
-        fullName,
-        email,
-        phoneNumber,
+      const res = await authService.register({
+        email: email.trim(),
         password,
-        studentId: userType === 'student' ? studentId : undefined,
+        fullName: fullName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        studentId: userType === 'student' ? studentId.trim() : undefined,
         faculty: userType === 'student' ? faculty : undefined,
-        studentCardImageUrl: studentCardPreview || undefined,
-      }
-
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
       })
 
-      const data: RegisterResponse = await res.json()
-
-      if (res.ok && data.success) {
-        message.success(data.message)
+      if (res.success && res.data) {
+        message.success('Đăng ký tài khoản thành công! Tự động đăng nhập vào hệ thống.')
+        setUserSession(res.data, true)
         setTimeout(() => {
-          router.push('/login')
-        }, 1200)
+          router.push('/')
+        }, 800)
       } else {
-        message.error(data.message || 'Đăng ký không thành công')
+        message.error(res.message || 'Đăng ký không thành công')
       }
     } catch {
       message.error('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.')
@@ -165,7 +159,7 @@ export function RegisterForm() {
       <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
         {/* Họ và tên */}
         <div>
-          <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+          <label htmlFor="fullName" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
             Họ và tên *
           </label>
           <div className="relative flex items-center">
@@ -173,7 +167,10 @@ export function RegisterForm() {
               <User size={18} strokeWidth={2} />
             </div>
             <input
+              id="fullName"
+              name="name"
               type="text"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Nguyễn Văn A"
@@ -187,7 +184,7 @@ export function RegisterForm() {
         {userType === 'student' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 animate-in fade-in duration-200">
             <div>
-              <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+              <label htmlFor="studentId" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
                 Mã sinh viên *
               </label>
               <div className="relative flex items-center">
@@ -195,7 +192,10 @@ export function RegisterForm() {
                   <IdCard size={18} strokeWidth={2} />
                 </div>
                 <input
+                  id="studentId"
+                  name="studentId"
                   type="text"
+                  autoComplete="off"
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value.toUpperCase())}
                   placeholder="DTC215..."
@@ -206,10 +206,12 @@ export function RegisterForm() {
             </div>
 
             <div>
-              <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+              <label htmlFor="faculty" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
                 Khoa / Viện
               </label>
               <select
+                id="faculty"
+                name="faculty"
                 value={faculty}
                 onChange={(e) => setFaculty(e.target.value)}
                 className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-2.5 px-3.5 text-sm font-semibold text-slate-900 dark:text-white outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
@@ -227,7 +229,7 @@ export function RegisterForm() {
         {/* Email & Số điện thoại */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <div>
-            <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+            <label htmlFor="registerEmail" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
               Email *
             </label>
             <div className="relative flex items-center">
@@ -235,7 +237,10 @@ export function RegisterForm() {
                 <Mail size={18} strokeWidth={2} />
               </div>
               <input
+                id="registerEmail"
+                name="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={userType === 'student' ? 'sv@ictu.edu.vn' : 'ban@gmail.com'}
@@ -246,7 +251,7 @@ export function RegisterForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+            <label htmlFor="phoneNumber" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
               Số điện thoại *
             </label>
             <div className="relative flex items-center">
@@ -254,7 +259,10 @@ export function RegisterForm() {
                 <Phone size={18} strokeWidth={2} />
               </div>
               <input
+                id="phoneNumber"
+                name="phoneNumber"
                 type="tel"
+                autoComplete="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="0981 234 567"
@@ -268,7 +276,7 @@ export function RegisterForm() {
         {/* Mật khẩu & Xác nhận */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <div>
-            <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+            <label htmlFor="registerPassword" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
               Mật khẩu *
             </label>
             <div className="relative flex items-center">
@@ -276,7 +284,10 @@ export function RegisterForm() {
                 <Lock size={18} strokeWidth={2} />
               </div>
               <input
+                id="registerPassword"
+                name="new-password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Tối thiểu 6 ký tự"
@@ -287,7 +298,7 @@ export function RegisterForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
+            <label htmlFor="confirmPassword" className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
               Nhập lại mật khẩu *
             </label>
             <div className="relative flex items-center">
@@ -295,7 +306,10 @@ export function RegisterForm() {
                 <Lock size={18} strokeWidth={2} />
               </div>
               <input
+                id="confirmPassword"
+                name="confirm-password"
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Khớp với mật khẩu"
