@@ -177,11 +177,36 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
       }
     })
 
+    // Nếu chưa đăng nhập: Cho phép chọn ghế trực quan (Guest mode) mà không chặn trải nghiệm
+    if (!isAuthenticated) {
+      const newHeldSeat: SeatItem = {
+        ...seat,
+        bookingStatus: 'holding',
+        isHeldByMe: true,
+      }
+      setSelectedSeats((prev) => [...prev, newHeldSeat])
+      setHoldExpiresAt(Date.now() + 600 * 1000)
+      setIsHoldingAction(false)
+      return
+    }
+
     try {
       const res = await bookingService.holdSeats({
         tripId,
         seatIds: [seat.seatId],
       })
+
+      if (res.statusCode === 401) {
+        // Token hết hạn hoặc không hợp lệ -> fallback chọn ghế cục bộ
+        const newHeldSeat: SeatItem = {
+          ...seat,
+          bookingStatus: 'holding',
+          isHeldByMe: true,
+        }
+        setSelectedSeats((prev) => [...prev, newHeldSeat])
+        setHoldExpiresAt(Date.now() + 600 * 1000)
+        return
+      }
 
       if (res.success && res.data?.success) {
         // Giữ ghế thành công!
