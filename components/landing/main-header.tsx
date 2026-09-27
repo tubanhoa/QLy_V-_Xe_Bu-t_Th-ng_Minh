@@ -214,22 +214,14 @@ export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/register"
-                className="hidden sm:inline-flex items-center rounded-xl border-2 border-[#005A36] bg-white/80 hover:bg-emerald-50 px-3.5 py-2 text-xs sm:text-sm font-black text-[#005A36] shadow-xs transition-all active:scale-95"
-              >
-                Đăng ký
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 rounded-xl btn-vcb-solid text-white font-black px-4 py-2 text-xs sm:text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.03] active:scale-95"
-                style={{ backgroundColor: '#005a36', color: '#ffffff' }}
-              >
-                <LogIn size={16} strokeWidth={2.5} className="text-white" aria-hidden="true" />
-                <span className="text-white font-black">Đăng nhập</span>
-              </Link>
-            </div>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-xl btn-vcb-solid text-white font-black px-5 py-2.5 text-sm shadow-md shadow-emerald-950/20 transition-all duration-150 hover:scale-[1.03] hover:shadow-lg active:scale-95"
+              style={{ backgroundColor: '#005a36', color: '#ffffff' }}
+            >
+              <LogIn size={18} strokeWidth={2.5} className="text-white" aria-hidden="true" />
+              <span className="text-white font-black">Đăng nhập</span>
+            </Link>
           )}
 
           {/* Mobile Menu Button */}
@@ -318,15 +310,6 @@ export function MainHeader({ onOpenSeatPicker }: MainHeaderProps) {
                 >
                   <LogIn size={18} strokeWidth={2.5} />
                   Đăng nhập tài khoản
-                </Link>
-
-                <Link
-                  href="/register"
-                  onClick={() => setOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#005A36] bg-emerald-50/50 py-2.5 text-xs font-black text-[#005A36] shadow-xs"
-                >
-                  <User size={16} strokeWidth={2.2} />
-                  Đăng ký tài khoản (Trợ giá -50%)
                 </Link>
               </>
             )}
