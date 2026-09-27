@@ -136,8 +136,16 @@ export function LandingPage() {
             setIsTripSearchOpen(true)
           }}
           onSearchRoute={(query) => {
-            setSearchOrigin(query)
-            setSearchDestination('')
+            if (query.toUpperCase().includes('CT-01') || query.toUpperCase().includes('01')) {
+              setSearchOrigin('ĐH CNTT & TT Thái Nguyên')
+              setSearchDestination('Bến Xe Trung Tâm Thái Nguyên')
+            } else if (query.toUpperCase().includes('CT-02') || query.toUpperCase().includes('02')) {
+              setSearchOrigin('Bến Xe Nam Thái Nguyên')
+              setSearchDestination('Khu Công Nghiệp Sông Công')
+            } else {
+              setSearchOrigin(query)
+              setSearchDestination('')
+            }
             setIsTripSearchOpen(true)
           }}
         />
