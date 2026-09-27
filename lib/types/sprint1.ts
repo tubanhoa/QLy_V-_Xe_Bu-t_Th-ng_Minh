@@ -116,7 +116,7 @@ export interface SearchTripsQuery {
 
 export interface UnifiedApiResponse<T> {
   success: boolean
-  data: T
+  data?: T
   message?: string
   errorCode?: string
   statusCode?: number

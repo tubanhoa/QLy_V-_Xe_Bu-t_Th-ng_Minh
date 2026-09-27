@@ -33,7 +33,7 @@ export function AuthPromptModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
     >
       <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col animate-in zoom-in-95 duration-200">
         {/* Top Header with Forest Green gradient */}
@@ -47,7 +47,7 @@ export function AuthPromptModal({
             <X size={18} />
           </button>
 
-          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 shadow-inner mb-3">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white/15 border border-white/20 shadow-inner mb-3">
             <Lock size={28} className="text-white" />
           </div>
 
