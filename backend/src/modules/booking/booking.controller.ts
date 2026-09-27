@@ -15,6 +15,9 @@ import {
   CreateBookingDto,
   SearchTripsDto,
   ExchangeTicketDto,
+  CancelTicketDto,
+  HoldExchangeSeatDto,
+  ConfirmExchangeDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
@@ -115,22 +118,61 @@ export class BookingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
-  @Post('cancel/:ticketId')
-  @ApiOperation({ summary: 'Hủy vé trước giờ khởi hành > 2 tiếng' })
-  async cancelTicket(@Param('ticketId') ticketId: string, @CurrentUser('id') userId: string) {
-    return this.bookingService.cancelTicket(ticketId, userId);
+  @Get(['tickets/:ticketId/cancellation-policy', ':ticketId/cancellation-policy'])
+  @ApiOperation({ summary: 'Kiểm tra điều kiện hủy/đổi vé và tính phí theo thời gian thực' })
+  async getCancellationPolicy(
+    @Param('ticketId') ticketId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingService.getCancellationPolicy(ticketId, userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
-  @Post('exchange/:ticketId')
-  @ApiOperation({ summary: 'Đổi vé sang chuyến hoặc ghế mới' })
-  async exchangeTicket(
+  @Post(['tickets/:ticketId/cancel', 'cancel/:ticketId'])
+  @ApiOperation({ summary: 'Gửi yêu cầu hủy vé, giải phóng ghế trống và tự động hoàn tiền' })
+  async cancelTicket(
     @Param('ticketId') ticketId: string,
-    @Body() dto: ExchangeTicketDto,
+    @Body() dto: CancelTicketDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.bookingService.exchangeTicket(ticketId, dto, userId);
+    return this.bookingService.cancelTicket(ticketId, userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get(['tickets/:ticketId/exchange-trips', 'exchange-trips/:ticketId'])
+  @ApiOperation({ summary: 'Tìm kiếm chuyến xe thay thế cho luồng đổi vé' })
+  async getExchangeTrips(
+    @Param('ticketId') ticketId: string,
+    @Query('date') date: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingService.getExchangeTrips(ticketId, userId, date);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post(['tickets/:ticketId/hold-exchange-seat', 'hold-exchange-seat/:ticketId'])
+  @ApiOperation({ summary: 'Tạm giữ ghế mới 10 phút cho luồng đổi vé (bảo toàn ghế cũ)' })
+  async holdExchangeSeat(
+    @Param('ticketId') ticketId: string,
+    @Body() dto: HoldExchangeSeatDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingService.holdExchangeSeat(ticketId, dto, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post(['tickets/:ticketId/confirm-exchange', 'tickets/:ticketId/exchange', 'exchange/:ticketId'])
+  @ApiOperation({ summary: 'Xác nhận đổi chuyến, tính chênh lệch giá vé và cấp vé QR mới' })
+  async confirmExchange(
+    @Param('ticketId') ticketId: string,
+    @Body() dto: ConfirmExchangeDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingService.confirmExchange(ticketId, dto, userId);
   }
 
   @UseGuards(JwtAuthGuard)

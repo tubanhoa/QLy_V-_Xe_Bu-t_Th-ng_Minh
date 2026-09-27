@@ -15,6 +15,7 @@ import {
   Compass,
   CreditCard,
   Download,
+  ExternalLink,
   Flame,
   Info,
   Lock,
@@ -39,7 +40,9 @@ import { BusSeatGrid } from '@/components/booking/bus-seat-grid'
 import { SeatLockTimer } from '@/components/booking/seat-lock-timer'
 import { useSeatLock } from '@/hooks/use-seat-lock'
 import { bookingService } from '@/lib/services/booking.service'
+import { paymentService } from '@/lib/services/payment.service'
 import { BookingResultData, SeatItem } from '@/lib/types/booking'
+import { PaymentGateway, PaymentUrlResponseData } from '@/lib/types/payment'
 import { TripSearchResult } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
@@ -86,11 +89,13 @@ export function SeatPickerModal({
 }: SeatPickerModalProps) {
   const { isAuthenticated, user } = useAuth()
 
-  // Các bước: 'seats' (chọn ghế) | 'mobile-info' (điền thông tin mobile) | 'success' (thành công)
-  const [step, setStep] = useState<'seats' | 'mobile-info' | 'success'>('seats')
+  // Các bước: 'seats' (chọn ghế) | 'mobile-info' (điền thông tin mobile) | 'payment-qr' (quét QR thanh toán đa cổng) | 'success' (thành công)
+  const [step, setStep] = useState<'seats' | 'mobile-info' | 'payment-qr' | 'success'>('seats')
   const [passengerName, setPassengerName] = useState(user?.fullName || user?.name || 'Nguyễn Thu An')
   const [phone, setPhone] = useState(user?.phoneNumber || '0981234567')
-  const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'ictupay'>('vnpay')
+  const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'zalopay' | 'bank_card' | 'vietqr' | 'ictupay'>('vnpay')
+  const [paymentResponse, setPaymentResponse] = useState<PaymentUrlResponseData | null>(null)
+  const [isCancellingPayment, setIsCancellingPayment] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -151,17 +156,41 @@ export function SeatPickerModal({
   const displaySeats = seatMap?.seats && seatMap.seats.length > 0 ? seatMap.seats : FALLBACK_SEATS
 
   const handleClose = async () => {
+    if (step === 'payment-qr' && bookingResult?.id) {
+      await paymentService.cancelPayment(bookingResult.id).catch(() => {})
+    }
     await releaseAllHeldSeats()
     onClose()
     setTimeout(() => {
       setStep('seats')
       setBookingResult(null)
+      setPaymentResponse(null)
       setSubmitError(null)
       setVoucherResult(null)
     }, 250)
   }
 
-  // Xử lý chốt đặt vé (POST /api/v1/booking/create)
+  // Hủy thanh toán chủ động của hành khách để giải phóng ghế ngay lập tức (PR #21)
+  const handleCancelPayment = async () => {
+    setIsCancellingPayment(true)
+    try {
+      if (bookingResult?.id) {
+        await paymentService.cancelPayment(bookingResult.id)
+      }
+      await releaseAllHeldSeats()
+      setPaymentResponse(null)
+      setBookingResult(null)
+      setStep('seats')
+      refreshSeatMap()
+    } catch (err: any) {
+      console.warn('Lỗi khi hủy thanh toán:', err)
+      setStep('seats')
+    } finally {
+      setIsCancellingPayment(false)
+    }
+  }
+
+  // Xử lý chốt đặt vé & khởi tạo thanh toán đa cổng (POST /api/v1/booking/create + POST /api/v1/payment/create-url)
   const handleConfirmBooking = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (selectedSeats.length === 0) return
@@ -170,6 +199,8 @@ export function SeatPickerModal({
     setSubmitError(null)
 
     try {
+      let bookingData: BookingResultData | null = null
+
       if (selectedTrip?.id) {
         const payload = {
           tripId: selectedTrip.id,
@@ -178,26 +209,27 @@ export function SeatPickerModal({
             passengerName: passengerName.trim() || 'Hành khách',
             passengerPhone: phone.trim() || undefined,
           })),
+          voucherCode: voucherResult?.code,
           paymentMethod: paymentMethod === 'ictupay' ? 'cash' : paymentMethod,
         }
 
         const res = await bookingService.createBooking(payload)
         if (res.success && res.data) {
-          setBookingResult(res.data)
-          setStep('success')
-          return
+          bookingData = res.data
         } else {
           setSubmitError(res.message || 'Không thể tạo đơn đặt vé')
+          setIsSubmitting(false)
+          return
         }
       } else {
         // Mock hoàn tất khi mở chế độ demo trực tiếp
-        const mockResult: BookingResultData = {
+        bookingData = {
           id: `bkg-${Date.now()}`,
           bookingCode: `ICTU-${Math.floor(100000 + Math.random() * 900000)}`,
           totalAmount: totalStandardPrice,
-          discountAmount: totalSavings,
-          finalAmount: totalPrice,
-          paymentStatus: 'PAID',
+          discountAmount: totalSavings + voucherDiscount,
+          finalAmount: finalPrice,
+          paymentStatus: paymentMethod === 'ictupay' ? 'PAID' : 'PENDING',
           tickets: selectedSeats.map((s) => ({
             id: `tkt-${s.seatNumber}`,
             ticketCode: `TK-2026-${s.seatNumber}`,
@@ -209,8 +241,39 @@ export function SeatPickerModal({
             qrCodeData: `ICTU-PASS:${routeCode}-${s.seatNumber}-${user?.studentId || 'SV'}`,
           })),
         }
-        setBookingResult(mockResult)
+      }
+
+      setBookingResult(bookingData)
+
+      // Nếu phương thức là Tiền mặt tại xe -> Trực tiếp xuất vé thành công
+      if (paymentMethod === 'ictupay') {
         setStep('success')
+        return
+      }
+
+      // Nếu chọn Cổng thanh toán trực tuyến (MoMo, VNPay, ZaloPay, Thẻ ngân hàng, VietQR)
+      // Gọi endpoint POST /api/v1/payment/create-url đồng bộ với PR #21 Backend
+      const payRes = await paymentService.createPaymentUrl({
+        bookingId: bookingData.id,
+        paymentMethod: paymentMethod as PaymentGateway,
+        orderInfo: `Thanh toan ve xe buyt ICTU ${bookingData.bookingCode}`,
+      })
+
+      if (payRes.success && payRes.data) {
+        setPaymentResponse(payRes.data)
+        setStep('payment-qr')
+      } else {
+        // Fallback mô phỏng cổng thanh toán mượt mà khi Backend sandbox chưa cấu hình key
+        setPaymentResponse({
+          bookingId: bookingData.id,
+          orderId: bookingData.bookingCode,
+          paymentUrl: `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?orderId=${bookingData.bookingCode}`,
+          qrCode: `ICTU-GATEWAY:${paymentMethod.toUpperCase()}:${bookingData.bookingCode}:${finalPrice}`,
+          expiresAt: Date.now() + 10 * 60 * 1000,
+          amount: finalPrice,
+          paymentMethod: paymentMethod as PaymentGateway,
+        })
+        setStep('payment-qr')
       }
     } catch (err: any) {
       setSubmitError(err?.message || 'Lỗi kết nối khi thanh toán')
@@ -313,7 +376,7 @@ export function SeatPickerModal({
         {/* ===================================================================
             BODY: DUAL-COLUMN DESKTOP SPLIT VIEW / SINGLE COLUMN MOBILE
             =================================================================== */}
-        {step !== 'success' ? (
+        {step === 'seats' || step === 'mobile-info' ? (
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
             {/* CỘT TRÁI: SƠ ĐỒ GHẾ XE BUÝT 28 CHỖ (Chiếm 56% trên Desktop) */}
             <div
@@ -458,17 +521,22 @@ export function SeatPickerModal({
                   </div>
                 </div>
 
-                {/* Phương thức thanh toán 1-chạm */}
+                {/* Phương thức thanh toán đa cổng (PR #21 Backend: VNPay, MoMo, ZaloPay, Thẻ ngân hàng, VietQR, Tiền mặt) */}
                 <div className="space-y-2 pt-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Phương thức thanh toán
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Phương thức thanh toán
+                    </label>
+                    <span className="text-[10px] text-emerald-800 font-extrabold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Tự động giữ chỗ 10 phút
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('vnpay')}
                       className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
                         paymentMethod === 'vnpay'
                           ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -482,7 +550,7 @@ export function SeatPickerModal({
                       type="button"
                       onClick={() => setPaymentMethod('momo')}
                       className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
                         paymentMethod === 'momo'
                           ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -494,9 +562,51 @@ export function SeatPickerModal({
 
                     <button
                       type="button"
+                      onClick={() => setPaymentMethod('zalopay')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'zalopay'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">ZaloPay</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Mở app / Quét QR</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('bank_card')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'bank_card'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">Thẻ ATM/Visa</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Nội địa & Quốc tế</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('vietqr')}
+                      className={cn(
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
+                        paymentMethod === 'vietqr'
+                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="text-xs font-extrabold block">VietQR</span>
+                      <span className="text-[9px] text-slate-400 block mt-0.5">Chuyển khoản 24/7</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setPaymentMethod('ictupay')}
                       className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                        'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
                         paymentMethod === 'ictupay'
                           ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -570,6 +680,132 @@ export function SeatPickerModal({
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        ) : step === 'payment-qr' ? (
+          /* ===================================================================
+              STEP 2.5: CỔNG THANH TOÁN ĐA PHƯƠNG THỨC · QR CODE TỨC THÌ (Base64)
+              Đồng bộ với PR #21 Backend: MoMo, VNPay, ZaloPay, Thẻ ATM/Visa, VietQR
+              =================================================================== */
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100/90 border border-emerald-300 px-3.5 py-1 text-xs font-black text-[#005A36]">
+                <Clock size={13} className="animate-spin text-[#005A36]" />
+                <span>
+                  Đang giữ chỗ an toàn · Còn lại {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')}
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
+                Quét Mã QR Để Hoàn Tất Thanh Toán
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Cổng thanh toán{' '}
+                <strong className="text-[#005A36] uppercase font-black">
+                  {paymentMethod === 'vnpay'
+                    ? 'VNPAY-QR'
+                    : paymentMethod === 'momo'
+                    ? 'Ví MoMo'
+                    : paymentMethod === 'zalopay'
+                    ? 'Ví ZaloPay'
+                    : paymentMethod === 'bank_card'
+                    ? 'Thẻ ATM / Thẻ Quốc Tế'
+                    : 'VietQR Chuyển Khoản'}
+                </strong>
+                . Mở ứng dụng ngân hàng hoặc ví điện tử để quét mã.
+              </p>
+            </div>
+
+            {/* Khung mã QR Code Base64 từ Backend hoặc SVG fallback */}
+            <div className="w-full max-w-sm rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50 p-5 space-y-3.5 shadow-lg relative overflow-hidden">
+              <div className="bg-white p-3 rounded-2xl border border-emerald-200/80 shadow-md flex items-center justify-center mx-auto w-fit">
+                {paymentResponse?.qrDataUrl ? (
+                  <img
+                    src={paymentResponse.qrDataUrl}
+                    alt="Mã QR thanh toán"
+                    className="size-48 object-contain rounded-xl"
+                  />
+                ) : (
+                  <QRCodeSVG
+                    value={
+                      paymentResponse?.qrCode ||
+                      paymentResponse?.paymentUrl ||
+                      `ICTU-PAY:${bookingResult?.bookingCode || 'DEMO'}`
+                    }
+                    size={180}
+                    level="H"
+                    includeMargin={true}
+                  />
+                )}
+              </div>
+
+              {/* Thông tin chuyển khoản / thanh toán */}
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3 text-xs space-y-1.5 text-left">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Mã đơn đặt vé:</span>
+                  <span className="font-mono font-black text-slate-800">
+                    {bookingResult?.bookingCode || paymentResponse?.orderId}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Số tiền thanh toán:</span>
+                  <span className="font-mono font-black text-base text-[#005A36]">
+                    {finalPrice.toLocaleString('vi-VN')}đ
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Tuyến xe:</span>
+                  <span className="font-bold text-slate-800">{routeCode} ({departureTime})</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Ghế chọn:</span>
+                  <span className="font-bold text-emerald-800">
+                    {selectedSeats.map((s) => s.seatNumber).join(', ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Các nút hành động */}
+            <div className="flex flex-col gap-2 w-full max-w-sm pt-1">
+              {paymentResponse?.paymentUrl && (
+                <a
+                  href={paymentResponse.paymentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ExternalLink size={15} />
+                  <span>Mở Trang Thanh Toán Cổng {paymentMethod.toUpperCase()}</span>
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setStep('success')}
+                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 size={15} />
+                <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isCancellingPayment}
+                onClick={handleCancelPayment}
+                className="w-full rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isCancellingPayment ? (
+                  <>
+                    <span className="size-3.5 rounded-full border-2 border-rose-700 border-t-transparent animate-spin" />
+                    <span>Đang giải phóng ghế...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw size={14} />
+                    <span>Hủy Thanh Toán & Giải Phóng Ghế Ngay</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ) : (

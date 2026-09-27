@@ -26,9 +26,15 @@ interface MainHeaderProps {
   onOpenSeatPicker?: () => void
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
   onOpenTicketModal?: () => void
+  onOpenMonthlyPassModal?: () => void
 }
 
-export function MainHeader({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }: MainHeaderProps) {
+export function MainHeader({
+  onOpenSeatPicker,
+  onOpenModal,
+  onOpenTicketModal,
+  onOpenMonthlyPassModal,
+}: MainHeaderProps) {
   const { isAuthenticated, user, role, logout } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
@@ -126,17 +132,26 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }:
                   </div>
                   <p className="mt-1 text-xs font-medium text-slate-600">Chọn vị trí ghế trên sơ đồ xe & thanh toán quét QR</p>
                 </button>
-                <Link
-                  href="/monthly-pass"
-                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenMonthlyPassModal) {
+                      onOpenMonthlyPassModal()
+                    } else if (onOpenModal) {
+                      onOpenModal('student-pass')
+                    } else {
+                      window.location.href = '/?openMonthlyPass=true'
+                    }
+                  }}
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block cursor-pointer"
                   id="desktop-nav-monthly-pass"
                 >
                   <div className="flex items-center justify-between">
                     <span className="block text-sm font-black text-slate-900">Đăng ký vé tháng HSSV</span>
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Trợ giá 50%</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
                   </div>
                   <p className="mt-1 text-xs font-medium text-slate-600">Đăng ký trực tuyến thẻ tháng sinh viên ICTU</p>
-                </Link>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -394,14 +409,24 @@ export function MainHeader({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }:
               >
                 Mạng lưới tuyến xe buýt ICTU
               </button>
-              <Link
-                href="/monthly-pass"
-                onClick={() => setOpen(false)}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors block"
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  if (onOpenMonthlyPassModal) {
+                    onOpenMonthlyPassModal()
+                  } else if (onOpenModal) {
+                    onOpenModal('student-pass')
+                  } else {
+                    window.location.href = '/?openMonthlyPass=true'
+                  }
+                }}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
                 id="mobile-nav-monthly-pass"
               >
-                Đăng ký vé tháng HSSV (-50%)
-              </Link>
+                <span>Đăng ký vé tháng HSSV (-50%)</span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
+              </button>
               <Link
                 href="/my-tickets"
                 onClick={() => setOpen(false)}

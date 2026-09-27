@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { AmbientTransitFx } from './ambient-transit-fx'
 import { FloatingSupportBot } from './floating-support-bot'
@@ -13,6 +13,7 @@ import { TripSearchModal } from './trip-search-modal'
 import { TicketManagementModal } from './ticket-management-modal'
 import { VietcombankHero } from './vietcombank-hero'
 import { AuthPromptModal } from '@/components/auth/auth-prompt-modal'
+import { MonthlyPassModal } from './monthly-pass-modal'
 import { useAuth } from '@/lib/auth-context'
 import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
 
@@ -21,6 +22,7 @@ export function LandingPage() {
   const [isSeatPickerOpen, setIsSeatPickerOpen] = useState(false)
   const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
+  const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
@@ -28,6 +30,28 @@ export function LandingPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
+
+  // Task PERF-01: Tạm dừng hoạt họa nền khi đang mở Cửa Sổ Nổi để giải phóng GPU/RAM
+  const isAnyModalOpen =
+    isSeatPickerOpen ||
+    isTripSearchOpen ||
+    isTicketModalOpen ||
+    isMonthlyPassModalOpen ||
+    isAuthPromptOpen ||
+    activeModal !== null
+
+  // Tự động mở Cửa Sổ Nổi Vé Điện Tử hoặc Vé Tháng khi có query param
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('openTickets') === 'true') {
+        setIsTicketModalOpen(true)
+      }
+      if (params.get('openMonthlyPass') === 'true') {
+        setIsMonthlyPassModalOpen(true)
+      }
+    }
+  }, [])
 
   return (
     <div className="relative h-screen max-h-screen w-full overflow-hidden bg-[#EBF5FB] flex flex-col justify-between select-none font-sans text-slate-900">
@@ -56,6 +80,7 @@ export function LandingPage() {
               width: '27.253%',
               aspectRatio: '375 / 220',
               transformOrigin: '50% 100%',
+              animationPlayState: isAnyModalOpen ? 'paused' : 'running',
             }}
           >
             {/* Realistic Ground Contact & Underbody Ambient Shadow (anchors tires to road) */}
@@ -122,7 +147,7 @@ export function LandingPage() {
         </div>
 
         {/* Organic Falling Tea Leaves Experience */}
-        <AmbientTransitFx />
+        <AmbientTransitFx isPaused={isAnyModalOpen} />
       </div>
 
       {/* 2-Tier Header with Transparent Background */}
@@ -133,11 +158,14 @@ export function LandingPage() {
           onOpenModal={(modal) => {
             if (modal === 'lookup') {
               setIsTicketModalOpen(true)
+            } else if (modal === 'student-pass') {
+              setIsMonthlyPassModalOpen(true)
             } else {
               setActiveModal(modal)
             }
           }}
           onOpenTicketModal={() => setIsTicketModalOpen(true)}
+          onOpenMonthlyPassModal={() => setIsMonthlyPassModalOpen(true)}
         />
       </div>
 
@@ -172,6 +200,8 @@ export function LandingPage() {
           onOpenModal={(modal) => {
             if (modal === 'lookup') {
               setIsTicketModalOpen(true)
+            } else if (modal === 'student-pass') {
+              setIsMonthlyPassModalOpen(true)
             } else {
               setActiveModal(modal)
             }
@@ -240,9 +270,15 @@ export function LandingPage() {
         initialTicketId={selectedTicketId}
       />
 
+      {/* Cửa sổ nổi (Floating Modal Window): Đăng Ký & Quản Lý Vé Tháng HSSV */}
+      <MonthlyPassModal
+        open={isMonthlyPassModalOpen}
+        onClose={() => setIsMonthlyPassModalOpen(false)}
+      />
+
       {/* Interactive Quick Access Modals (Routes, News, Student Pass) */}
       <QuickAccessModals
-        activeModal={activeModal === 'lookup' ? null : activeModal}
+        activeModal={activeModal === 'lookup' || activeModal === 'student-pass' ? null : activeModal}
         onClose={() => setActiveModal(null)}
         onBookSeat={(route?: BusRoute) => {
           if (route) {

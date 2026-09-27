@@ -56,6 +56,7 @@ import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketDetail, TicketFilterStatus } from '@/lib/types/ticket'
 import { TICKET_STATUS_COLOR, TICKET_STATUS_LABEL } from '@/lib/types/ticket'
 import { ExchangeTicketModal } from '@/components/portal/exchange-ticket-modal'
+import { CancellationPolicyModal } from '@/components/portal/cancellation-policy-modal'
 import { FeedbackModal } from '@/components/portal/feedback-modal'
 import { cn } from '@/lib/utils'
 
@@ -111,8 +112,9 @@ export function TicketManagementModal({
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailNotice, setEmailNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Sub-modals Đổi vé & Đánh giá
+  // Sub-modals Đổi vé, Hủy vé & Đánh giá
   const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
@@ -387,8 +389,7 @@ export function TicketManagementModal({
 
   const canCancel =
     ticketDetail &&
-    (ticketDetail.status === 'PAID' || ticketDetail.status === 'RESERVED') &&
-    new Date(ticketDetail.departureTime).getTime() - Date.now() >= 2 * 60 * 60 * 1000
+    (ticketDetail.status === 'PAID' || ticketDetail.status === 'RESERVED')
 
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
@@ -667,12 +668,34 @@ export function TicketManagementModal({
                         <button
                           type="button"
                           onClick={() => setIsFullscreenQr(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold transition-colors shadow-2xs"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold transition-colors shadow-2xs cursor-pointer"
                           title="Phóng to mã QR toàn màn hình"
                         >
                           <Maximize2 size={14} />
                           <span className="hidden sm:inline">Toàn màn hình</span>
                         </button>
+
+                        {(ticketDetail.status === 'PAID' || ticketDetail.status === 'RESERVED') && (
+                          <button
+                            type="button"
+                            onClick={() => setShowExchangeModal(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <ArrowLeftRight size={13} className="text-blue-700" />
+                            <span>Đổi chuyến</span>
+                          </button>
+                        )}
+
+                        {canCancel && (
+                          <button
+                            type="button"
+                            onClick={() => setShowCancelModal(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <Ban size={13} className="text-rose-600" />
+                            <span>Hủy vé</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -951,54 +974,17 @@ export function TicketManagementModal({
                           </button>
                         )}
 
-                        {canCancel && !cancelConfirm && !cancelSuccess && (
+                        {canCancel && (
                           <button
                             type="button"
-                            onClick={() => setCancelConfirm(true)}
+                            onClick={() => setShowCancelModal(true)}
                             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-black text-rose-700 transition-all cursor-pointer"
                           >
                             <Ban className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Hủy vé (&gt; 2 tiếng)</span>
+                            <span>Hủy vé & Hoàn tiền</span>
                           </button>
                         )}
                       </div>
-
-                      {cancelSuccess && (
-                        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 flex items-center gap-2.5 text-xs text-emerald-900">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>Vé đã được hủy thành công. Chính sách hoàn tiền sẽ được xử lý theo quy định.</span>
-                        </div>
-                      )}
-
-                      {cancelConfirm && (
-                        <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-2.5 text-xs text-rose-900">
-                          <div className="flex items-center gap-2 font-bold text-rose-700">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span>Xác nhận hủy vé xe buýt này?</span>
-                          </div>
-                          <p className="text-[11px] text-rose-700">
-                            Hủy trước giờ khởi hành trên 2 tiếng được hoàn tiền theo chính sách. Vé sau khi hủy sẽ không thể hoàn tác.
-                          </p>
-                          <div className="flex gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => setCancelConfirm(false)}
-                              className="flex-1 rounded-xl bg-white border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                            >
-                              Giữ lại vé
-                            </button>
-                            <button
-                              type="button"
-                              disabled={cancelling}
-                              onClick={handleCancelTicket}
-                              className="flex-1 rounded-xl bg-rose-600 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                            >
-                              {cancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                              <span>Đồng ý hủy</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </>
                 )}
@@ -1222,14 +1208,36 @@ export function TicketManagementModal({
         </div>
       )}
 
-      {/* Sub-modal: Đổi vé */}
+      {/* Sub-modal: Đổi vé 3 bước */}
       {showExchangeModal && ticketDetail && (
         <ExchangeTicketModal
           ticketId={ticketDetail.ticketId}
           ticketCode={ticketDetail.ticketCode}
+          currentSeatNumber={ticketDetail.seatNumber}
+          currentTripId={ticketDetail.tripId}
+          currentDepartureTime={ticketDetail.departureTime}
+          currentPrice={ticketDetail.price}
+          routeName={ticketDetail.routeName}
           onClose={() => setShowExchangeModal(false)}
           onSuccess={() => {
             setShowExchangeModal(false)
+            loadTicketDetail(ticketDetail.ticketId)
+            loadTickets()
+          }}
+        />
+      )}
+
+      {/* Sub-modal: Hủy vé & Hoàn tiền tự động (Backend PR #20) */}
+      {showCancelModal && ticketDetail && (
+        <CancellationPolicyModal
+          ticketId={ticketDetail.ticketId}
+          ticketCode={ticketDetail.ticketCode}
+          seatNumber={ticketDetail.seatNumber}
+          departureTime={ticketDetail.departureTime}
+          price={ticketDetail.price}
+          onClose={() => setShowCancelModal(false)}
+          onSuccess={() => {
+            setShowCancelModal(false)
             loadTicketDetail(ticketDetail.ticketId)
             loadTickets()
           }}

@@ -84,6 +84,42 @@ export class SearchTripsDto {
   date?: string;
 }
 
+export class CancelTicketDto {
+  @ApiPropertyOptional({ example: 'Bận việc đột xuất', description: 'Lý do hủy vé' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class HoldExchangeSeatDto {
+  @ApiProperty({ description: 'ID chuyến xe mới muốn đổi sang' })
+  @IsString()
+  @IsNotEmpty({ message: 'newTripId không được để trống' })
+  newTripId: string;
+
+  @ApiProperty({ description: 'ID ghế mới trên chuyến mới muốn giữ chỗ' })
+  @IsString()
+  @IsNotEmpty({ message: 'newSeatId không được để trống' })
+  newSeatId: string;
+}
+
+export class ConfirmExchangeDto {
+  @ApiProperty({ description: 'ID chuyến xe mới' })
+  @IsString()
+  @IsNotEmpty({ message: 'newTripId không được để trống' })
+  newTripId: string;
+
+  @ApiProperty({ description: 'ID ghế mới trên chuyến mới' })
+  @IsString()
+  @IsNotEmpty({ message: 'newSeatId không được để trống' })
+  newSeatId: string;
+
+  @ApiPropertyOptional({ example: 'vnpay', description: 'Phương thức thanh toán nếu có chênh lệch giá' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+}
+
 export class ExchangeTicketDto {
   @ApiProperty({ description: 'ID chuyến xe mới' })
   @IsString()
@@ -94,4 +130,9 @@ export class ExchangeTicketDto {
   @IsString()
   @IsNotEmpty()
   newSeatId: string;
+
+  @ApiPropertyOptional({ example: 'vnpay', description: 'Phương thức thanh toán khoản chênh lệch' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
 }

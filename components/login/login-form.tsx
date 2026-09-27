@@ -84,7 +84,7 @@ function LoginFormContent() {
         } else if (portalMode === 'staff') {
           router.push('/dashboard')
         } else {
-          router.push('/')
+          router.push('/?openTickets=true')
         }
       } else {
         message.error(res.message || 'Email hoặc mật khẩu không chính xác')
@@ -102,7 +102,7 @@ function LoginFormContent() {
       const res = await login('student.an@ictu.edu.vn', 'Password@123', false)
       if (res.success) {
         message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU!')
-        router.push(redirectParam || '/')
+        router.push(redirectParam || '/?openTickets=true')
       } else {
         message.error(res.message || 'Không thể kết nối dịch vụ Office 365')
       }
@@ -126,19 +126,28 @@ function LoginFormContent() {
               <p className="text-[11px] text-muted-foreground truncate">{user.roleTitle}</p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <Link
-                href="/dashboard"
-                className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
-              >
-                Vào Dashboard
-              </Link>
+              {user.role === 'admin' || user.role === 'dispatcher' || user.role === 'driver' || user.role === 'manager' ? (
+                <Link
+                  href="/dashboard"
+                  className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
+                >
+                  Vào Bảng Điều Hành
+                </Link>
+              ) : (
+                <Link
+                  href="/?openTickets=true"
+                  className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
+                >
+                  Vào Ví Vé & Tiện Ích
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   logout()
                   message.info('Đã đăng xuất tài khoản')
                 }}
-                className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted"
+                className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted cursor-pointer"
               >
                 Đổi tài khoản
               </button>
