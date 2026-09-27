@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   ArrowUpDown,
   BatteryCharging,
   Bus,
@@ -58,8 +60,24 @@ export function TripSearchModal({
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
+  type SortCriteria = 'departure' | 'price' | 'seats'
+  type SortDirection = 'asc' | 'desc'
+
   const [filterType, setFilterType] = useState<'all' | 'soon' | 'available' | 'ct01' | 'ct02'>('all')
-  const [sortBy, setSortBy] = useState<'departure' | 'price' | 'seats'>('departure')
+  const [sortBy, setSortBy] = useState<SortCriteria>('departure')
+  const [sortOrder, setSortOrder] = useState<SortDirection>('asc')
+
+  const handleToggleSort = (criteria: SortCriteria) => {
+    if (sortBy === criteria) {
+      // Đảo chiều sắp xếp khi người dùng bấm lại vào cùng tiêu chí
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      // Đổi sang tiêu chí mới với chiều mặc định tối ưu nhất
+      setSortBy(criteria)
+      // Mặc định: Giờ chạy -> asc (sớm nhất), Giá vé -> asc (thấp nhất), Ghế trống -> desc (nhiều nhất)
+      setSortOrder(criteria === 'seats' ? 'desc' : 'asc')
+    }
+  }
 
   const filteredTrips = useMemo(() => {
     let result = [...trips]
@@ -72,23 +90,38 @@ export function TripSearchModal({
         return diffMinutes > 0 && diffMinutes <= 90
       })
     } else if (filterType === 'available') {
-      result = result.filter((t) => t.availableSeats >= 10)
+      result = result.filter((t) => Number(t.availableSeats || 0) >= 10)
     } else if (filterType === 'ct01') {
       result = result.filter((t) => t.routeCode.includes('01'))
     } else if (filterType === 'ct02') {
       result = result.filter((t) => t.routeCode.includes('02'))
     }
 
-    if (sortBy === 'departure') {
-      result.sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime())
-    } else if (sortBy === 'price') {
-      result.sort((a, b) => Number(a.basePrice) - Number(b.basePrice))
-    } else if (sortBy === 'seats') {
-      result.sort((a, b) => b.availableSeats - a.availableSeats)
-    }
+    // Logic sắp xếp chính xác cho Giờ chạy, Giá vé và Ghế trống
+    result.sort((a, b) => {
+      if (sortBy === 'departure') {
+        const timeA = new Date(a.departureTime).getTime() || 0
+        const timeB = new Date(b.departureTime).getTime() || 0
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
+      }
+
+      if (sortBy === 'price') {
+        const priceA = Number(a.basePrice) || 0
+        const priceB = Number(b.basePrice) || 0
+        return sortOrder === 'asc' ? priceA - priceB : priceB - priceA
+      }
+
+      if (sortBy === 'seats') {
+        const seatsA = Number(a.availableSeats) || 0
+        const seatsB = Number(b.availableSeats) || 0
+        return sortOrder === 'asc' ? seatsA - seatsB : seatsB - seatsA
+      }
+
+      return 0
+    })
 
     return result
-  }, [trips, filterType, sortBy])
+  }, [trips, filterType, sortBy, sortOrder])
 
   // Khởi tạo và nạp danh sách trạm gợi ý
   useEffect(() => {
@@ -423,38 +456,88 @@ export function TripSearchModal({
                 Sắp xếp:
               </span>
               <div className="inline-flex rounded-xl bg-slate-200/60 p-0.5 border border-slate-200/80">
+                {/* Giờ chạy */}
                 <button
                   type="button"
-                  onClick={() => setSortBy('departure')}
+                  title="Nhấn để đổi chiều: Sớm nhất <-> Muộn nhất"
+                  onClick={() => handleToggleSort('departure')}
                   className={cn(
-                    'rounded-lg px-2 py-0.5 text-[11px] font-bold transition-all flex items-center gap-1',
-                    sortBy === 'departure' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900',
+                    'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                    sortBy === 'departure'
+                      ? 'bg-white text-[#005A36] shadow-xs ring-1 ring-emerald-300/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900',
                   )}
                 >
-                  <Clock size={11} />
+                  <Clock size={12} className={sortBy === 'departure' ? 'text-[#005A36]' : 'text-slate-400'} />
                   <span>Giờ chạy</span>
+                  {sortBy === 'departure' && (
+                    <>
+                      {sortOrder === 'asc' ? (
+                        <ArrowUp size={11} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowDown size={11} strokeWidth={2.8} />
+                      )}
+                      <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded">
+                        {sortOrder === 'asc' ? 'Sớm' : 'Muộn'}
+                      </span>
+                    </>
+                  )}
                 </button>
+
+                {/* Giá vé */}
                 <button
                   type="button"
-                  onClick={() => setSortBy('price')}
+                  title="Nhấn để đổi chiều: Thấp nhất <-> Cao nhất"
+                  onClick={() => handleToggleSort('price')}
                   className={cn(
-                    'rounded-lg px-2 py-0.5 text-[11px] font-bold transition-all flex items-center gap-1',
-                    sortBy === 'price' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900',
+                    'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                    sortBy === 'price'
+                      ? 'bg-white text-[#005A36] shadow-xs ring-1 ring-emerald-300/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900',
                   )}
                 >
-                  <Ticket size={11} />
+                  <Ticket size={12} className={sortBy === 'price' ? 'text-[#005A36]' : 'text-slate-400'} />
                   <span>Giá vé</span>
+                  {sortBy === 'price' && (
+                    <>
+                      {sortOrder === 'asc' ? (
+                        <ArrowUp size={11} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowDown size={11} strokeWidth={2.8} />
+                      )}
+                      <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded">
+                        {sortOrder === 'asc' ? 'Thấp' : 'Cao'}
+                      </span>
+                    </>
+                  )}
                 </button>
+
+                {/* Ghế trống */}
                 <button
                   type="button"
-                  onClick={() => setSortBy('seats')}
+                  title="Nhấn để đổi chiều: Nhiều nhất <-> Ít nhất"
+                  onClick={() => handleToggleSort('seats')}
                   className={cn(
-                    'rounded-lg px-2 py-0.5 text-[11px] font-bold transition-all flex items-center gap-1',
-                    sortBy === 'seats' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900',
+                    'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                    sortBy === 'seats'
+                      ? 'bg-white text-[#005A36] shadow-xs ring-1 ring-emerald-300/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900',
                   )}
                 >
-                  <Users size={11} />
+                  <Users size={12} className={sortBy === 'seats' ? 'text-[#005A36]' : 'text-slate-400'} />
                   <span>Ghế trống</span>
+                  {sortBy === 'seats' && (
+                    <>
+                      {sortOrder === 'desc' ? (
+                        <ArrowDown size={11} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUp size={11} strokeWidth={2.8} />
+                      )}
+                      <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded">
+                        {sortOrder === 'desc' ? 'Nhiều' : 'Ít'}
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -463,6 +546,34 @@ export function TripSearchModal({
 
         {/* Results List Viewport */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          {/* Active Sort Banner Indicator */}
+          {!loading && !error && filteredTrips.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 font-medium">
+              <span>
+                Tìm thấy <strong className="text-slate-900 font-bold">{filteredTrips.length}</strong> chuyến xe phù hợp
+              </span>
+              <div className="flex items-center gap-1.5 text-[11px] text-[#005A36] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60 font-bold">
+                <SlidersHorizontal size={11} />
+                <span>
+                  Đang xếp:{' '}
+                  <strong>
+                    {sortBy === 'departure' &&
+                      (sortOrder === 'asc'
+                        ? 'Giờ xuất bến (Sớm nhất ➔ Muộn nhất)'
+                        : 'Giờ xuất bến (Muộn nhất ➔ Sớm nhất)')}
+                    {sortBy === 'price' &&
+                      (sortOrder === 'asc'
+                        ? 'Giá vé (Thấp nhất ➔ Cao nhất)'
+                        : 'Giá vé (Cao nhất ➔ Thấp nhất)')}
+                    {sortBy === 'seats' &&
+                      (sortOrder === 'desc'
+                        ? 'Ghế trống (Nhiều nhất ➔ Ít nhất)'
+                        : 'Ghế trống (Ít nhất ➔ Nhiều nhất)')}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          )}
           {/* Loading Skeletons */}
           {loading && (
             <div className="space-y-3 py-2">
