@@ -49,6 +49,8 @@ export enum PaymentStatus {
 export enum PaymentMethod {
   VNPAY = 'vnpay',
   MOMO = 'momo',
+  ZALOPAY = 'zalopay',
+  BANK_CARD = 'bank_card',
   VIETQR = 'vietqr',
   CASH = 'cash',
 }

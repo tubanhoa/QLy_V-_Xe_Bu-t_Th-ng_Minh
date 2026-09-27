@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
+import { PaymentLogEntity } from '../../database/entities/payment-log.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
@@ -12,6 +13,7 @@ import { BookingModule } from '../booking/booking.module.js';
   imports: [
     TypeOrmModule.forFeature([
       PaymentEntity,
+      PaymentLogEntity,
       BookingEntity,
       TicketEntity,
       SeatHoldEntity,

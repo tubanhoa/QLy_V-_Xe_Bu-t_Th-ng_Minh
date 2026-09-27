@@ -10,13 +10,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as crypto from 'node:crypto';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
+import { PaymentLogEntity } from '../../database/entities/payment-log.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { generateQrDataUrl } from '../../common/utils/qr-code.util.js';
-import { CreatePaymentUrlDto, RefundTicketDto } from './dto/payment.dto.js';
+import {
+  CreatePaymentUrlDto,
+  RefundTicketDto,
+  MoMoIpnDto,
+  ZaloPayIpnDto,
+  ReconciliationQueryDto,
+} from './dto/payment.dto.js';
 import {
   PaymentStatus,
   BookingStatus,
@@ -39,10 +46,46 @@ export class PaymentService {
     @InjectRepository(SeatHoldEntity)
     private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
     @Optional()
+    @InjectRepository(PaymentLogEntity)
+    private readonly paymentLogRepository?: Repository<PaymentLogEntity>,
+    @Optional()
     private readonly seatLockService?: SeatLockService,
     @Optional()
     private readonly notificationService?: NotificationService,
   ) {}
+
+  async logPaymentEvent(params: {
+    paymentId?: string;
+    bookingId?: string;
+    bookingCode?: string;
+    gateway: string;
+    eventType: string;
+    requestData?: Record<string, any>;
+    responseData?: Record<string, any>;
+    status?: string;
+    ipAddress?: string;
+    errorMessage?: string;
+  }) {
+    try {
+      if (this.paymentLogRepository) {
+        const log = this.paymentLogRepository.create({
+          paymentId: params.paymentId,
+          bookingId: params.bookingId,
+          bookingCode: params.bookingCode,
+          gateway: params.gateway,
+          eventType: params.eventType,
+          requestData: params.requestData,
+          responseData: params.responseData,
+          status: params.status || 'success',
+          ipAddress: params.ipAddress,
+          errorMessage: params.errorMessage,
+        });
+        await this.paymentLogRepository.save(log);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Failed to save payment log: ${err?.message}`);
+    }
+  }
 
   async createPaymentUrl(dto: CreatePaymentUrlDto, reqIp?: string) {
     const booking = await this.bookingRepository.findOne({
@@ -71,32 +114,99 @@ export class PaymentService {
     });
     await this.paymentRepository.save(payment);
 
-    if (dto.paymentMethod === PaymentMethod.VNPAY) {
-      const paymentUrl = this.buildVNPayUrl({
-        amount,
-        txnRef,
-        orderInfo: dto.orderInfo || `Thanh toan don dat ve ${booking.bookingCode}`,
-        ipAddr: dto.ipAddress || reqIp || '127.0.0.1',
-      });
+    let paymentUrl = '';
+    let qrCode = '';
+    const orderInfo = dto.orderInfo || `Thanh toan don dat ve ${booking.bookingCode}`;
+    const ipAddr = dto.ipAddress || reqIp || '127.0.0.1';
 
-      return {
-        paymentId: payment.id,
-        paymentMethod: dto.paymentMethod,
-        paymentUrl,
+    if (dto.paymentMethod === PaymentMethod.VNPAY) {
+      paymentUrl = this.buildVNPayUrl({
         amount,
         txnRef,
-      };
+        orderInfo,
+        ipAddr,
+        bankCode: dto.bankCode,
+        returnUrl: dto.returnUrl,
+      });
+      qrCode = paymentUrl;
+    } else if (dto.paymentMethod === PaymentMethod.MOMO) {
+      const momoRes = this.buildMoMoUrl({
+        amount,
+        txnRef,
+        orderInfo,
+        returnUrl: dto.returnUrl,
+      });
+      paymentUrl = momoRes.paymentUrl;
+      qrCode = momoRes.qrCode;
+    } else if (dto.paymentMethod === PaymentMethod.ZALOPAY) {
+      const zaloRes = this.buildZaloPayUrl({
+        amount,
+        txnRef,
+        orderInfo,
+        bookingId: booking.id,
+        returnUrl: dto.returnUrl,
+      });
+      paymentUrl = zaloRes.paymentUrl;
+      qrCode = zaloRes.qrCode;
+    } else if (dto.paymentMethod === PaymentMethod.BANK_CARD) {
+      paymentUrl = this.buildBankCardUrl({
+        amount,
+        txnRef,
+        orderInfo,
+        ipAddr,
+        bankCode: dto.bankCode,
+        returnUrl: dto.returnUrl,
+      });
+      qrCode = paymentUrl;
+    } else {
+      // VIETQR / CASH
+      qrCode = `https://api.vietqr.io/image/970422-0987654321-compact2.jpg?amount=${amount}&addInfo=${encodeURIComponent(
+        booking.bookingCode,
+      )}`;
+      paymentUrl = qrCode;
     }
 
-    // Default or Cash or VietQR
+    // Sinh ảnh mã QR Data URL Base64 render trực tiếp trên Frontend / Mobile App
+    let qrDataUrl = '';
+    try {
+      qrDataUrl = await generateQrDataUrl(qrCode);
+    } catch {
+      qrDataUrl = '';
+    }
+
+    // Cập nhật payment_details
+    payment.paymentDetails = {
+      gateway: dto.paymentMethod,
+      bankCode: dto.bankCode,
+      orderInfo,
+      ipAddress: ipAddr,
+      paymentUrl,
+      qrCode,
+    };
+    await this.paymentRepository.save(payment);
+
+    // Ghi nhật ký khởi tạo thanh toán
+    await this.logPaymentEvent({
+      paymentId: payment.id,
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      gateway: dto.paymentMethod,
+      eventType: 'create_url',
+      requestData: { dto, reqIp },
+      responseData: { paymentUrl, qrCode },
+      status: 'success',
+      ipAddress: ipAddr,
+    });
+
     return {
       paymentId: payment.id,
       paymentMethod: dto.paymentMethod,
       amount,
       txnRef,
-      paymentUrl: `https://api.vietqr.io/image/970422-0987654321-compact2.jpg?amount=${amount}&addInfo=${encodeURIComponent(
-        booking.bookingCode,
-      )}`,
+      paymentUrl,
+      qrCode,
+      qrDataUrl,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     };
   }
 
@@ -105,11 +215,13 @@ export class PaymentService {
     txnRef: string;
     orderInfo: string;
     ipAddr: string;
+    bankCode?: string;
+    returnUrl?: string;
   }): string {
     const tmnCode = process.env.VNPAY_TMN_CODE || 'ICTUBUS01';
     const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
     const vnpUrl = process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
-    const returnUrl = process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payment/result';
+    const returnUrl = params.returnUrl || process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payment/result';
 
     const date = new Date();
     const createDate = this.formatDate(date);
@@ -129,6 +241,10 @@ export class PaymentService {
       vnp_CreateDate: createDate,
     };
 
+    if (params.bankCode) {
+      vnp_Params['vnp_BankCode'] = params.bankCode;
+    }
+
     const sortedParams = this.sortObject(vnp_Params);
     const signData = new URLSearchParams(sortedParams).toString();
     const hmac = crypto.createHmac('sha512', secretKey);
@@ -136,6 +252,71 @@ export class PaymentService {
 
     sortedParams['vnp_SecureHash'] = signed;
     return `${vnpUrl}?${new URLSearchParams(sortedParams).toString()}`;
+  }
+
+  private buildMoMoUrl(params: {
+    amount: number;
+    txnRef: string;
+    orderInfo: string;
+    returnUrl?: string;
+  }): { paymentUrl: string; qrCode: string } {
+    const partnerCode = process.env.MOMO_PARTNER_CODE || 'MOMOBUS2026';
+    const accessKey = process.env.MOMO_ACCESS_KEY || 'MOMOACCESSKEY2026';
+    const secretKey = process.env.MOMO_SECRET_KEY || 'MOMOSECRETKEY2026BUS';
+    const redirectUrl = params.returnUrl || process.env.MOMO_RETURN_URL || 'http://localhost:3000/payment/result';
+    const ipnUrl = process.env.MOMO_IPN_URL || 'http://localhost:3000/api/v1/payment/momo-ipn';
+    const requestId = `${params.txnRef}-${Date.now()}`;
+    const orderId = params.txnRef;
+    const orderInfo = params.orderInfo;
+    const requestType = 'captureWallet';
+    const extraData = '';
+
+    const rawSignature = `accessKey=${accessKey}&amount=${params.amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+    const signature = crypto.createHmac('sha256', secretKey).update(rawSignature).digest('hex');
+
+    const paymentUrl = `https://test-payment.momo.vn/v2/gateway/pay?partnerCode=${partnerCode}&orderId=${orderId}&amount=${params.amount}&signature=${signature}`;
+    const qrCode = `2|99|${partnerCode}|${orderId}|${params.amount}|0|0|${params.amount}|${encodeURIComponent(orderInfo)}`;
+
+    return { paymentUrl, qrCode };
+  }
+
+  private buildZaloPayUrl(params: {
+    amount: number;
+    txnRef: string;
+    orderInfo: string;
+    bookingId: string;
+    returnUrl?: string;
+  }): { paymentUrl: string; qrCode: string } {
+    const appId = process.env.ZALOPAY_APP_ID || '2553';
+    const key1 = process.env.ZALOPAY_KEY1 || 'ZALOPAYKEY1SECRET2026';
+    const appTime = Date.now();
+    const appTransId = `${this.formatDate(new Date()).slice(2, 8)}_${params.txnRef}`;
+    const appUser = 'ictu_passenger';
+    const embedData = JSON.stringify({ redirecturl: params.returnUrl || 'http://localhost:3000/payment/result' });
+    const item = JSON.stringify([{ bookingId: params.bookingId, amount: params.amount }]);
+
+    const data = `${appId}|${appTransId}|${appUser}|${params.amount}|${appTime}|${embedData}|${item}`;
+    const mac = crypto.createHmac('sha256', key1).update(data).digest('hex');
+
+    const paymentUrl = `https://gateway.zalopay.vn/openinapp?app_id=${appId}&app_trans_id=${appTransId}&amount=${params.amount}&mac=${mac}`;
+    const qrCode = `zalopay://pay?app_id=${appId}&app_trans_id=${appTransId}&amount=${params.amount}&mac=${mac}`;
+
+    return { paymentUrl, qrCode };
+  }
+
+  private buildBankCardUrl(params: {
+    amount: number;
+    txnRef: string;
+    orderInfo: string;
+    ipAddr: string;
+    bankCode?: string;
+    returnUrl?: string;
+  }): string {
+    const effectiveBankCode = params.bankCode || 'VNBANK';
+    return this.buildVNPayUrl({
+      ...params,
+      bankCode: effectiveBankCode,
+    });
   }
 
   async handleVNPayReturn(queryParams: Record<string, string>) {
@@ -180,6 +361,13 @@ export class PaymentService {
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
 
     if (secureHash !== checkHash) {
+      await this.logPaymentEvent({
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_received',
+        requestData: queryParams,
+        status: 'failed',
+        errorMessage: 'Invalid VNPay checksum',
+      });
       return { RspCode: '97', Message: 'Invalid Checksum' };
     }
 
@@ -190,6 +378,13 @@ export class PaymentService {
     });
 
     if (!payment) {
+      await this.logPaymentEvent({
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_not_found',
+        requestData: queryParams,
+        status: 'failed',
+        errorMessage: 'Order not found',
+      });
       return { RspCode: '01', Message: 'Order not found' };
     }
 
@@ -204,6 +399,107 @@ export class PaymentService {
       await this.failPayment(txnRef, queryParams);
       return { RspCode: '00', Message: 'Confirm Success' };
     }
+  }
+
+  async handleMoMoIpn(dto: MoMoIpnDto, clientIp?: string) {
+    const secretKey = process.env.MOMO_SECRET_KEY || 'MOMOSECRETKEY2026BUS';
+    const accessKey = process.env.MOMO_ACCESS_KEY || 'MOMOACCESSKEY2026';
+
+    const rawSignature = `accessKey=${accessKey}&amount=${dto.amount}&extraData=${dto.extraData || ''}&message=${dto.message || ''}&orderId=${dto.orderId}&orderInfo=${dto.orderInfo || ''}&orderType=${dto.orderType || ''}&partnerCode=${dto.partnerCode || ''}&payType=${dto.payType || ''}&requestId=${dto.requestId || ''}&responseTime=${dto.responseTime || ''}&resultCode=${dto.resultCode}&transId=${dto.transId || ''}`;
+    const calculatedSignature = crypto.createHmac('sha256', secretKey).update(rawSignature).digest('hex');
+
+    if (dto.signature !== calculatedSignature) {
+      await this.logPaymentEvent({
+        gateway: PaymentMethod.MOMO,
+        eventType: 'ipn_received',
+        requestData: dto as any,
+        status: 'failed',
+        ipAddress: clientIp,
+        errorMessage: 'Invalid MoMo IPN signature',
+      });
+      return { message: 'Invalid signature', resultCode: 97 };
+    }
+
+    const isSuccess = Number(dto.resultCode) === 0;
+    if (isSuccess) {
+      await this.confirmPayment(dto.orderId, dto);
+    } else {
+      await this.failPayment(dto.orderId, dto);
+    }
+
+    await this.logPaymentEvent({
+      gateway: PaymentMethod.MOMO,
+      eventType: isSuccess ? 'ipn_success' : 'ipn_failed',
+      requestData: dto as any,
+      responseData: { resultCode: dto.resultCode, message: dto.message },
+      status: isSuccess ? 'success' : 'failed',
+      ipAddress: clientIp,
+    });
+
+    return { message: isSuccess ? 'Success' : 'Payment Failed', resultCode: dto.resultCode };
+  }
+
+  async handleZaloPayIpn(dto: ZaloPayIpnDto, clientIp?: string) {
+    const key2 = process.env.ZALOPAY_KEY2 || process.env.ZALOPAY_KEY1 || 'ZALOPAYKEY1SECRET2026';
+    const calculatedMac = crypto.createHmac('sha256', key2).update(dto.data).digest('hex');
+
+    if (dto.mac !== calculatedMac) {
+      await this.logPaymentEvent({
+        gateway: PaymentMethod.ZALOPAY,
+        eventType: 'ipn_received',
+        requestData: dto as any,
+        status: 'failed',
+        ipAddress: clientIp,
+        errorMessage: 'Invalid ZaloPay MAC signature',
+      });
+      return { return_code: -1, return_message: 'mac not equal' };
+    }
+
+    let dataObj: Record<string, any> = {};
+    try {
+      dataObj = JSON.parse(dto.data);
+    } catch {
+      dataObj = { raw: dto.data };
+    }
+
+    const appTransId = dataObj.app_trans_id || '';
+    const txnRef = appTransId.includes('_') ? appTransId.substring(appTransId.indexOf('_') + 1) : appTransId;
+
+    let payment = await this.paymentRepository.findOne({
+      where: { transactionId: txnRef },
+    });
+    if (!payment && appTransId) {
+      payment = await this.paymentRepository.findOne({
+        where: { transactionId: appTransId },
+      });
+    }
+
+    if (!payment) {
+      await this.logPaymentEvent({
+        gateway: PaymentMethod.ZALOPAY,
+        eventType: 'ipn_not_found',
+        requestData: dto as any,
+        status: 'failed',
+        ipAddress: clientIp,
+        errorMessage: `Payment with txnRef ${txnRef} not found`,
+      });
+      return { return_code: 2, return_message: 'order not found' };
+    }
+
+    await this.confirmPayment(payment.transactionId, dataObj);
+
+    await this.logPaymentEvent({
+      paymentId: payment.id,
+      bookingId: payment.bookingId,
+      gateway: PaymentMethod.ZALOPAY,
+      eventType: 'ipn_success',
+      requestData: dto as any,
+      responseData: { return_code: 1, return_message: 'success' },
+      status: 'success',
+      ipAddress: clientIp,
+    });
+
+    return { return_code: 1, return_message: 'success' };
   }
 
   async confirmPayment(txnRef: string, details: Record<string, any>) {
@@ -251,6 +547,17 @@ export class PaymentService {
       }
     }
 
+    // Ghi log thanh toán thành công
+    await this.logPaymentEvent({
+      paymentId: payment.id,
+      bookingId: payment.bookingId,
+      bookingCode: payment.booking?.bookingCode,
+      gateway: payment.paymentMethod || 'gateway',
+      eventType: 'payment_success',
+      responseData: details,
+      status: 'success',
+    });
+
     // Tự động gửi Email/Thông báo kèm vé điện tử và hình ảnh mã QR sau khi thanh toán thành công
     if (this.notificationService && payment.booking?.user?.email) {
       for (const ticket of tickets) {
@@ -287,6 +594,18 @@ export class PaymentService {
     payment.status = PaymentStatus.FAILED;
     payment.paymentDetails = details || {};
     await this.paymentRepository.save(payment);
+
+    // Ghi log thanh toán thất bại
+    await this.logPaymentEvent({
+      paymentId: payment.id,
+      bookingId: payment.bookingId,
+      bookingCode: payment.booking?.bookingCode,
+      gateway: payment.paymentMethod || 'gateway',
+      eventType: 'payment_failed',
+      responseData: details,
+      status: 'failed',
+      errorMessage: details?.message || 'Thanh toán thất bại hoặc bị hủy',
+    });
 
     if (payment.booking) {
       payment.booking.status = BookingStatus.CANCELLED;
@@ -368,6 +687,15 @@ export class PaymentService {
       }
     }
 
+    await this.logPaymentEvent({
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      gateway: 'system',
+      eventType: 'cancel_payment',
+      requestData: { bookingId, userId },
+      status: 'success',
+    });
+
     return {
       success: true,
       message: 'Đã hủy thanh toán và giải phóng ghế thành công',
@@ -405,11 +733,72 @@ export class PaymentService {
       await this.paymentRepository.save(payment);
     }
 
+    await this.logPaymentEvent({
+      paymentId: payment?.id,
+      bookingId: ticket.bookingId,
+      bookingCode: ticket.booking?.bookingCode,
+      gateway: payment?.paymentMethod || 'gateway',
+      eventType: 'refund',
+      requestData: { ticketId, dto },
+      responseData: { refundAmount },
+      status: 'success',
+    });
+
     return {
       success: true,
       message: `Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VND cho vé ${ticket.ticketCode}`,
       refundAmount,
       refundTime: new Date(),
+    };
+  }
+
+  async getPaymentLogs(paymentId: string) {
+    if (!this.paymentLogRepository) return [];
+    return this.paymentLogRepository.find({
+      where: { paymentId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getReconciliationReport(query: ReconciliationQueryDto) {
+    if (!this.paymentLogRepository) {
+      return { totalLogs: 0, totalSuccessfulPayments: 0, totalRevenue: 0, logs: [] };
+    }
+
+    const qb = this.paymentLogRepository.createQueryBuilder('log');
+    if (query.gateway) {
+      qb.andWhere('log.gateway = :gateway', { gateway: query.gateway });
+    }
+    if (query.status) {
+      qb.andWhere('log.status = :status', { status: query.status });
+    }
+    if (query.startDate) {
+      qb.andWhere('log.createdAt >= :startDate', { startDate: new Date(query.startDate) });
+    }
+    if (query.endDate) {
+      qb.andWhere('log.createdAt <= :endDate', { endDate: new Date(`${query.endDate}T23:59:59.999Z`) });
+    }
+    qb.orderBy('log.createdAt', 'DESC');
+    const logs = await qb.getMany();
+
+    const paymentWhere: any = { status: PaymentStatus.SUCCESS };
+    if (query.gateway) {
+      paymentWhere.paymentMethod = query.gateway;
+    }
+    const successfulPayments = await this.paymentRepository.find({
+      where: paymentWhere,
+    });
+
+    const totalRevenue = successfulPayments.reduce(
+      (sum, p) => sum + Number(p.amount || 0),
+      0,
+    );
+
+    return {
+      totalLogs: logs.length,
+      totalSuccessfulPayments: successfulPayments.length,
+      totalRevenue,
+      logs,
     };
   }
 

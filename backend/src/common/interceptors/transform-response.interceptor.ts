@@ -36,11 +36,14 @@ export class TransformResponseInterceptor<T>
   ): Observable<ApiResponse<T>> {
     return next.handle().pipe(
       map((responseData) => {
-        // Nếu response đã có format chuẩn → giữ nguyên
+        // Nếu response đã có format chuẩn hoặc response cổng thanh toán (MoMo, ZaloPay, VNPay) → giữ nguyên
         if (
           responseData &&
           typeof responseData === 'object' &&
-          'success' in responseData
+          ('success' in responseData ||
+            'resultCode' in responseData ||
+            'return_code' in responseData ||
+            'RspCode' in responseData)
         ) {
           return responseData as ApiResponse<T>;
         }

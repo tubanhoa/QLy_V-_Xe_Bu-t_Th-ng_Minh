@@ -11,7 +11,13 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { PaymentService } from './payment.service.js';
-import { CreatePaymentUrlDto, RefundTicketDto } from './dto/payment.dto.js';
+import {
+  CreatePaymentUrlDto,
+  RefundTicketDto,
+  MoMoIpnDto,
+  ZaloPayIpnDto,
+  ReconciliationQueryDto,
+} from './dto/payment.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -27,7 +33,7 @@ export class PaymentController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @Post('create-url')
-  @ApiOperation({ summary: 'Tạo URL thanh toán VNPay / MoMo / VietQR' })
+  @ApiOperation({ summary: 'Tạo URL thanh toán VNPay / MoMo / ZaloPay / BankCard / VietQR' })
   async createPaymentUrl(@Body() dto: CreatePaymentUrlDto, @Req() req: Request) {
     const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
     return this.paymentService.createPaymentUrl(dto, ip);
@@ -55,6 +61,39 @@ export class PaymentController {
     return this.paymentService.handleVNPayIpn(params);
   }
 
+  @Public()
+  @Post('momo-ipn')
+  @ApiOperation({ summary: 'Webhook IPN từ MoMo (POST)' })
+  async handleMoMoIpn(@Body() dto: MoMoIpnDto, @Req() req: Request) {
+    const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
+    return this.paymentService.handleMoMoIpn(dto, ip);
+  }
+
+  @Public()
+  @Post('zalopay-ipn')
+  @ApiOperation({ summary: 'Webhook IPN từ ZaloPay (POST)' })
+  async handleZaloPayIpn(@Body() dto: ZaloPayIpnDto, @Req() req: Request) {
+    const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
+    return this.paymentService.handleZaloPayIpn(dto, ip);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get('logs/:paymentId')
+  @ApiOperation({ summary: 'Lấy danh sách nhật ký giao dịch (Payment Logs)' })
+  async getPaymentLogs(@Param('paymentId') paymentId: string) {
+    return this.paymentService.getPaymentLogs(paymentId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Get('reconciliation')
+  @ApiOperation({ summary: 'Báo cáo đối soát giao dịch thanh toán (Admin / Manager)' })
+  async getReconciliationReport(@Query() query: ReconciliationQueryDto) {
+    return this.paymentService.getReconciliationReport(query);
+  }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @Post('cancel/:bookingId')
@@ -75,3 +114,4 @@ export class PaymentController {
     return this.paymentService.refundTicket(ticketId, dto);
   }
 }
+
