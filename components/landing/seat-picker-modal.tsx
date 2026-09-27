@@ -102,6 +102,8 @@ export function SeatPickerModal({
     isHoldingAction,
     conflictedSeatId,
     errorMessage: lockError,
+    successMessage: lockSuccess,
+    isExpired: isHoldExpired,
     remainingSeconds,
     toggleSeat,
     releaseAllHeldSeats,
@@ -261,9 +263,36 @@ export function SeatPickerModal({
           </div>
         </div>
 
-        {/* Cảnh báo Conflict Race Condition (Nếu có) */}
+        {/* 1. Thông báo khi ghế được giữ thành công (Point 1) */}
+        {lockSuccess && !lockError && (
+          <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in slide-in-from-top-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={15} className="shrink-0 text-emerald-200" />
+              <span>{lockSuccess}</span>
+            </div>
+            <span className="text-[10px] bg-emerald-700/80 px-2 py-0.5 rounded-full font-mono font-bold">10:00</span>
+          </div>
+        )}
+
+        {/* 2. Cảnh báo khi thời gian giữ chỗ sắp hết (dưới 2 phút) (Point 4) */}
+        {remainingSeconds > 0 && remainingSeconds <= 120 && (
+          <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-black flex items-center justify-between shrink-0 animate-pulse">
+            <div className="flex items-center gap-2">
+              <Flame size={15} className="shrink-0 text-white fill-white" />
+              <span>Thời gian giữ chỗ sắp hết! Vui lòng hoàn tất thanh toán trước khi ghế bị giải phóng.</span>
+            </div>
+            <span className="font-mono text-xs bg-amber-600/40 text-slate-950 px-2 py-0.5 rounded-md font-black">
+              {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')}
+            </span>
+          </div>
+        )}
+
+        {/* 3. Cảnh báo Xung đột Race Condition hoặc Hết hạn giữ chỗ (Points 5 & 9) */}
         {(lockError || submitError) && (
-          <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in fade-in">
+          <div className={cn(
+            "text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in fade-in",
+            isHoldExpired ? "bg-rose-600" : "bg-amber-600"
+          )}>
             <div className="flex items-center gap-2">
               <AlertCircle size={15} className="shrink-0" />
               <span>{lockError || submitError}</span>
@@ -271,10 +300,10 @@ export function SeatPickerModal({
             <button
               type="button"
               onClick={() => refreshSeatMap()}
-              className="underline text-[11px] font-black hover:text-amber-100 flex items-center gap-1 cursor-pointer"
+              className="underline text-[11px] font-black hover:opacity-90 flex items-center gap-1 cursor-pointer bg-black/20 px-2.5 py-1 rounded-lg"
             >
-              <RefreshCw size={11} />
-              Tải lại
+              <RefreshCw size={12} />
+              <span>{isHoldExpired ? 'Chọn lại ghế' : 'Tải lại'}</span>
             </button>
           </div>
         )}

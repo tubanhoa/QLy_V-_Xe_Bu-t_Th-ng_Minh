@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils'
 import { searchService } from '@/lib/services/search.service'
 import { BusRoute } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
+import { MonthlyPassPage } from '@/components/portal/monthly-pass-page'
+import { MyTicketsPage } from '@/components/portal/my-tickets-page'
 
 interface QuickAccessModalsProps {
   activeModal: 'routes' | 'news' | 'student-pass' | 'lookup' | null
@@ -111,7 +113,12 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
     >
-      <div className="relative w-full max-w-xl max-h-[88vh] overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
+      <div
+        className={cn(
+          "relative w-full max-h-[88vh] overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform",
+          activeModal === 'lookup' || activeModal === 'student-pass' ? 'max-w-3xl' : 'max-w-xl'
+        )}
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
@@ -361,81 +368,8 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
 
           {/* Modal 3: Student Pass Form */}
           {activeModal === 'student-pass' && (
-            <div>
-              {studentFormSubmitted ? (
-                <div className="py-6 text-center space-y-3">
-                  <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-100 text-[#005A36]">
-                    <CheckCircle2 size={32} />
-                  </div>
-                  <h4 className="text-base font-bold text-slate-900">Nộp Hồ Sơ Thành Công!</h4>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    Hồ sơ vé tháng của bạn đã được gửi tới Ban Điều phối. Thẻ sẽ được kích hoạt vào tài khoản trong vòng 2 giờ làm việc.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="rounded-full bg-[#005A36] px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-800"
-                  >
-                    Đóng cửa sổ
-                  </button>
-                </div>
-              ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    setStudentFormSubmitted(true)
-                  }}
-                  className="space-y-3"
-                >
-                  <div className="rounded-2xl bg-blue-50 border border-blue-200/80 p-3 text-xs text-blue-900 flex items-center gap-2">
-                    <ShieldCheck size={18} className="text-blue-600 shrink-0" />
-                    <span>Mức trợ giá 50%: Giá vé chỉ còn <strong>100.000đ/tháng</strong> (không giới hạn lượt đi).</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Mã Sinh Viên ICTU *</label>
-                      <input
-                        required
-                        type="text"
-                        placeholder="VD: DTC215480..."
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-[#005A36]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Họ và Tên *</label>
-                      <input
-                        required
-                        type="text"
-                        placeholder="Nguyễn Văn A"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-[#005A36]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Tuyến xe đăng ký *</label>
-                    <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-[#005A36] bg-white">
-                      <option>Tuyến CT-01: KTX ICTU ➔ Bến xe Thái Nguyên</option>
-                      <option>Tuyến CT-02: Campus Loop Liên Trường</option>
-                      <option>Tất cả các tuyến (Liên tuyến ICTU)</option>
-                    </select>
-                  </div>
-
-                  <div className="rounded-2xl border-2 border-dashed border-slate-200 p-4 text-center cursor-pointer hover:border-[#005A36] transition-colors">
-                    <Upload size={22} className="mx-auto text-slate-400 mb-1" />
-                    <span className="block text-xs font-bold text-slate-700">Tải ảnh Thẻ Sinh Viên / Giấy báo nhập học</span>
-                    <span className="block text-[11px] text-slate-400">Hỗ trợ JPG, PNG dưới 5MB</span>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full rounded-xl bg-[#005A36] py-3 text-xs font-bold text-white shadow-md hover:bg-emerald-800 transition-colors"
-                  >
-                    Gửi Hồ Sơ Xét Duyệt Vé Tháng
-                  </button>
-                </form>
-              )}
+            <div className="py-2">
+              <MonthlyPassPage />
             </div>
           )}
 
@@ -487,138 +421,15 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
 
               {/* Tab 1: My Active Tickets */}
               {lookupTab === 'my-tickets' && (
-                <div className="space-y-3">
-                  {isAuthenticated ? (
-                    <div className="rounded-2xl border border-emerald-300/80 bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 p-4 shadow-xs space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-emerald-100 pb-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-lg bg-[#005A36] text-white px-2.5 py-1 text-xs font-black">
-                            CT-01
-                          </span>
-                          <span className="font-extrabold text-xs text-slate-900">
-                            KTX ICTU ➔ Bến Xe Trung Tâm TP
-                          </span>
-                        </div>
-                        <span className="w-fit rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-[#005A36]">
-                          HỢP LỆ · SẴN SÀNG LÊN XE
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                        <div className="bg-white/90 p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Khởi hành</span>
-                          <span className="font-mono font-black text-slate-900 text-sm">07:45</span>
-                          <span className="text-[9px] text-slate-500 block">Hôm nay</span>
-                        </div>
-                        <div className="bg-white/90 p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Số ghế</span>
-                          <span className="font-mono font-black text-[#005A36] text-sm">02B</span>
-                          <span className="text-[9px] text-slate-500 block">Tầng 1 · Cửa sổ</span>
-                        </div>
-                        <div className="bg-white/90 p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Hành khách</span>
-                          <span className="font-bold text-slate-900 truncate block">
-                            {user?.fullName || user?.name || 'Nguyễn Thu An'}
-                          </span>
-                          <span className="text-[9px] text-emerald-700 font-bold block">
-                            {user?.studentId ? `SV: ${user.studentId}` : 'Sinh viên ICTU'}
-                          </span>
-                        </div>
-                        <div className="bg-white/90 p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Giá vé</span>
-                          <span className="font-black text-[#005A36] text-sm">5.000đ</span>
-                          <span className="text-[9px] text-emerald-700 font-bold block">Trợ giá SV -50%</span>
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => setShowQrModal(true)}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#005A36] px-4 py-2.5 text-xs font-black text-white shadow-md hover:bg-[#004529] active:scale-95 transition-all cursor-pointer"
-                        >
-                          <QrCode size={15} />
-                          <span>Mở Mã QR Lên Xe</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleClose()
-                            onBookSeat?.()
-                          }}
-                          className="text-xs font-bold text-[#005A36] hover:underline cursor-pointer"
-                        >
-                          + Đặt thêm chuyến khác
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 px-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 space-y-3">
-                      <div className="size-12 rounded-2xl bg-emerald-100 text-[#005A36] flex items-center justify-center mx-auto shadow-xs">
-                        <Ticket size={24} />
-                      </div>
-                      <h4 className="font-black text-sm text-slate-800">Bạn chưa đăng nhập</h4>
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                        Đăng nhập bằng tài khoản Sinh viên hoặc Cán bộ ICTU để theo dõi vé điện tử cá nhân và sử dụng thẻ tháng 1 chạm.
-                      </p>
-                      <a
-                        href="/login?redirect=/"
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#005A36] px-4 py-2 text-xs font-black text-white shadow-md hover:bg-[#004529]"
-                      >
-                        <LogIn size={14} />
-                        <span>Đăng nhập ngay</span>
-                      </a>
-                    </div>
-                  )}
+                <div className="py-1">
+                  <MyTicketsPage />
                 </div>
               )}
 
               {/* Tab 2: Virtual Student Bus Pass Card */}
               {lookupTab === 'student-pass' && (
-                <div className="space-y-4">
-                  <div className="relative w-full rounded-3xl bg-gradient-to-br from-[#005A36] via-[#004529] to-[#002818] p-5 text-white shadow-xl overflow-hidden border border-emerald-500/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <span className="text-[10px] font-black text-emerald-300 uppercase tracking-widest block">
-                          TRƯỜNG ĐH CNTT & TRUYỀN THÔNG - ICTU
-                        </span>
-                        <h4 className="text-sm font-black text-white mt-0.5">THẺ THÁNG XE BUÝT ĐIỆN LIÊN TUYẾN</h4>
-                      </div>
-                      <div className="size-8 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
-                        <Radio size={16} className="text-emerald-300 animate-pulse" />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3.5 my-3">
-                      <div className="size-12 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center font-black text-lg text-white shadow-inner">
-                        {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
-                      </div>
-                      <div>
-                        <span className="text-sm font-extrabold text-white block">
-                          {user?.fullName || user?.name || 'Nguyễn Thu An'}
-                        </span>
-                        <span className="text-xs font-mono text-emerald-200 block font-bold">
-                          Mã SV: {user?.studentId || 'DTC215180001'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-white/15 flex items-center justify-between text-[11px]">
-                      <div>
-                        <span className="text-white/60 block text-[9px] uppercase font-bold">Thời hạn sử dụng</span>
-                        <span className="font-mono font-bold text-white">Học kỳ I 2026 - 2027</span>
-                      </div>
-                      <span className="rounded-full bg-emerald-400/20 border border-emerald-300/40 px-2.5 py-0.5 text-[10px] font-black text-emerald-200">
-                        TRỢ GIÁ 50%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl bg-emerald-50/70 border border-emerald-200 p-3 text-xs text-emerald-950 flex items-center gap-2.5">
-                    <Sparkles size={16} className="text-[#005A36] shrink-0" />
-                    <span>Thẻ tháng được tích hợp chạm NFC trực tiếp tại cửa lên xe buýt thông minh.</span>
-                  </div>
+                <div className="py-1">
+                  <MonthlyPassPage />
                 </div>
               )}
 

@@ -2,13 +2,11 @@
 
 /**
  * Modal đánh giá chuyến xe — 5 sao + nhận xét
- * Tự động kích hoạt sau khi hoàn thành chuyến
- * File mới — không chạm file cũ
- * Branch: feature/SBTS-feedback-fe
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState, useCallback } from 'react'
-import { X, Star, Send, CheckCircle2, Loader2, MessageSquare } from 'lucide-react'
+import { X, Star, Send, CheckCircle2, Loader2, MessageSquare, AlertTriangle } from 'lucide-react'
 
 interface FeedbackPayload {
   tripId?: string
@@ -62,8 +60,14 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
   const displayRating = hoverRating || rating
 
   const handleSubmit = useCallback(async () => {
-    if (!rating) { setError('Vui lòng chọn số sao đánh giá'); return }
-    if (!content.trim()) { setError('Vui lòng nhập nội dung đánh giá'); return }
+    if (!rating) {
+      setError('Vui lòng chọn số sao đánh giá chuyến đi')
+      return
+    }
+    if (!content.trim()) {
+      setError('Vui lòng nhập nội dung đánh giá')
+      return
+    }
 
     setSubmitting(true)
     setError('')
@@ -96,117 +100,110 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
 
       if (res.ok) {
         setSuccess(true)
-        setTimeout(() => onClose(), 2500)
+        setTimeout(() => onClose(), 2000)
       } else {
         setError(resJson?.message || 'Không thể gửi đánh giá. Vui lòng thử lại.')
       }
-    } catch (e: any) {
+    } catch (err: any) {
       setSubmitting(false)
-      setError(e?.message || 'Lỗi kết nối máy chủ')
+      setError(err?.message || 'Lỗi kết nối máy chủ')
     }
   }, [rating, content, tripId, category, onClose])
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
       aria-label="Đánh giá chuyến xe"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" />
-
-      <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl bg-[#0d1117] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 overflow-hidden">
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10">
-              <MessageSquare className="w-5 h-5 text-amber-400" />
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-sm shrink-0">
+              <Star size={20} className="fill-white" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">Đánh giá chuyến xe</h2>
-              {tripName && (
-                <p className="text-xs text-white/40 truncate max-w-[180px]">{tripName}</p>
-              )}
+              <h2 className="text-base font-extrabold text-slate-900">Đánh Giá Chuyến Đi</h2>
+              <p className="text-xs text-slate-500 font-medium">
+                {tripName || 'Hệ thống khảo sát chất lượng ICTU Transit'}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/8 text-white/40 hover:text-white transition-all">
-            <X className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
-          {/* Success state */}
-          {success && (
-            <div className="flex flex-col items-center gap-4 py-8">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-400" />
-                </div>
-                <div className="absolute inset-0 rounded-full border-2 border-emerald-400/30 animate-ping" />
+        {/* Content */}
+        <div className="p-5 sm:p-6 space-y-4 text-slate-700 text-xs">
+          {success ? (
+            <div className="py-6 text-center space-y-3">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-100 text-[#005A36]">
+                <CheckCircle2 size={32} />
               </div>
-              <div className="text-center">
-                <p className="text-base font-semibold text-white">Cảm ơn bạn!</p>
-                <p className="text-sm text-white/50 mt-1">
-                  Đánh giá của bạn giúp chúng tôi cải thiện dịch vụ.
-                </p>
-              </div>
+              <h4 className="text-base font-bold text-slate-900">Cảm Ơn Đóng Góp Của Bạn!</h4>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                Ý kiến của bạn giúp nâng cao chất lượng dịch vụ xe buýt thông minh ICTU Transit.
+              </p>
             </div>
-          )}
-
-          {/* Rating form */}
-          {!success && (
+          ) : (
             <>
-              {/* Star rating */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="text-4xl transition-all duration-200">
-                  {displayRating ? EMOJI_MAP[displayRating] : '⭐'}
-                </div>
+              {/* Star Rating & Emotion */}
+              <div className="flex flex-col items-center gap-2 py-2 text-center bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4">
+                <span className="text-3xl transition-transform transform hover:scale-110">
+                  {displayRating > 0 ? EMOJI_MAP[displayRating] : '⭐'}
+                </span>
+                <span className="text-xs font-bold text-[#005A36]">
+                  {displayRating > 0 ? RATING_LABEL[displayRating] : 'Chạm vào sao để đánh giá'}
+                </span>
 
-                <div
-                  className="flex gap-2"
-                  onMouseLeave={() => setHoverRating(0)}
-                >
+                <div className="flex gap-2 pt-1" role="radiogroup">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
                       onMouseEnter={() => setHoverRating(star)}
-                      onClick={() => { setRating(star); setError('') }}
-                      className="transition-transform hover:scale-110 active:scale-95"
-                      id={`star-rating-${star}`}
+                      onMouseLeave={() => setHoverRating(0)}
+                      className="p-1 transition-transform hover:scale-125 focus:outline-none"
+                      id={`star-${star}`}
                     >
                       <Star
-                        className={`w-9 h-9 transition-colors duration-150 ${
+                        size={28}
+                        className={`transition-colors ${
                           star <= displayRating
                             ? 'text-amber-400 fill-amber-400'
-                            : 'text-white/20'
+                            : 'text-slate-300'
                         }`}
                       />
                     </button>
                   ))}
                 </div>
-
-                {displayRating > 0 && (
-                  <p className="text-sm font-medium text-amber-300 animate-in fade-in duration-150">
-                    {RATING_LABEL[displayRating]}
-                  </p>
-                )}
               </div>
 
-              {/* Category chips */}
-              <div className="space-y-2">
-                <p className="text-xs text-white/50">Chủ đề đánh giá (tùy chọn)</p>
-                <div className="flex flex-wrap gap-2">
+              {/* Category Chips */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-800">
+                  Chủ đề đánh giá nổi bật
+                </label>
+                <div className="flex flex-wrap gap-1.5">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat.key}
+                      type="button"
                       onClick={() => setCategory(category === cat.key ? '' : cat.key)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
                         category === cat.key
-                          ? 'bg-[#00d4aa]/20 border border-[#00d4aa]/40 text-[#00d4aa]'
-                          : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/8 hover:text-white/70'
+                          ? 'bg-[#005A36] text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-[#005A36] border border-slate-200'
                       }`}
-                      id={`category-${cat.key}`}
                     >
                       {cat.label}
                     </button>
@@ -214,44 +211,44 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
                 </div>
               </div>
 
-              {/* Content textarea */}
-              <div className="space-y-2">
-                <p className="text-xs text-white/50">Nhận xét của bạn *</p>
-                <div className="relative">
-                  <textarea
-                    id="feedback-content"
-                    value={content}
-                    onChange={(e) => {
-                      if (e.target.value.length <= MAX_CHARS) setContent(e.target.value)
-                    }}
-                    placeholder="Chia sẻ trải nghiệm của bạn về chuyến đi…"
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 outline-none focus:border-[#00d4aa]/50 focus:bg-white/8 transition-all resize-none"
-                  />
-                  <span className={`absolute bottom-2.5 right-3 text-xs ${content.length >= MAX_CHARS ? 'text-red-400' : 'text-white/30'}`}>
+              {/* Textarea */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="font-bold text-slate-800">Ý kiến đóng góp chi tiết *</label>
+                  <span className={`text-[11px] ${content.length > MAX_CHARS ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>
                     {content.length}/{MAX_CHARS}
                   </span>
                 </div>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
+                  rows={3}
+                  placeholder="Hãy chia sẻ trải nghiệm của bạn về tài xế, độ đúng giờ hoặc tình trạng xe buýt..."
+                  className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-800 outline-none focus:border-[#005A36] focus:bg-white focus:ring-1 focus:ring-[#005A36]/20 transition-all resize-none"
+                />
               </div>
 
-              {/* Error */}
+              {/* Error inline */}
               {error && (
-                <p className="text-xs text-red-400">{error}</p>
+                <div className="rounded-xl bg-rose-50 border border-rose-200 p-2.5 flex items-center gap-2 text-rose-700 text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
               )}
 
-              {/* Submit */}
+              {/* Submit Button */}
               <button
-                onClick={handleSubmit}
+                type="button"
                 disabled={submitting || !rating || !content.trim()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-[#00d4aa] hover:bg-[#00bfa0] disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-[#060a0f] transition-all"
-                id="submit-feedback-btn"
+                onClick={handleSubmit}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#005A36] hover:bg-[#004529] py-3 text-xs font-black text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <Send size={15} />
                 )}
-                {submitting ? 'Đang gửi…' : 'Gửi đánh giá'}
+                <span>{submitting ? 'Đang gửi phản hồi...' : 'Gửi Đánh Giá Ngay'}</span>
               </button>
             </>
           )}

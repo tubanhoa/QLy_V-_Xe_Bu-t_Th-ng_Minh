@@ -1,9 +1,8 @@
 'use client'
 
 /**
- * Modal Chi tiết vé — hiển thị QR code, thông tin vé và nút Hủy vé
- * File mới hoàn toàn — không chạm file cũ
- * Branch: feature/SBTS-my-tickets-fe
+ * Modal Chi tiết vé — hiển thị QR code, thông tin vé và các hành động tiện ích
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -25,6 +24,8 @@ import {
   ArrowLeftRight,
   Radio,
   Star,
+  AlertTriangle,
+  Ticket,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
@@ -127,331 +128,201 @@ export function TicketDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
-      aria-label="Chi tiết vé xe"
+      aria-label="Chi tiết vé xe điện tử"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" />
-
-      {/* Panel */}
-      <div className="relative w-full sm:max-w-lg max-h-[95dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-[#0d1117] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300">
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#0d1117]/95 backdrop-blur-sm border-b border-white/8">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#00d4aa]/10">
-              <QrCode className="w-5 h-5 text-[#00d4aa]" />
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-sm shrink-0">
+              <Ticket size={20} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">Chi tiết vé</h2>
-              {ticket && (
-                <p className="text-xs text-white/50">{ticket.ticketCode}</p>
-              )}
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-900">Chi Tiết Vé Điện Tử</h3>
+                {ticket && statusColor && (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+                    {TICKET_STATUS_LABEL[ticket.status]}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                {ticket ? `Mã vé: ${ticket.ticketCode}` : 'Hệ thống vé xe buýt thông minh ICTU'}
+              </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-white/8 text-white/50 hover:text-white transition-all"
-            aria-label="Đóng"
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 space-y-5">
-          {/* Loading */}
+        {/* Body content */}
+        <div className="overflow-y-auto p-5 sm:p-6 space-y-4 text-slate-700 text-sm">
           {loading && (
-            <div className="flex flex-col items-center gap-4 py-16">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-[#00d4aa]/10 flex items-center justify-center">
-                  <Loader2 className="w-7 h-7 text-[#00d4aa] animate-spin" />
-                </div>
-                <div className="absolute inset-0 rounded-2xl border border-[#00d4aa]/20 animate-ping" />
-              </div>
-              <p className="text-sm text-white/50">Đang tải thông tin vé…</p>
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-8 h-8 text-[#005A36] animate-spin" />
+              <p className="text-xs text-slate-500 font-medium">Đang tải thông tin vé...</p>
             </div>
           )}
 
-          {/* Error */}
-          {error && !loading && (
-            <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-5 text-center">
-              <p className="text-sm text-red-400">{error}</p>
+          {!loading && error && !ticket && (
+            <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs text-rose-800 space-y-2 text-center">
+              <AlertTriangle className="w-6 h-6 text-rose-600 mx-auto" />
+              <p className="font-bold">{error}</p>
               <button
+                type="button"
                 onClick={loadTicket}
-                className="mt-3 text-xs text-white/50 hover:text-white transition-colors underline"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700"
               >
                 Thử lại
               </button>
             </div>
           )}
 
-          {/* Ticket data */}
-          {ticket && !loading && (
+          {!loading && ticket && (
             <>
-              {/* Status badge */}
-              <div className="flex items-center justify-between">
-                <span
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${statusColor?.bg} ${statusColor?.text} ${statusColor?.border}`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                  {TICKET_STATUS_LABEL[ticket.status]}
-                </span>
-                <span className="text-xs text-white/40">
-                  Đặt lúc {formatDate(ticket.createdAt)}
-                </span>
+              {/* QR Code Pass Card */}
+              <div className="rounded-3xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 p-4 sm:p-5 space-y-3 text-center">
+                {ticket.qrDataUrl ? (
+                  <div className="bg-white p-3 rounded-2xl border border-emerald-100 shadow-xs inline-block mx-auto">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={ticket.qrDataUrl}
+                      alt="Mã QR vé xe buýt"
+                      className="w-40 h-40 object-contain mx-auto"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-40 h-40 rounded-2xl bg-white border border-slate-200 flex flex-col items-center justify-center gap-2 mx-auto text-slate-400 text-xs">
+                    <QrCode className="w-10 h-10 text-slate-300" />
+                    <span>Mã QR chưa sẵn sàng</span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <div className="font-mono font-black text-base text-[#005A36]">
+                    {ticket.ticketCode}
+                  </div>
+                  <div className="text-xs font-extrabold text-slate-800">
+                    {ticket.routeName}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Chuyến đi: <strong>{ticket.origin}</strong> ➔ <strong>{ticket.destination}</strong>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white border border-emerald-200/80 p-2.5 text-[11px] text-emerald-950 font-medium">
+                  Đưa mã QR trên màn hình lại gần máy quét tại cửa lên xe buýt thông minh để mở cổng tự động.
+                </div>
               </div>
 
-              {/* QR Code */}
-              {ticket.qrDataUrl && (
-                <div className="rounded-2xl bg-white p-4 flex items-center justify-center shadow-lg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={ticket.qrDataUrl}
-                    alt={`QR vé ${ticket.ticketCode}`}
-                    className="w-52 h-52 object-contain"
-                    id={`ticket-qr-${ticket.ticketId}`}
-                  />
+              {/* Chi tiết lộ trình & Ghế */}
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs border-b border-slate-200/80 pb-2.5">
+                  <div className="flex items-center gap-1.5 text-slate-600 font-bold">
+                    <Clock className="w-4 h-4 text-[#005A36]" />
+                    <span>Giờ khởi hành:</span>
+                  </div>
+                  <span className="font-bold text-slate-900">{formatDate(ticket.departureTime)}</span>
                 </div>
-              )}
-              {!ticket.qrDataUrl && (
-                <div className="rounded-2xl bg-white/5 border border-white/8 p-8 flex flex-col items-center gap-2">
-                  <QrCode className="w-12 h-12 text-white/20" />
-                  <p className="text-xs text-white/30">Mã QR chưa khả dụng</p>
-                </div>
-              )}
 
-              {/* QR action buttons */}
-              {ticket.qrDataUrl && (
-                <div className="flex gap-2">
-                  <a
-                    href={ticket.qrDataUrl}
-                    download={`ve-${ticket.ticketCode}.png`}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white/6 hover:bg-white/10 border border-white/8 text-xs text-white/70 hover:text-white transition-all"
-                    id={`download-qr-${ticket.ticketId}`}
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Tải QR
-                  </a>
-                  <button
-                    onClick={() =>
-                      navigator.share?.({
-                        title: `Vé xe ${ticket.routeName}`,
-                        text: `Mã vé: ${ticket.ticketCode}`,
-                      })
-                    }
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white/6 hover:bg-white/10 border border-white/8 text-xs text-white/70 hover:text-white transition-all"
-                    id={`share-ticket-${ticket.ticketId}`}
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    Chia sẻ
-                  </button>
-                </div>
-              )}
-
-              {/* Info grid */}
-              <div className="space-y-3">
-                {/* Route */}
-                <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-                    Thông tin chuyến
-                  </h3>
-
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-4 h-4 text-[#00d4aa] mt-0.5 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs text-white/50">Tuyến</p>
-                      <p className="text-sm font-medium text-white truncate">
-                        {ticket.routeName || `${ticket.origin} → ${ticket.destination}`}
-                      </p>
-                    </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 font-bold block">Vị trí ghế</span>
+                    <span className="text-sm font-black text-[#005A36] font-mono block mt-0.5">
+                      Ghế {ticket.seatNumber}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {ticket.seatType || 'Ghế tiêu chuẩn'}
+                    </span>
                   </div>
 
-                  {ticket.origin && ticket.destination && (
-                    <div className="flex items-start gap-3">
-                      <div className="w-4 flex flex-col items-center gap-1 mt-0.5">
-                        <div className="w-2 h-2 rounded-full bg-[#00d4aa]" />
-                        <div className="w-px h-4 bg-white/20" />
-                        <div className="w-2 h-2 rounded-full bg-orange-400" />
-                      </div>
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-xs text-white/40">Điểm xuất phát</p>
-                          <p className="text-sm text-white">{ticket.origin}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-white/40">Điểm đến</p>
-                          <p className="text-sm text-white">{ticket.destination}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs text-white/50">Giờ khởi hành</p>
-                      <p className="text-sm font-medium text-white">
-                        {formatDate(ticket.departureTime)}
-                      </p>
-                    </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 font-bold block">Giá vé</span>
+                    <span className="text-sm font-black text-slate-900 font-mono block mt-0.5">
+                      {formatPrice(ticket.price)}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-bold">Đã thanh toán</span>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                  <div className="flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate text-slate-700 font-medium">
+                      {ticket.passengerName}
+                    </span>
+                  </div>
                   {ticket.vehiclePlate && (
-                    <div className="flex items-center gap-3">
-                      <Bus className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs text-white/50">Biển số xe</p>
-                        <p className="text-sm font-medium text-white font-mono">
-                          {ticket.vehiclePlate}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Passenger info */}
-                <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-                    Thông tin hành khách
-                  </h3>
-
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs text-white/50">Họ tên</p>
-                      <p className="text-sm font-medium text-white">
-                        {ticket.passengerName}
-                      </p>
-                    </div>
-                  </div>
-
-                  {ticket.passengerPhone && (
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs text-white/50">Số điện thoại</p>
-                        <p className="text-sm font-medium text-white">
-                          {ticket.passengerPhone}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3">
-                    <Armchair className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs text-white/50">Ghế</p>
-                      <p className="text-sm font-medium text-white">
-                        {ticket.seatNumber}
-                        {ticket.seatType && (
-                          <span className="ml-1.5 text-xs text-white/40">
-                            ({ticket.seatType})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Booking codes + price */}
-                <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-                    Mã vé & Giá tiền
-                  </h3>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Hash className="w-4 h-4 text-white/30 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs text-white/50">Mã đơn</p>
-                        <p className="text-sm font-mono text-white">{ticket.bookingCode}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-white/50">Giá vé</p>
-                      <p className="text-base font-bold text-[#00d4aa]">
-                        {formatPrice(ticket.price)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {ticket.checkedInAt && (
-                    <div className="flex items-center gap-2 pt-1 border-t border-white/6">
-                      <CheckCircle2 className="w-4 h-4 text-violet-400" />
-                      <p className="text-xs text-white/60">
-                        Check-in lúc {formatDate(ticket.checkedInAt)}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Bus className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="font-mono text-slate-700 font-bold">
+                        Biển số: {ticket.vehiclePlate}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Cancel success */}
+              {/* Thông báo hủy thành công */}
               {cancelSuccess && (
-                <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <p className="text-sm text-emerald-300">
-                    Vé đã được hủy thành công. Chúng tôi sẽ xem xét hoàn tiền theo chính sách.
-                  </p>
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 flex items-center gap-2.5 text-xs text-emerald-900">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Vé đã được hủy thành công. Chính sách hoàn tiền sẽ được xử lý theo quy định.</span>
                 </div>
               )}
 
-              {/* Error inline */}
-              {error && (
-                <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4">
-                  <p className="text-sm text-red-400">{error}</p>
-                </div>
-              )}
-
-              {/* Cancel confirm */}
+              {/* Xác nhận hủy vé */}
               {cancelConfirm && (
-                <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4 space-y-3">
-                  <p className="text-sm text-white font-medium">
-                    ⚠️ Xác nhận hủy vé?
+                <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-2.5 text-xs text-rose-900">
+                  <div className="flex items-center gap-2 font-bold text-rose-700">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Xác nhận hủy vé xe buýt này?</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700">
+                    Hủy trước giờ khởi hành trên 2 tiếng được hoàn tiền theo chính sách. Vé sau khi hủy sẽ không thể hoàn tác.
                   </p>
-                  <p className="text-xs text-white/60">
-                    Vé sẽ bị hủy không thể khôi phục. Hoàn tiền sẽ được xử lý trong 3–5 ngày làm việc.
-                  </p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-1">
                     <button
+                      type="button"
                       onClick={() => setCancelConfirm(false)}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-white/8 hover:bg-white/12 text-sm text-white/70 hover:text-white transition-all"
-                      id="cancel-confirm-no"
+                      className="flex-1 rounded-xl bg-white border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                     >
-                      Không, giữ vé
+                      Giữ lại vé
                     </button>
                     <button
-                      onClick={handleCancel}
+                      type="button"
                       disabled={cancelling}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-60 text-sm font-semibold text-white transition-all"
-                      id="cancel-confirm-yes"
+                      onClick={handleCancel}
+                      className="flex-1 rounded-xl bg-rose-600 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
-                      {cancelling ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Ban className="w-4 h-4" />
-                      )}
-                      {cancelling ? 'Đang hủy…' : 'Xác nhận hủy'}
+                      {cancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      <span>Đồng ý hủy</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Connected Action Buttons: Realtime Tracking, Exchange, Feedback, Cancel */}
-              <div className="space-y-2 pt-2">
+              {/* Các nút hành động thông minh */}
+              <div className="space-y-2 pt-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Realtime GPS tracking link */}
                   <Link
                     href={`/tracking/${ticket.tripId || ticket.ticketId}`}
                     target="_blank"
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all text-center"
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 text-xs font-black text-[#005A36] transition-all text-center"
                     id={`track-ticket-btn-${ticket.ticketId}`}
                   >
-                    <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                    Theo dõi xe realtime
+                    <Radio className="w-3.5 h-3.5 text-[#005A36] animate-pulse" />
+                    <span>Theo dõi xe realtime</span>
                   </Link>
 
                   {/* Exchange ticket button */}
@@ -459,11 +330,11 @@ export function TicketDetailModal({
                     <button
                       type="button"
                       onClick={() => setShowExchangeModal(true)}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-bold text-blue-400 hover:text-blue-300 transition-all"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-black text-blue-800 transition-all cursor-pointer"
                       id={`exchange-ticket-btn-${ticket.ticketId}`}
                     >
-                      <ArrowLeftRight className="w-3.5 h-3.5" />
-                      Đổi chuyến / ghế
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-blue-700" />
+                      <span>Đổi chuyến / đổi ghế</span>
                     </button>
                   )}
 
@@ -472,26 +343,27 @@ export function TicketDetailModal({
                     <button
                       type="button"
                       onClick={() => setShowFeedbackModal(true)}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-bold text-amber-400 hover:text-amber-300 transition-all"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-xs font-black text-amber-900 transition-all cursor-pointer"
                       id={`feedback-ticket-btn-${ticket.ticketId}`}
                     >
-                      <Star className="w-3.5 h-3.5" />
-                      Đánh giá chuyến đi
+                      <Star className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Đánh giá chuyến đi</span>
+                    </button>
+                  )}
+
+                  {/* Hủy vé button */}
+                  {canCancel && !cancelConfirm && !cancelSuccess && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelConfirm(true)}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-black text-rose-700 transition-all cursor-pointer"
+                      id={`cancel-ticket-btn-${ticket.ticketId}`}
+                    >
+                      <Ban className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Hủy vé (&gt; 2 tiếng)</span>
                     </button>
                   )}
                 </div>
-
-                {/* Cancel button */}
-                {canCancel && !cancelConfirm && !cancelSuccess && (
-                  <button
-                    onClick={() => setCancelConfirm(true)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-xs font-semibold text-red-400 hover:text-red-300 transition-all"
-                    id={`cancel-ticket-btn-${ticket.ticketId}`}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    Hủy vé (Hoàn tiền theo quy định)
-                  </button>
-                )}
               </div>
             </>
           )}

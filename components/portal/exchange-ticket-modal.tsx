@@ -2,8 +2,7 @@
 
 /**
  * Modal đổi vé — 3 bước: chọn chuyến mới → chọn ghế mới → xác nhận
- * File mới — không chạm file cũ
- * Branch: feature/SBTS-exchange-refund-fe
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState } from 'react'
@@ -17,6 +16,7 @@ import {
   Bus,
   Armchair,
   AlertTriangle,
+  Info,
 } from 'lucide-react'
 import { exchangeService } from '@/lib/services/exchange.service'
 import type { ExchangeTicketPayload, ExchangeStep } from '@/lib/types/exchange'
@@ -45,18 +45,24 @@ export function ExchangeTicketModal({
   const stepIndex = STEPS.indexOf(step)
 
   const STEP_LABELS: Record<ExchangeStep, string> = {
-    'select-trip': 'Chọn chuyến mới',
-    'select-seat': 'Chọn ghế mới',
-    'confirm': 'Xác nhận',
+    'select-trip': '1. Chuyến mới',
+    'select-seat': '2. Ghế mới',
+    'confirm': '3. Xác nhận',
   }
 
   const handleNext = () => {
     if (step === 'select-trip') {
-      if (!newTripId.trim()) { setError('Vui lòng nhập ID chuyến xe mới'); return }
+      if (!newTripId.trim()) {
+        setError('Vui lòng nhập ID chuyến xe mới mong muốn đổi')
+        return
+      }
       setError('')
       setStep('select-seat')
     } else if (step === 'select-seat') {
-      if (!newSeatId.trim()) { setError('Vui lòng nhập ID ghế mới'); return }
+      if (!newSeatId.trim()) {
+        setError('Vui lòng nhập ID vị trí ghế mới')
+        return
+      }
       setError('')
       setStep('confirm')
     }
@@ -67,15 +73,21 @@ export function ExchangeTicketModal({
     setSubmitting(true)
     setError('')
 
-    const payload: ExchangeTicketPayload = { newTripId: newTripId.trim(), newSeatId: newSeatId.trim() }
+    const payload: ExchangeTicketPayload = {
+      newTripId: newTripId.trim(),
+      newSeatId: newSeatId.trim(),
+    }
     const result = await exchangeService.exchangeTicket(ticketId, payload)
     setSubmitting(false)
 
     if (result.success) {
       setSuccess(true)
-      setTimeout(() => { onSuccess?.(); onClose() }, 2500)
+      setTimeout(() => {
+        onSuccess?.()
+        onClose()
+      }, 2000)
     } else {
-      setError(result.message || 'Không thể đổi vé. Vui lòng thử lại.')
+      setError(result.message || 'Không thể đổi vé. Vui lòng kiểm tra điều kiện đổi vé trước giờ khởi hành > 2 tiếng.')
     }
   }
 
@@ -83,167 +95,192 @@ export function ExchangeTicketModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
+      aria-label="Đổi vé xe buýt"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" />
-      <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl bg-[#0d1117] border border-white/10 shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300">
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-500/10">
-              <ArrowLeftRight className="w-5 h-5 text-blue-400" />
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-sm shrink-0">
+              <ArrowLeftRight size={20} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">Đổi vé xe</h2>
-              {ticketCode && <p className="text-xs text-white/40">{ticketCode}</p>}
+              <h2 className="text-base font-extrabold text-slate-900">Đổi Chuyến & Ghế Mới</h2>
+              <p className="text-xs text-slate-500 font-medium">
+                {ticketCode ? `Vé gốc: ${ticketCode}` : 'Hệ thống đổi vé tự động ICTU'}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/8 text-white/40 hover:text-white transition-all">
-            <X className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        {/* Progress bar */}
-        <div className="flex h-0.5">
-          {STEPS.map((s, i) => (
-            <div key={s} className={`flex-1 transition-all duration-500 ${i <= stepIndex ? 'bg-blue-400' : 'bg-white/10'}`} />
-          ))}
+        {/* Stepper bar */}
+        <div className="px-5 pt-3.5 pb-1">
+          <div className="flex rounded-xl bg-slate-100 p-1 text-[11px] font-bold">
+            {STEPS.map((s, idx) => (
+              <div
+                key={s}
+                className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
+                  s === step
+                    ? 'bg-white text-[#005A36] shadow-xs font-black'
+                    : idx < stepIndex
+                    ? 'text-emerald-700 font-bold'
+                    : 'text-slate-400'
+                }`}
+              >
+                {STEP_LABELS[s]}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Step label */}
-          <div className="flex items-center justify-center gap-2 text-xs text-white/40">
-            {STEPS.map((s, i) => (
-              <span key={s} className={`flex items-center gap-1.5 ${i === stepIndex ? 'text-blue-400 font-semibold' : ''}`}>
-                {i > 0 && <ArrowRight className="w-3 h-3" />}
-                {STEP_LABELS[s]}
-              </span>
-            ))}
+        {/* Body content */}
+        <div className="p-5 sm:p-6 space-y-4 text-slate-700 text-xs">
+          {/* Policy banner */}
+          <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-3 text-amber-900 flex items-start gap-2">
+            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              Quy định: Vé chỉ được đổi trước giờ xuất bến tối thiểu <strong>2 tiếng</strong>. Giá vé sẽ được bảo lưu hoặc bù chênh lệch (nếu có).
+            </p>
           </div>
 
           {/* Success state */}
-          {success && (
-            <div className="flex flex-col items-center gap-4 py-8">
-              <div className="p-4 rounded-full bg-emerald-500/15">
-                <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+          {success ? (
+            <div className="py-6 text-center space-y-3">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-100 text-[#005A36]">
+                <CheckCircle2 size={32} />
               </div>
-              <div className="text-center">
-                <p className="text-base font-semibold text-white">Đổi vé thành công!</p>
-                <p className="text-sm text-white/50 mt-1">Vé mới đã được cấp.</p>
-              </div>
+              <h4 className="text-base font-bold text-slate-900">Đổi Vé Thành Công!</h4>
+              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                Vé mới đã được cập nhật vào tài khoản của bạn. Đang tự động làm mới...
+              </p>
             </div>
-          )}
-
-          {/* Step content */}
-          {!success && (
+          ) : (
             <>
-              {/* Warning notice */}
-              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-300">
-                  Chỉ đổi vé trước giờ khởi hành tối thiểu 2 tiếng. Chênh lệch giá sẽ được tính theo chính sách.
-                </p>
-              </div>
-
-              {/* Step 1: Trip */}
+              {/* Step 1: Chọn chuyến */}
               {step === 'select-trip' && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-white">Chuyến xe mới</p>
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Nhập ID Chuyến Xe Mới *
+                  </label>
                   <div className="relative">
-                    <Bus className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Bus className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
-                      id="new-trip-id-input"
                       type="text"
                       value={newTripId}
                       onChange={(e) => setNewTripId(e.target.value)}
-                      placeholder="Nhập ID chuyến xe mới…"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 outline-none focus:border-blue-400/60 focus:bg-white/8 transition-all font-mono"
+                      placeholder="VD: d290f1ee-6c54-4b01-90e6-d701748f0851"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-medium text-slate-900 outline-none focus:border-[#005A36] focus:bg-white focus:ring-1 focus:ring-[#005A36]/20 transition-all"
                     />
                   </div>
-                  <p className="text-xs text-white/30">Lấy ID từ kết quả tìm kiếm chuyến xe</p>
+                  <p className="text-[11px] text-slate-400">
+                    Bạn có thể tra cứu ID chuyến trong mục <strong>&quot;Tìm Kiếm Tuyến&quot;</strong> tại trang chủ.
+                  </p>
                 </div>
               )}
 
-              {/* Step 2: Seat */}
+              {/* Step 2: Chọn ghế */}
               {step === 'select-seat' && (
-                <div className="space-y-2">
-                  <div className="rounded-xl bg-white/4 border border-white/8 p-3 text-xs text-white/50">
-                    Chuyến mới: <span className="text-white font-mono">{newTripId}</span>
-                  </div>
-                  <p className="text-sm font-medium text-white">Ghế mới</p>
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Nhập ID Ghế Mới *
+                  </label>
                   <div className="relative">
-                    <Armchair className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <Armchair className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
-                      id="new-seat-id-input"
                       type="text"
                       value={newSeatId}
                       onChange={(e) => setNewSeatId(e.target.value)}
-                      placeholder="Nhập ID ghế mới…"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 outline-none focus:border-blue-400/60 focus:bg-white/8 transition-all font-mono"
+                      placeholder="VD: seat-02b hoặc UUID ghế"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-medium text-slate-900 outline-none focus:border-[#005A36] focus:bg-white focus:ring-1 focus:ring-[#005A36]/20 transition-all"
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400">
+                    Hệ thống sẽ giữ chỗ vị trí mới và giải phóng ghế cũ ngay khi xác nhận.
+                  </p>
                 </div>
               )}
 
-              {/* Step 3: Confirm */}
+              {/* Step 3: Xác nhận */}
               {step === 'confirm' && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-white">Xác nhận đổi vé</p>
-                  <div className="rounded-xl bg-white/4 border border-white/8 divide-y divide-white/6">
-                    {[
-                      ['Vé hiện tại', ticketCode || ticketId],
-                      ['Chuyến mới', newTripId],
-                      ['Ghế mới', newSeatId],
-                    ].map(([label, value]) => (
-                      <div key={label} className="flex items-center justify-between px-4 py-2.5">
-                        <span className="text-xs text-white/50">{label}</span>
-                        <span className="text-sm font-medium text-white font-mono">{value}</span>
-                      </div>
-                    ))}
+                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 space-y-2.5">
+                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-tight">
+                    Xác Nhận Đổi Vé
+                  </h4>
+                  <div className="space-y-1.5 text-xs text-slate-700">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Mã vé cần đổi:</span>
+                      <span className="font-mono font-bold text-slate-900">{ticketCode || ticketId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Chuyến mới:</span>
+                      <span className="font-mono text-slate-900 truncate max-w-[180px]">{newTripId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Ghế mới:</span>
+                      <span className="font-mono font-bold text-[#005A36]">{newSeatId}</span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Error */}
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {/* Error inline */}
+              {error && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 flex items-start gap-2 text-rose-700 text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-              {/* Navigation */}
-              <div className="flex gap-2 pt-1">
-                {step !== 'select-trip' ? (
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                {step !== 'select-trip' && (
                   <button
-                    onClick={() => setStep(STEPS[stepIndex - 1])}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/6 hover:bg-white/10 text-sm text-white/60 hover:text-white transition-all"
-                    id="exchange-prev-btn"
+                    type="button"
+                    onClick={() => {
+                      setError('')
+                      if (step === 'confirm') setStep('select-seat')
+                      else if (step === 'select-seat') setStep('select-trip')
+                    }}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    Quay lại
-                  </button>
-                ) : (
-                  <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-white/6 hover:bg-white/10 text-sm text-white/60 hover:text-white transition-all">
-                    Hủy
+                    <ArrowLeft size={14} />
+                    <span>Quay lại</span>
                   </button>
                 )}
 
                 {step !== 'confirm' ? (
                   <button
+                    type="button"
                     onClick={handleNext}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-sm font-semibold text-white transition-all"
-                    id="exchange-next-btn"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] hover:bg-[#004529] py-2.5 text-xs font-black text-white shadow-md active:scale-95 transition-all"
                   >
-                    Tiếp theo <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Tiếp tục</span>
+                    <ArrowRight size={14} />
                   </button>
                 ) : (
                   <button
-                    onClick={handleSubmit}
+                    type="button"
                     disabled={submitting}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-sm font-semibold text-white transition-all"
-                    id="exchange-confirm-btn"
+                    onClick={handleSubmit}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] hover:bg-[#004529] py-2.5 text-xs font-black text-white shadow-md disabled:opacity-50 active:scale-95 transition-all"
                   >
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    {submitting ? 'Đang xử lý…' : 'Xác nhận đổi vé'}
+                    {submitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={15} />
+                    )}
+                    <span>{submitting ? 'Đang gửi...' : 'Xác nhận đổi vé'}</span>
                   </button>
                 )}
               </div>

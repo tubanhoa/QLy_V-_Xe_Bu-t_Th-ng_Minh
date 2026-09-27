@@ -2,9 +2,7 @@
 
 /**
  * Component nhập mã giảm giá với validation realtime
- * Tái sử dụng trong booking flow
- * File mới — không chạm file cũ
- * Branch: feature/SBTS-voucher-monthly-pass-fe
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -51,7 +49,7 @@ export function VoucherInput({ orderAmount, onApplied, disabled }: VoucherInputP
         onApplied(res.data)
       } else {
         setStatus('invalid')
-        setErrorMsg(res.message || 'Mã không hợp lệ hoặc đã hết hạn')
+        setErrorMsg(res.message || 'Mã giảm giá không hợp lệ hoặc đã hết hạn')
         setResult(null)
         onApplied(null)
       }
@@ -80,80 +78,84 @@ export function VoucherInput({ orderAmount, onApplied, disabled }: VoucherInputP
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label htmlFor="voucher-code-input" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          <Tag className="w-3.5 h-3.5 text-[#005A36]" />
+          <span>Mã giảm giá / Voucher</span>
+        </label>
+        <span className="text-[11px] text-slate-400">Tự động áp dụng khi nhập</span>
+      </div>
+
       {/* Input */}
       <div className="relative">
-        <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-          <Tag className="w-4 h-4 text-white/30" />
-        </div>
-
         <input
           id="voucher-code-input"
           type="text"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="Nhập mã giảm giá…"
+          placeholder="Nhập mã (VD: ICTU2026, BANMOI)..."
           maxLength={20}
           disabled={disabled}
-          className={`w-full pl-10 pr-10 py-2.5 rounded-xl border bg-white/5 text-sm font-mono text-white placeholder:text-white/30 outline-none transition-all focus:bg-white/8 ${
+          className={`w-full pl-3.5 pr-10 py-2 rounded-xl border text-xs font-mono font-bold uppercase outline-none transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:font-normal ${
             status === 'valid'
-              ? 'border-emerald-500/60 focus:border-emerald-400'
+              ? 'border-emerald-500 bg-emerald-50/40 text-emerald-900 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500/20'
               : status === 'invalid'
-              ? 'border-red-500/50 focus:border-red-400'
-              : 'border-white/10 focus:border-[#00d4aa]/60'
+              ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20'
+              : 'border-slate-200 bg-slate-50 text-slate-800 focus:border-[#005A36] focus:ring-1 focus:ring-[#005A36]/20 focus:bg-white'
           } disabled:opacity-50`}
           autoComplete="off"
           spellCheck={false}
         />
 
-        {/* Right icon */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+        {/* Right action/state icon */}
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {status === 'checking' && (
-            <Loader2 className="w-4 h-4 text-white/40 animate-spin" />
+            <Loader2 className="w-4 h-4 text-[#005A36] animate-spin" />
           )}
           {status === 'valid' && (
-            <Check className="w-4 h-4 text-emerald-400" />
+            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+              <Check className="w-3.5 h-3.5 text-emerald-700" />
+            </div>
           )}
           {status === 'invalid' && (
-            <X className="w-4 h-4 text-red-400" />
+            <div className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center">
+              <X className="w-3.5 h-3.5 text-rose-700" />
+            </div>
           )}
           {(status === 'idle' || status === 'valid') && code && (
             <button
+              type="button"
               onClick={handleClear}
-              className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              className="w-5 h-5 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center transition-colors"
               id="clear-voucher-btn"
             >
-              <X className="w-3 h-3 text-white/60" />
+              <X className="w-3 h-3 text-slate-600" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Valid result */}
+      {/* Valid result pill */}
       {status === 'valid' && result && (
-        <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span className="text-sm font-semibold text-emerald-300">
-              Áp dụng thành công!
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 space-y-1 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 font-bold text-emerald-800">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              <span>Áp dụng thành công mã {result.code}</span>
             </span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-white/60">Giảm</span>
-            <span className="font-bold text-emerald-300">
+            <span className="font-mono font-extrabold text-[#005A36]">
               -{formatPrice(result.discountAmount)}
             </span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-white/60">Còn lại</span>
-            <span className="font-bold text-white">{formatPrice(result.finalAmount)}</span>
           </div>
         </div>
       )}
 
-      {/* Invalid error */}
+      {/* Invalid error message */}
       {status === 'invalid' && errorMsg && (
-        <p className="text-xs text-red-400 pl-1">{errorMsg}</p>
+        <p className="text-[11px] text-rose-600 font-medium pl-1 flex items-center gap-1">
+          <span>⚠️ {errorMsg}</span>
+        </p>
       )}
     </div>
   )

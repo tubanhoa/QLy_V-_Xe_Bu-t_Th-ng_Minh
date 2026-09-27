@@ -2,11 +2,7 @@
 
 /**
  * Trang Lịch sử vé của hành khách
- * - Hiển thị tất cả vé đã mua, filter theo trạng thái
- * - Click vào vé mở TicketDetailModal
- * - Responsive: list trên mobile, grid trên desktop
- * File mới hoàn toàn — không chạm file cũ
- * Branch: feature/SBTS-my-tickets-fe
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -20,8 +16,13 @@ import {
   RefreshCw,
   InboxIcon,
   Filter,
+  LogIn,
+  QrCode,
+  Bus,
 } from 'lucide-react'
+import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
+import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketFilterStatus } from '@/lib/types/ticket'
 import {
   TICKET_STATUS_COLOR,
@@ -58,21 +59,18 @@ function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): Ti
   }
 }
 
-function TicketCard({
-  ticket,
-  onClick,
-}: {
+interface TicketCardProps {
   ticket: TicketSummary
   onClick: () => void
-}) {
+}
+
+function TicketCard({ ticket, onClick }: TicketCardProps) {
   const statusColor = TICKET_STATUS_COLOR[ticket.status] ?? TICKET_STATUS_COLOR['PENDING']
-  const isPast = new Date(ticket.departureTime).getTime() < Date.now()
 
   const formatDate = (iso: string) =>
-    new Date(iso).toLocaleString('vi-VN', {
+    new Date(iso).toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -83,301 +81,200 @@ function TicketCard({
   return (
     <button
       onClick={onClick}
-      className={`group w-full text-left rounded-2xl border transition-all duration-200 hover:scale-[1.01] hover:shadow-lg hover:shadow-black/40 overflow-hidden ${
-        isPast && ticket.status !== 'CHECKED_IN'
-          ? 'bg-white/3 border-white/6 opacity-70 hover:opacity-100'
-          : 'bg-white/5 border-white/10 hover:bg-white/8 hover:border-white/15'
-      }`}
+      className="group w-full text-left rounded-2xl border border-slate-200/80 bg-white hover:border-[#005A36] hover:shadow-md p-4 transition-all shadow-2xs space-y-3 cursor-pointer"
       id={`ticket-card-${ticket.ticketId}`}
     >
-      {/* Top accent bar */}
-      <div
-        className={`h-0.5 w-full ${
-          ticket.status === 'PAID' || ticket.status === 'CHECKED_IN'
-            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-            : ticket.status === 'PENDING' || ticket.status === 'RESERVED'
-            ? 'bg-gradient-to-r from-amber-500 to-orange-400'
-            : 'bg-gradient-to-r from-slate-600 to-slate-500'
-        }`}
-      />
-
-      <div className="p-4 space-y-3">
-        {/* Header: route + status */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white truncate leading-snug">
-              {ticket.routeName || 'Chuyến xe buýt'}
-            </p>
-            <p className="text-xs text-white/40 mt-0.5 font-mono">{ticket.bookingCode}</p>
-          </div>
-          <span
-            className={`flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
-          >
-            <span className="w-1 h-1 rounded-full bg-current" />
-            {TICKET_STATUS_LABEL[ticket.status]}
+      <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs">
+            CT-01
           </span>
+          <div>
+            <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-[#005A36] transition-colors leading-snug">
+              {ticket.routeName || 'Tuyến CT-01 KTX ICTU ↔ Bến Xe TP'}
+            </h4>
+            <span className="text-[10px] font-mono text-slate-400">
+              Mã: {ticket.ticketCode}
+            </span>
+          </div>
         </div>
 
-        {/* Info row */}
-        <div className="flex items-center gap-4 text-xs text-white/50">
-          <span className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
-            {formatDate(ticket.departureTime)}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Armchair className="w-3.5 h-3.5 text-amber-400" />
-            Ghế {ticket.seatNumber}
-          </span>
-        </div>
+        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+          {TICKET_STATUS_LABEL[ticket.status]}
+        </span>
+      </div>
 
-        {/* Footer: price + arrow */}
-        <div className="flex items-center justify-between pt-1 border-t border-white/6">
-          <span className="text-sm font-bold text-[#00d4aa]">
-            {formatPrice(ticket.price)}
-          </span>
-          <div className="flex items-center gap-1 text-xs text-white/30 group-hover:text-white/60 transition-colors">
-            <span>Xem QR</span>
-            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-slate-600">
+          <Clock className="w-3.5 h-3.5 text-[#005A36]" />
+          <span>{formatDate(ticket.departureTime)}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-600">
+          <Armchair className="w-3.5 h-3.5 text-amber-600" />
+          <span>Ghế <strong className="text-[#005A36]">{ticket.seatNumber}</strong></span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+        <span className="font-mono font-black text-sm text-[#005A36]">
+          {formatPrice(ticket.price)}
+        </span>
+        <div className="inline-flex items-center gap-1 font-bold text-slate-500 group-hover:text-[#005A36] transition-colors text-[11px]">
+          <QrCode size={13} />
+          <span>Xem mã QR</span>
+          <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
     </button>
   )
 }
 
-function SkeletonCard() {
-  return (
-    <div className="rounded-2xl bg-white/5 border border-white/8 overflow-hidden">
-      <div className="h-0.5 bg-gradient-to-r from-white/10 to-white/5" />
-      <div className="p-4 space-y-3">
-        <div className="flex justify-between gap-3">
-          <div className="space-y-1.5 flex-1">
-            <div className="h-4 w-3/4 rounded-lg bg-white/8 animate-pulse" />
-            <div className="h-3 w-1/3 rounded-md bg-white/5 animate-pulse" />
-          </div>
-          <div className="h-6 w-20 rounded-full bg-white/8 animate-pulse" />
-        </div>
-        <div className="flex gap-4">
-          <div className="h-3 w-32 rounded-md bg-white/5 animate-pulse" />
-          <div className="h-3 w-16 rounded-md bg-white/5 animate-pulse" />
-        </div>
-        <div className="flex justify-between border-t border-white/6 pt-1">
-          <div className="h-4 w-24 rounded-md bg-white/8 animate-pulse" />
-          <div className="h-3 w-16 rounded-md bg-white/5 animate-pulse" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function MyTicketsPage() {
+  const { isAuthenticated, user } = useAuth()
   const [tickets, setTickets] = useState<TicketSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TicketFilterStatus>('all')
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
 
-  const loadTickets = useCallback(async (reset = false) => {
-    const targetPage = reset ? 1 : page
-    if (reset) {
-      setLoading(true)
-      setTickets([])
-    } else {
-      setLoadingMore(true)
+  const loadTickets = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false)
+      return
     }
+    setLoading(true)
     setError(null)
 
-    const result = await ticketService.getMyTickets(targetPage, 12)
+    const res = await ticketService.getMyTickets(1, 20)
+    setLoading(false)
 
-    if (reset) setLoading(false)
-    else setLoadingMore(false)
-
-    if (result.success && result.data) {
-      const newItems = result.data.items
-      setTickets((prev) => (reset ? newItems : [...prev, ...newItems]))
-      setHasMore(targetPage < result.data!.meta.totalPages)
-      if (reset) setPage(1)
+    if (res.success && res.data) {
+      setTickets(res.data.items)
     } else {
-      setError(result.message || 'Không thể tải vé')
+      setError(res.message || 'Chưa tải được danh sách vé')
     }
-  }, [page])
+  }, [isAuthenticated])
 
   useEffect(() => {
-    loadTickets(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    loadTickets()
+  }, [loadTickets])
 
-  const handleLoadMore = async () => {
-    const nextPage = page + 1
-    setPage(nextPage)
-    setLoadingMore(true)
-    setError(null)
-
-    const result = await ticketService.getMyTickets(nextPage, 12)
-    setLoadingMore(false)
-
-    if (result.success && result.data) {
-      setTickets((prev) => [...prev, ...result.data!.items])
-      setHasMore(nextPage < result.data!.meta.totalPages)
-    }
-  }
-
-  const handleCancelled = useCallback((ticketId: string) => {
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.ticketId === ticketId ? { ...t, status: 'CANCELLED' as const } : t,
-      ),
-    )
-  }, [])
-
-  const filtered = filterTickets(tickets, filter)
+  const displayedTickets = filterTickets(tickets, filter)
 
   return (
-    <div className="min-h-screen bg-[#060a0f] text-white">
-      {/* Page header */}
-      <div className="px-4 sm:px-6 pt-6 pb-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-                <Ticket className="w-5 h-5 text-[#00d4aa]" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">Vé của tôi</h1>
-                <p className="text-xs text-white/40">Lịch sử & mã QR điện tử</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => loadTickets(true)}
-              disabled={loading}
-              className="p-2 rounded-xl hover:bg-white/8 text-white/40 hover:text-white disabled:opacity-40 transition-all"
-              title="Làm mới"
-              id="refresh-tickets-btn"
-            >
-              <RefreshCw className={`w-4.5 h-4.5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+    <div className="space-y-4">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-sm shrink-0">
+            <Ticket size={20} />
           </div>
-
-          {/* Stats */}
-          {!loading && tickets.length > 0 && (
-            <div className="mt-3 flex items-center gap-4 text-xs text-white/40">
-              <span>{tickets.length} vé tổng cộng</span>
-              <span>·</span>
-              <span>
-                {tickets.filter((t) => t.status === 'PAID' || t.status === 'RESERVED').length} đang hoạt động
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Filter tabs */}
-      <div className="px-4 sm:px-6 mb-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/4 border border-white/8 w-fit">
-            <Filter className="w-3.5 h-3.5 text-white/30 ml-2 mr-1" />
-            {FILTER_TABS.map((tab) => {
-              const count =
-                tab.key === 'all' ? tickets.length : filterTickets(tickets, tab.key).length
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilter(tab.key)}
-                  className={`relative px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 ${
-                    filter === tab.key
-                      ? 'bg-[#00d4aa] text-[#060a0f] shadow-sm'
-                      : 'text-white/50 hover:text-white/80'
-                  }`}
-                  id={`filter-tab-${tab.key}`}
-                >
-                  {tab.label}
-                  {count > 0 && filter !== tab.key && (
-                    <span className="ml-1 text-[10px] text-white/30">{count}</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="px-4 sm:px-6 pb-8">
-        <div className="max-w-2xl mx-auto space-y-3">
-          {/* Loading skeletons */}
-          {loading &&
-            Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
-
-          {/* Error */}
-          {error && !loading && (
-            <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-6 text-center space-y-3">
-              <p className="text-sm text-red-400">{error}</p>
-              <button
-                onClick={() => loadTickets(true)}
-                className="text-xs text-white/50 hover:text-white underline transition-colors"
-              >
-                Thử lại
-              </button>
-            </div>
-          )}
-
-          {/* Empty */}
-          {!loading && !error && filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-4 py-20">
-              <div className="p-5 rounded-3xl bg-white/4 border border-white/8">
-                <InboxIcon className="w-10 h-10 text-white/20" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-white/60">
-                  {filter === 'all'
-                    ? 'Bạn chưa có vé nào'
-                    : `Không có vé nào trong mục "${FILTER_TABS.find((t) => t.key === filter)?.label}"`}
-                </p>
-                <p className="text-xs text-white/30 mt-1">
-                  Đặt vé ngay để trải nghiệm hệ thống
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Ticket list */}
-          {!loading &&
-            filtered.map((ticket) => (
-              <TicketCard
-                key={ticket.ticketId}
-                ticket={ticket}
-                onClick={() => setSelectedTicketId(ticket.ticketId)}
-              />
-            ))}
-
-          {/* Load more */}
-          {!loading && hasMore && filtered.length > 0 && (
-            <button
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/4 hover:bg-white/8 border border-white/8 text-sm text-white/50 hover:text-white disabled:opacity-50 transition-all"
-              id="load-more-tickets-btn"
-            >
-              {loadingMore ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>Xem thêm vé</>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
+                Vé Điện Tử Của Tôi
+              </h2>
+              {tickets.length > 0 && (
+                <span className="rounded-full bg-emerald-100 text-[#005A36] px-2.5 py-0.5 text-[10px] font-black">
+                  {tickets.length} VÉ
+                </span>
               )}
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Quét mã QR qua cổng soát vé thông minh & đổi vé trước 2 tiếng khởi hành
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold shrink-0">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setFilter(tab.key)}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                filter === tab.key
+                  ? 'bg-white text-[#005A36] shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {tab.label}
             </button>
-          )}
+          ))}
         </div>
       </div>
+
+      {/* Body Area */}
+      {!isAuthenticated ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 text-center space-y-3 shadow-xs">
+          <div className="size-12 rounded-2xl bg-emerald-100 text-[#005A36] flex items-center justify-center mx-auto">
+            <LogIn size={24} />
+          </div>
+          <h3 className="text-base font-extrabold text-slate-900">
+            Đăng Nhập Để Xem Vé Đã Mua
+          </h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Đăng nhập tài khoản sinh viên hoặc tài khoản hành khách để tự động đồng bộ lịch sử vé điện tử, mã QR và thẻ xe buýt.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#005A36] hover:bg-[#004529] px-5 py-2.5 text-xs font-black text-white shadow-md transition-all"
+            >
+              <LogIn size={15} />
+              <span>Đăng nhập ngay</span>
+            </Link>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="py-12 text-center space-y-2">
+          <Loader2 size={28} className="text-[#005A36] animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 font-medium">Đang tải lịch sử vé điện tử...</p>
+        </div>
+      ) : displayedTickets.length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 text-center space-y-3 shadow-xs">
+          <div className="size-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <Ticket size={24} />
+          </div>
+          <h3 className="text-base font-extrabold text-slate-900">
+            Không Tìm Thấy Vé Nào ({FILTER_TABS.find((t) => t.key === filter)?.label})
+          </h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Bạn chưa có vé xe buýt nào trong danh mục này. Hãy chọn tuyến xe và đặt vé trực tuyến ngay hôm nay!
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#005A36] hover:bg-[#004529] px-5 py-2.5 text-xs font-black text-white shadow-md"
+            >
+              <Bus size={15} />
+              <span>Đặt vé xe buýt ngay</span>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {displayedTickets.map((t) => (
+            <TicketCard
+              key={t.ticketId}
+              ticket={t}
+              onClick={() => setSelectedTicketId(t.ticketId)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Ticket Detail Modal */}
-      <TicketDetailModal
-        ticketId={selectedTicketId}
-        onClose={() => setSelectedTicketId(null)}
-        onCancelled={handleCancelled}
-      />
+      {selectedTicketId && (
+        <TicketDetailModal
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+          onCancelled={() => {
+            loadTickets()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -60,33 +60,33 @@ export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
 
 export const TICKET_STATUS_COLOR: Record<TicketStatus, { bg: string; text: string; border: string }> = {
   PENDING: {
-    bg: 'bg-amber-500/15',
-    text: 'text-amber-400',
-    border: 'border-amber-500/30',
+    bg: 'bg-amber-100',
+    text: 'text-amber-800',
+    border: 'border-amber-300',
   },
   PAID: {
-    bg: 'bg-emerald-500/15',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/30',
+    bg: 'bg-emerald-100',
+    text: 'text-emerald-800',
+    border: 'border-emerald-300',
   },
   RESERVED: {
-    bg: 'bg-blue-500/15',
-    text: 'text-blue-400',
-    border: 'border-blue-500/30',
+    bg: 'bg-blue-100',
+    text: 'text-blue-800',
+    border: 'border-blue-300',
   },
   CANCELLED: {
-    bg: 'bg-red-500/15',
-    text: 'text-red-400',
-    border: 'border-red-500/30',
+    bg: 'bg-rose-100',
+    text: 'text-rose-800',
+    border: 'border-rose-300',
   },
   CHECKED_IN: {
-    bg: 'bg-violet-500/15',
-    text: 'text-violet-400',
-    border: 'border-violet-500/30',
+    bg: 'bg-teal-100',
+    text: 'text-teal-800',
+    border: 'border-teal-300',
   },
   EXPIRED: {
-    bg: 'bg-slate-500/15',
-    text: 'text-slate-400',
-    border: 'border-slate-500/30',
+    bg: 'bg-slate-100',
+    text: 'text-slate-700',
+    border: 'border-slate-300',
   },
 }

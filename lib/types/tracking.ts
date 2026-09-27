@@ -39,10 +39,10 @@ export const INCIDENT_TYPE_LABEL: Record<IncidentType, string> = {
 }
 
 export const INCIDENT_SEVERITY_COLOR: Record<IncidentSeverity, { bg: string; text: string; border: string }> = {
-  low: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
-  medium: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
-  high: { bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/30' },
-  critical: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30' },
+  low: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+  medium: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
+  high: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300' },
+  critical: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
 }
 
 export const INCIDENT_SEVERITY_LABEL: Record<IncidentSeverity, string> = {

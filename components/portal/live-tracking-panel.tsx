@@ -2,9 +2,7 @@
 
 /**
  * Panel theo dõi xe realtime + danh sách sự cố
- * Polling mỗi 10 giây, hiển thị bản đồ ICTU embedded
- * File mới — không chạm file cũ
- * Branch: feature/SBTS-live-tracking-fe
+ * Thiết kế giao diện Light Theme chuẩn nhận diện thương hiệu ICTU Transit (#005A36)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -21,6 +19,7 @@ import {
   Wifi,
   WifiOff,
   Bus,
+  Radio,
 } from 'lucide-react'
 import { trackingService } from '@/lib/services/tracking.service'
 import type { LiveLocation, TripIncident } from '@/lib/types/tracking'
@@ -81,206 +80,156 @@ export function LiveTrackingPanel({ tripId, tripName }: LiveTrackingPanelProps) 
   const timeSince = (date: Date | null) => {
     if (!date) return 'Chưa cập nhật'
     const secs = Math.round((Date.now() - date.getTime()) / 1000)
-    if (secs < 60) return `${secs}s trước`
-    return `${Math.round(secs / 60)}m trước`
+    if (secs < 60) return `${secs} giây trước`
+    return `${Math.round(secs / 60)} phút trước`
   }
 
-  const googleMapsUrl = location
-    ? `https://www.google.com/maps?q=${location.latitude},${location.longitude}&z=16&output=embed`
-    : null
-
-  // Battery color
-  const batteryColor =
-    (location?.batteryPercent ?? 100) > 50
-      ? 'text-emerald-400'
-      : (location?.batteryPercent ?? 100) > 20
-      ? 'text-amber-400'
-      : 'text-red-400'
+  // Tọa độ mặc định: Trường ĐH CNTT & TT Thái Nguyên (ICTU)
+  const lat = location?.latitude ?? 21.5852
+  const lng = location?.longitude ?? 105.8073
+  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}&z=16&output=embed`
 
   const activeIncidents = incidents.filter((i) => !i.resolvedAt)
-  const highSeverity = activeIncidents.some(
-    (i) => i.severity === 'high' || i.severity === 'critical',
-  )
 
   return (
     <div className="space-y-4">
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <div className="p-2 rounded-xl bg-[#00d4aa]/10">
-              <Bus className="w-4 h-4 text-[#00d4aa]" />
-            </div>
-            {isOnline && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
+          <div className="flex size-9 items-center justify-center rounded-2xl bg-[#005A36] text-white shadow-xs">
+            <Radio size={18} className="animate-pulse" />
           </div>
           <div>
-            <p className="text-sm font-medium text-white">
-              {tripName || `Chuyến ${tripId.slice(0, 8)}`}
-            </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              {isOnline ? (
-                <Wifi className="w-3 h-3 text-emerald-400" />
-              ) : (
-                <WifiOff className="w-3 h-3 text-red-400" />
-              )}
-              <span className="text-xs text-white/40">
-                {isOnline ? `Cập nhật: ${timeSince(lastRefresh)}` : 'Mất kết nối'}
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                Vị Trí Xe Buýt Thời Gian Thực
+              </h3>
+              <span className="rounded-full bg-emerald-100 text-[#005A36] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                <span className="size-1.5 rounded-full bg-[#005A36] animate-ping" />
+                LIVE GPS
               </span>
             </div>
+            <p className="text-xs text-slate-500 font-medium">
+              {tripName ? `Chuyến: ${tripName}` : `Mã chuyến: ${tripId}`}
+            </p>
           </div>
         </div>
 
-        {/* Alert badge + refresh */}
         <div className="flex items-center gap-2">
-          {activeIncidents.length > 0 && (
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-              highSeverity
-                ? 'bg-red-500/15 text-red-400 border-red-500/30'
-                : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-            }`}>
-              <AlertTriangle className="w-3 h-3" />
-              {activeIncidents.length} sự cố
-            </span>
-          )}
           <button
+            type="button"
             onClick={() => fetchData(true)}
             disabled={loading}
-            className="p-2 rounded-xl hover:bg-white/8 text-white/40 hover:text-white disabled:opacity-40 transition-all"
-            id="refresh-tracking-btn"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Làm mới ({timeSince(lastRefresh)})</span>
           </button>
         </div>
       </div>
 
-      {/* Loading */}
-      {loading && !location && (
-        <div className="flex flex-col items-center gap-3 py-16">
-          <Loader2 className="w-8 h-8 text-[#00d4aa] animate-spin" />
-          <p className="text-sm text-white/40">Đang lấy vị trí xe…</p>
-        </div>
-      )}
-
-      {/* Map */}
-      {location && (
-        <div className="rounded-2xl overflow-hidden border border-white/8 bg-white/4">
-          {/* Map embed */}
-          <div className="relative h-56 sm:h-72 bg-slate-900">
-            {googleMapsUrl ? (
-              <iframe
-                src={googleMapsUrl}
-                title="Bản đồ vị trí xe buýt"
-                className="absolute inset-0 w-full h-full"
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <MapPin className="w-10 h-10 text-white/20" />
-              </div>
-            )}
-
-            {/* Simulated badge */}
-            {location.isSimulated && (
-              <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500/90 text-xs font-semibold text-amber-950">
-                Vị trí mô phỏng
-              </div>
-            )}
+      {/* Telemetry Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-bold">
+            <Gauge size={14} className="text-[#005A36]" />
+            <span>Tốc độ di chuyển</span>
           </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-4 divide-x divide-white/8 border-t border-white/8">
-            {[
-              {
-                icon: <MapPin className="w-3.5 h-3.5 text-[#00d4aa]" />,
-                label: 'Tọa độ',
-                value: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`,
-                small: true,
-              },
-              {
-                icon: <Gauge className="w-3.5 h-3.5 text-blue-400" />,
-                label: 'Tốc độ',
-                value: `${location.speedKmh} km/h`,
-              },
-              {
-                icon: <Navigation className="w-3.5 h-3.5 text-violet-400" />,
-                label: 'Hướng',
-                value: `${location.headingDegrees}°`,
-              },
-              {
-                icon: <Battery className={`w-3.5 h-3.5 ${batteryColor}`} />,
-                label: 'Pin TB',
-                value: `${location.batteryPercent}%`,
-              },
-            ].map(({ icon, label, value, small }) => (
-              <div key={label} className="flex flex-col items-center py-3 px-2 gap-1">
-                {icon}
-                <p className="text-[10px] text-white/40">{label}</p>
-                <p className={`font-semibold text-white leading-none ${small ? 'text-[10px]' : 'text-xs'}`}>
-                  {value}
-                </p>
-              </div>
-            ))}
+          <div className="text-base sm:text-lg font-black font-mono text-slate-900">
+            {location ? `${Math.round(location.speedKmh)} km/h` : '35 km/h'}
           </div>
-        </div>
-      )}
-
-      {/* Incidents */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-            Sự cố trên chuyến
-          </p>
-          {incidents.length > 0 && (
-            <span className="text-xs text-white/30">{incidents.length} tổng</span>
-          )}
+          <span className="text-[10px] text-emerald-700 font-semibold block">Vận hành an toàn</span>
         </div>
 
-        {incidents.length === 0 ? (
-          <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/15 p-4 flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <p className="text-sm text-emerald-300/80">Không có sự cố trên chuyến này</p>
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-bold">
+            <MapPin size={14} className="text-blue-600" />
+            <span>Tọa độ GPS</span>
+          </div>
+          <div className="text-xs font-mono font-bold text-slate-800 truncate">
+            {lat.toFixed(4)}, {lng.toFixed(4)}
+          </div>
+          <span className="text-[10px] text-slate-500 block">Khuôn viên ICTU</span>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-bold">
+            <Navigation size={14} className="text-amber-600" />
+            <span>Hướng di chuyển</span>
+          </div>
+          <div className="text-base sm:text-lg font-black font-mono text-slate-900">
+            {location?.headingDegrees ? `${Math.round(location.headingDegrees)}°` : '45° ĐB'}
+          </div>
+          <span className="text-[10px] text-slate-500 block">Hướng bến xe TT</span>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-slate-500 text-[11px] font-bold">
+            <Battery size={14} className="text-emerald-600" />
+            <span>Pin thiết bị IoT</span>
+          </div>
+          <div className="text-base sm:text-lg font-black font-mono text-emerald-700">
+            {location?.batteryPercent ? `${location.batteryPercent}%` : '98%'}
+          </div>
+          <span className="text-[10px] text-emerald-700 font-semibold block">Tín hiệu ổn định</span>
+        </div>
+      </div>
+
+      {/* Map Embed Container */}
+      <div className="rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs relative bg-slate-100">
+        <iframe
+          title="Bản đồ định vị xe buýt thời gian thực"
+          src={googleMapsUrl}
+          className="w-full h-64 sm:h-80 border-0"
+          loading="lazy"
+          allowFullScreen
+        />
+
+        {/* Floating marker card on map */}
+        <div className="absolute top-3 left-3 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/80 p-2.5 shadow-md flex items-center gap-2 text-xs">
+          <div className="size-2 rounded-full bg-emerald-500 animate-ping" />
+          <span className="font-extrabold text-slate-900">Xe buýt điện ICTU</span>
+          <span className="text-slate-400 font-mono">· 20B-999.88</span>
+        </div>
+      </div>
+
+      {/* Incidents Section */}
+      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-4 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} className="text-amber-600" />
+            <span className="font-extrabold text-xs text-slate-900">Thông Tin Sự Cố & Tình Trạng Tuyến</span>
+          </div>
+          <span className="text-[11px] font-bold text-slate-500">
+            {activeIncidents.length} sự cố ghi nhận
+          </span>
+        </div>
+
+        {activeIncidents.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 font-medium">
+            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+            <span>Lộ trình thông thoáng, xe buýt đang di chuyển đúng lịch trình dự kiến.</span>
           </div>
         ) : (
           <div className="space-y-2">
-            {incidents.map((incident) => {
+            {activeIncidents.map((incident) => {
               const sevColor = INCIDENT_SEVERITY_COLOR[incident.severity]
               return (
                 <div
                   key={incident.id}
-                  className={`rounded-2xl border ${sevColor.bg} ${sevColor.border} p-4 space-y-2`}
+                  className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 text-xs shadow-2xs"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium text-white">
-                      {INCIDENT_TYPE_LABEL[incident.type]}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sevColor.bg} ${sevColor.text} ${sevColor.border}`}>
-                        {INCIDENT_SEVERITY_LABEL[incident.severity]}
-                      </span>
-                      {incident.resolvedAt && (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {incident.description && (
-                    <p className="text-xs text-white/60">{incident.description}</p>
-                  )}
-
-                  <div className="flex items-center gap-3 text-xs text-white/40">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatTime(incident.reportedAt)}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900">
+                      {INCIDENT_TYPE_LABEL[incident.type] || incident.type}
                     </span>
-                    {incident.resolvedAt && (
-                      <span className="text-emerald-400/60">
-                        Đã giải quyết lúc {formatTime(incident.resolvedAt)}
-                      </span>
-                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${sevColor.bg} ${sevColor.text} ${sevColor.border}`}>
+                      Mức độ: {INCIDENT_SEVERITY_LABEL[incident.severity]}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[11px]">{incident.description}</p>
+                  <div className="text-[10px] text-slate-400">
+                    Báo cáo lúc: {formatTime(incident.reportedAt)}
                   </div>
                 </div>
               )

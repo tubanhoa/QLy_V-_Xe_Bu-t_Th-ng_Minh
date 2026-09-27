@@ -73,7 +73,7 @@ export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
 }
 
 export const APPROVAL_STATUS_COLOR: Record<ApprovalStatus, { bg: string; text: string; border: string }> = {
-  pending: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
-  approved: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  rejected: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30' },
+  pending: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
+  approved: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+  rejected: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
 }
