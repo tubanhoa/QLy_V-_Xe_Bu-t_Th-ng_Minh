@@ -96,4 +96,22 @@ export class BookingController {
   ) {
     return this.bookingService.exchangeTicket(ticketId, dto, userId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post('cancel-booking/:bookingId')
+  @ApiOperation({ summary: 'Hủy đơn đặt vé khi chưa thanh toán và giải phóng ghế ngay lập tức' })
+  async cancelBooking(
+    @Param('bookingId') bookingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingService.cancelBooking(bookingId, userId);
+  }
+
+  @Public()
+  @Post('cleanup-expired')
+  @ApiOperation({ summary: 'Quét và cập nhật trạng thái các ghế giữ hoặc đơn vé đã hết hạn' })
+  async cleanupExpiredHolds() {
+    return this.bookingService.cleanupExpiredHolds();
+  }
 }

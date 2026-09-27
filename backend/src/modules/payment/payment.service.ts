@@ -2,14 +2,18 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import * as crypto from 'node:crypto';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
+import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
+import { SeatLockService } from '../booking/seat-lock.service.js';
 import { CreatePaymentUrlDto, RefundTicketDto } from './dto/payment.dto.js';
 import {
   PaymentStatus,
@@ -29,6 +33,11 @@ export class PaymentService {
     private readonly bookingRepository: Repository<BookingEntity>,
     @InjectRepository(TicketEntity)
     private readonly ticketRepository: Repository<TicketEntity>,
+    @Optional()
+    @InjectRepository(SeatHoldEntity)
+    private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
+    @Optional()
+    private readonly seatLockService?: SeatLockService,
   ) {}
 
   async createPaymentUrl(dto: CreatePaymentUrlDto, reqIp?: string) {
@@ -139,8 +148,12 @@ export class PaymentService {
     const isSuccess = queryParams['vnp_ResponseCode'] === '00';
     const txnRef = queryParams['vnp_TxnRef'];
 
-    if (isValid && isSuccess) {
-      await this.confirmPayment(txnRef, queryParams);
+    if (isValid) {
+      if (isSuccess) {
+        await this.confirmPayment(txnRef, queryParams);
+      } else {
+        await this.failPayment(txnRef, queryParams);
+      }
     }
 
     return {
@@ -184,14 +197,12 @@ export class PaymentService {
       await this.confirmPayment(txnRef, queryParams);
       return { RspCode: '00', Message: 'Confirm Success' };
     } else {
-      payment.status = PaymentStatus.FAILED;
-      payment.paymentDetails = queryParams;
-      await this.paymentRepository.save(payment);
+      await this.failPayment(txnRef, queryParams);
       return { RspCode: '00', Message: 'Confirm Success' };
     }
   }
 
-  private async confirmPayment(txnRef: string, details: Record<string, any>) {
+  async confirmPayment(txnRef: string, details: Record<string, any>) {
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: txnRef },
       relations: { booking: true },
@@ -214,6 +225,117 @@ export class PaymentService {
       { bookingId: payment.bookingId },
       { status: TicketStatus.PAID },
     );
+
+    // Cập nhật trạng thái SeatHoldEntity sang 'booked'
+    if (this.seatHoldRepository && payment.booking?.tripId) {
+      const tickets = await this.ticketRepository.find({ where: { bookingId: payment.bookingId } });
+      const seatIds = tickets.map((t) => t.seatId);
+      if (seatIds.length > 0) {
+        await this.seatHoldRepository.update(
+          { tripId: payment.booking.tripId, seatId: In(seatIds) },
+          { status: 'booked' },
+        );
+      }
+    }
+  }
+
+  async failPayment(txnRef: string, details?: Record<string, any>) {
+    const payment = await this.paymentRepository.findOne({
+      where: { transactionId: txnRef },
+      relations: { booking: { tickets: true } },
+    });
+
+    if (!payment) return;
+
+    payment.status = PaymentStatus.FAILED;
+    payment.paymentDetails = details || {};
+    await this.paymentRepository.save(payment);
+
+    if (payment.booking) {
+      payment.booking.status = BookingStatus.CANCELLED;
+      await this.bookingRepository.save(payment.booking);
+
+      const tickets = payment.booking.tickets || [];
+      if (tickets.length > 0) {
+        await this.ticketRepository.update(
+          { bookingId: payment.bookingId },
+          { status: TicketStatus.CANCELLED },
+        );
+
+        const seatIds = tickets.map((t) => t.seatId);
+        if (this.seatHoldRepository) {
+          await this.seatHoldRepository.update(
+            { tripId: payment.booking.tripId, seatId: In(seatIds) },
+            { status: 'released' },
+          );
+        }
+
+        if (this.seatLockService) {
+          await this.seatLockService.releaseSeats(
+            payment.booking.tripId,
+            seatIds,
+            payment.booking.userId,
+          );
+        }
+      }
+    }
+  }
+
+  async cancelPayment(bookingId: string, userId?: string) {
+    const booking = await this.bookingRepository.findOne({
+      where: { id: bookingId },
+      relations: { tickets: true, payments: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Không tìm thấy đơn đặt vé');
+    }
+
+    if (userId && booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thao tác trên đơn đặt vé này');
+    }
+
+    if (booking.status === BookingStatus.PAID) {
+      throw new BadRequestException('Đơn hàng đã thanh toán thành công, không thể hủy');
+    }
+
+    booking.status = BookingStatus.CANCELLED;
+    await this.bookingRepository.save(booking);
+
+    const tickets = booking.tickets || [];
+    if (tickets.length > 0) {
+      await this.ticketRepository.update(
+        { bookingId: booking.id },
+        { status: TicketStatus.CANCELLED },
+      );
+
+      const seatIds = tickets.map((t) => t.seatId);
+      if (this.seatHoldRepository) {
+        await this.seatHoldRepository.update(
+          { tripId: booking.tripId, seatId: In(seatIds) },
+          { status: 'released' },
+        );
+      }
+
+      if (this.seatLockService) {
+        await this.seatLockService.releaseSeats(booking.tripId, seatIds, booking.userId);
+      }
+    }
+
+    if (booking.payments) {
+      for (const p of booking.payments) {
+        if (p.status === PaymentStatus.PENDING) {
+          p.status = PaymentStatus.FAILED;
+          await this.paymentRepository.save(p);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Đã hủy thanh toán và giải phóng ghế thành công',
+      bookingId: booking.id,
+    };
   }
 
   async refundTicket(ticketId: string, dto: RefundTicketDto) {

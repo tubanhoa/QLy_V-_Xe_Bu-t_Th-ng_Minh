@@ -8,13 +8,14 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, DataSource } from 'typeorm';
+import { Repository, Between, In, DataSource, LessThanOrEqual } from 'typeorm';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
 import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { VoucherEntity } from '../../database/entities/voucher.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
+import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { SeatLockService } from './seat-lock.service.js';
 import {
   HoldSeatsDto,
@@ -43,6 +44,9 @@ export class BookingService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly seatLockService: SeatLockService,
+    @Optional()
+    @InjectRepository(SeatHoldEntity)
+    private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
     @Optional()
     private readonly dataSource?: DataSource,
   ) {}
@@ -137,6 +141,10 @@ export class BookingService {
           .andWhere('ticket.status NOT IN (:...excluded)', {
             excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
           })
+          .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+            pendingStatus: BookingStatus.PENDING,
+            now: new Date(),
+          })
           .getCount();
 
         const availableSeats = Math.max(0, capacity - bookedCount);
@@ -196,8 +204,9 @@ export class BookingService {
     }
 
     const seatNumberMap = new Map(seats.map((s) => [s.id, s.seatNumber]));
+    const now = new Date();
 
-    // Check if any seat is already booked in database
+    // Check if any seat is already booked in database (loại trừ các booking pending đã hết hạn)
     const alreadyBooked = await this.ticketRepository
       .createQueryBuilder('ticket')
       .innerJoin('ticket.booking', 'booking')
@@ -207,6 +216,10 @@ export class BookingService {
       .andWhere('ticket.status NOT IN (:...excluded)', {
         excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
       })
+      .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+        pendingStatus: BookingStatus.PENDING,
+        now,
+      })
       .getMany();
 
     if (alreadyBooked.length > 0) {
@@ -215,6 +228,26 @@ export class BookingService {
         message: 'Một số ghế đã có người đặt mua trước, vui lòng chọn ghế khác',
         failedSeats: failedSeatNumbers,
       });
+    }
+
+    // Kiểm tra trong CSDL: ngăn người dùng khác chọn ghế đang được giữ còn hiệu lực
+    if (this.seatHoldRepository) {
+      const activeDbHolds = await this.seatHoldRepository
+        .createQueryBuilder('hold')
+        .where('hold.tripId = :tripId', { tripId: dto.tripId })
+        .andWhere('hold.seatId IN (:...seatIds)', { seatIds: dto.seatIds })
+        .andWhere('hold.status = :status', { status: 'holding' })
+        .andWhere('hold.expiresAt > :now', { now })
+        .getMany();
+
+      const heldByOthers = activeDbHolds.filter((h) => h.userId !== userId);
+      if (heldByOthers.length > 0) {
+        const failedSeatNumbers = heldByOthers.map((h) => seatNumberMap.get(h.seatId) || h.seatId);
+        throw new ConflictException({
+          message: 'Ghế đang được giữ bởi hành khách khác. Vui lòng thử lại sau',
+          failedSeats: failedSeatNumbers,
+        });
+      }
     }
 
     const result = await this.seatLockService.holdSeats(dto.tripId, dto.seatIds, userId, 600);
@@ -227,20 +260,67 @@ export class BookingService {
       });
     }
 
-    const expiresAt = new Date(Date.now() + 600 * 1000);
+    const startTime = now;
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+    const holdToken = `HOLD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    // Lưu thông tin ghế đang được giữ vào cơ sở dữ liệu
+    if (this.seatHoldRepository) {
+      // Đánh dấu các bản ghi giữ trước đó của cùng user trên các ghế này thành 'released'
+      await this.seatHoldRepository
+        .createQueryBuilder()
+        .update(SeatHoldEntity)
+        .set({ status: 'released' })
+        .where('tripId = :tripId AND userId = :userId AND seatId IN (:...seatIds) AND status = :status', {
+          tripId: dto.tripId,
+          userId,
+          seatIds: result.lockedSeats,
+          status: 'holding',
+        })
+        .execute();
+
+      const holds = result.lockedSeats.map((seatId) =>
+        this.seatHoldRepository!.create({
+          tripId: dto.tripId,
+          seatId,
+          userId,
+          holdToken,
+          status: 'holding',
+          createdAt: startTime,
+          expiresAt,
+        }),
+      );
+      await this.seatHoldRepository.save(holds);
+    }
 
     return {
       success: true,
       message: 'Giữ chỗ thành công trong 10 phút!',
+      holdToken,
       tripId: dto.tripId,
       lockedSeats: result.lockedSeats,
       lockedSeatNumbers: result.lockedSeats.map((id) => seatNumberMap.get(id) || id),
+      startTime,
       expiresAt,
+      remainingSeconds: 600,
     };
   }
 
   async releaseSeats(dto: HoldSeatsDto, userId: string) {
     await this.seatLockService.releaseSeats(dto.tripId, dto.seatIds, userId);
+    if (this.seatHoldRepository) {
+      await this.seatHoldRepository
+        .createQueryBuilder()
+        .update(SeatHoldEntity)
+        .set({ status: 'released' })
+        .where('tripId = :tripId AND userId = :userId AND seatId IN (:...seatIds) AND status = :status', {
+          tripId: dto.tripId,
+          userId,
+          seatIds: dto.seatIds,
+          status: 'holding',
+        })
+        .execute();
+    }
     return { success: true, message: 'Đã hủy giữ chỗ thành công' };
   }
 
@@ -294,6 +374,25 @@ export class BookingService {
         throw new ConflictException({
           message: `Ghế ${seat?.seatNumber || seatId} đang được giữ bởi hành khách khác. Không thể đặt vé.`,
           failedSeats: [seat?.seatNumber || seatId],
+        });
+      }
+    }
+
+    if (this.seatHoldRepository) {
+      const activeDbHolds = await this.seatHoldRepository
+        .createQueryBuilder('hold')
+        .where('hold.tripId = :tripId', { tripId: dto.tripId })
+        .andWhere('hold.seatId IN (:...seatIds)', { seatIds })
+        .andWhere('hold.status = :status', { status: 'holding' })
+        .andWhere('hold.expiresAt > :now', { now: new Date() })
+        .getMany();
+
+      const foreignHold = activeDbHolds.find((h) => h.userId !== userId);
+      if (foreignHold) {
+        const seat = seatMap.get(foreignHold.seatId);
+        throw new ConflictException({
+          message: `Ghế ${seat?.seatNumber || foreignHold.seatId} đang được giữ bởi hành khách khác. Không thể đặt vé.`,
+          failedSeats: [seat?.seatNumber || foreignHold.seatId],
         });
       }
     }
@@ -675,6 +774,86 @@ export class BookingService {
       ticketId: ticket.id,
       newTripId: newTrip.id,
       newSeatNumber: newSeat.seatNumber,
+    };
+  }
+
+  async cleanupExpiredHolds() {
+    const now = new Date();
+    if (this.seatHoldRepository) {
+      await this.seatHoldRepository
+        .createQueryBuilder()
+        .update(SeatHoldEntity)
+        .set({ status: 'expired' })
+        .where('status = :status AND expiresAt <= :now', { status: 'holding', now })
+        .execute();
+    }
+
+    const expiredBookings = await this.bookingRepository.find({
+      where: {
+        status: BookingStatus.PENDING,
+        expiresAt: LessThanOrEqual(now),
+      },
+      relations: { tickets: true },
+    });
+
+    for (const booking of expiredBookings) {
+      booking.status = BookingStatus.EXPIRED;
+      await this.bookingRepository.save(booking);
+
+      if (booking.tickets && booking.tickets.length > 0) {
+        await this.ticketRepository.update(
+          { bookingId: booking.id },
+          { status: TicketStatus.EXPIRED },
+        );
+      }
+    }
+
+    return { success: true, expiredBookingsCount: expiredBookings.length };
+  }
+
+  async cancelBooking(bookingId: string, userId?: string) {
+    const booking = await this.bookingRepository.findOne({
+      where: { id: bookingId },
+      relations: { tickets: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Không tìm thấy đơn đặt vé');
+    }
+
+    if (userId && booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thao tác trên đơn đặt vé này');
+    }
+
+    if (booking.status === BookingStatus.PAID) {
+      throw new BadRequestException('Đơn hàng đã thanh toán thành công, không thể hủy trực tiếp');
+    }
+
+    booking.status = BookingStatus.CANCELLED;
+    await this.bookingRepository.save(booking);
+
+    const seatIds = (booking.tickets || []).map((t) => t.seatId);
+    if (booking.tickets && booking.tickets.length > 0) {
+      await this.ticketRepository.update(
+        { bookingId: booking.id },
+        { status: TicketStatus.CANCELLED },
+      );
+    }
+
+    if (seatIds.length > 0) {
+      if (this.seatHoldRepository) {
+        await this.seatHoldRepository.update(
+          { tripId: booking.tripId, seatId: In(seatIds) },
+          { status: 'released' },
+        );
+      }
+      await this.seatLockService.releaseSeats(booking.tripId, seatIds, booking.userId);
+    }
+
+    return {
+      success: true,
+      message: 'Đã hủy đơn đặt vé và giải phóng ghế thành công',
+      bookingId: booking.id,
     };
   }
 }

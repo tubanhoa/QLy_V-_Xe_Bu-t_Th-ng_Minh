@@ -6,6 +6,7 @@ import { TripEntity } from '../../database/entities/trip.entity.js';
 import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { VoucherEntity } from '../../database/entities/voucher.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
+import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { BookingController } from './booking.controller.js';
 import { BookingService } from './booking.service.js';
 import { SeatLockService } from './seat-lock.service.js';
@@ -19,6 +20,7 @@ import { SeatLockService } from './seat-lock.service.js';
       SeatEntity,
       VoucherEntity,
       UserEntity,
+      SeatHoldEntity,
     ]),
   ],
   controllers: [BookingController],

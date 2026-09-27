@@ -15,9 +15,10 @@ import { VehicleEntity } from '../../database/entities/vehicle.entity.js';
 import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
+import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
-import { TripStatus, TicketStatus } from '../../common/constants/status.constant.js';
+import { TripStatus, TicketStatus, BookingStatus } from '../../common/constants/status.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 
@@ -46,6 +47,9 @@ export class TripsService {
     @Inject(forwardRef(() => SeatLockService))
     @Optional()
     private readonly seatLockService?: SeatLockService,
+    @Optional()
+    @InjectRepository(SeatHoldEntity)
+    private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
   ) {}
 
   /**
@@ -257,13 +261,19 @@ export class TripsService {
       });
     }
 
-    // Get active tickets for this trip
+    const now = new Date();
+
+    // Get active tickets for this trip (loại trừ các booking pending đã hết thời gian giữ 10 phút)
     const activeTickets = await this.ticketRepository
       .createQueryBuilder('ticket')
       .innerJoin('ticket.booking', 'booking')
       .where('booking.tripId = :tripId', { tripId })
       .andWhere('ticket.status NOT IN (:...excluded)', {
         excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+      })
+      .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+        pendingStatus: BookingStatus.PENDING,
+        now,
       })
       .select(['ticket.id', 'ticket.seatId', 'ticket.status', 'ticket.passengerName'])
       .getMany();
@@ -276,9 +286,38 @@ export class TripsService {
       });
     }
 
+    const dbHoldsMap = new Map<string, { userId: string; expiresAt: number }>();
+    if (this.seatHoldRepository) {
+      const activeDbHolds = await this.seatHoldRepository
+        .createQueryBuilder('hold')
+        .where('hold.tripId = :tripId', { tripId })
+        .andWhere('hold.status = :status', { status: 'holding' })
+        .andWhere('hold.expiresAt > :now', { now })
+        .getMany();
+      for (const h of activeDbHolds) {
+        dbHoldsMap.set(h.seatId, {
+          userId: h.userId,
+          expiresAt: new Date(h.expiresAt).getTime(),
+        });
+      }
+    }
+
     const lockedSeatsMap = this.seatLockService
       ? await this.seatLockService.getLockedSeatsForTrip(tripId)
       : new Map<string, { userId: string; expiresAt: number }>();
+
+    // Merge lockedSeatsMap and dbHoldsMap (tự động bỏ qua các bản ghi đã quá hạn -> ghế còn trống)
+    const effectiveHoldsMap = new Map<string, { userId: string; expiresAt: number }>();
+    for (const [seatId, info] of lockedSeatsMap.entries()) {
+      if (info.expiresAt > now.getTime()) {
+        effectiveHoldsMap.set(seatId, info);
+      }
+    }
+    for (const [seatId, info] of dbHoldsMap.entries()) {
+      if (info.expiresAt > now.getTime()) {
+        effectiveHoldsMap.set(seatId, info);
+      }
+    }
 
     let holdingCount = 0;
     const seatMap = seats.map((seat) => {
@@ -297,7 +336,7 @@ export class TripsService {
         };
       }
 
-      const lockInfo = lockedSeatsMap.get(seat.id);
+      const lockInfo = effectiveHoldsMap.get(seat.id);
       if (lockInfo) {
         holdingCount++;
         const isHeldByMe = currentUserId ? lockInfo.userId === currentUserId : false;

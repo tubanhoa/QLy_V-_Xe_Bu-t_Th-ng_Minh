@@ -6,6 +6,7 @@ import { VehicleEntity } from '../../database/entities/vehicle.entity.js';
 import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
+import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { TripsController } from './trips.controller.js';
 import { TripsService } from './trips.service.js';
 import { BookingModule } from '../booking/booking.module.js';
@@ -19,6 +20,7 @@ import { BookingModule } from '../booking/booking.module.js';
       SeatEntity,
       TicketEntity,
       UserEntity,
+      SeatHoldEntity,
     ]),
     forwardRef(() => BookingModule),
   ],
