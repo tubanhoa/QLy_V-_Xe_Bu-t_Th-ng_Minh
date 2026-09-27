@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Layout } from 'antd'
-import { LogOut } from 'lucide-react'
+import { LogOut, ShieldAlert, Sparkles, Ticket } from 'lucide-react'
+import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { ROLE_NAV, type Role } from '@/lib/rbac'
 import { BottomSheet } from './bottom-sheet'
@@ -46,6 +47,12 @@ export function AppShell() {
 
   useEffect(() => () => clearTimeout(loadingTimer.current), [])
 
+  const isStaff =
+    role === 'admin' ||
+    role === 'dispatcher' ||
+    role === 'manager' ||
+    role === 'driver'
+
   const portalRole: Role =
     role === 'driver' ? 'driver' : role === 'dispatcher' || role === 'manager' ? 'dispatcher' : 'admin'
   const navItems = ROLE_NAV[portalRole] || ROLE_NAV.admin
@@ -67,6 +74,54 @@ export function AppShell() {
   }
 
   if (!user) return null
+
+  // Chặn sinh viên / hành khách truy cập Bảng Điều Hành nội bộ của Cán bộ
+  if (!isStaff) {
+    return (
+      <div className="min-h-screen bg-slate-100/80 flex items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-8 shadow-2xl text-center space-y-4">
+          <div className="size-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs">
+            <ShieldAlert size={32} />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-black text-slate-900">
+              Khu Vực Dành Cho Cán Bộ Điều Hành
+            </h2>
+            <p className="text-xs text-slate-600 font-medium leading-relaxed">
+              Bạn đang đăng nhập với tài khoản <strong>{user.fullName || user.name}</strong> ({user.roleTitle || 'Học sinh / Sinh viên ICTU'}). Cổng này chỉ dành riêng cho Cán bộ điều hành và Tài xế ICTU Transit.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-left space-y-1.5 text-xs text-emerald-950">
+            <div className="font-extrabold flex items-center gap-1.5 text-[#005A36]">
+              <Sparkles size={15} />
+              <span>Cổng Tiện Ích Dành Cho Sinh Viên:</span>
+            </div>
+            <p className="text-[11px] text-emerald-800 leading-normal">
+              Bạn có thể xem vé điện tử, quét mã QR lên xe, đổi chuyến, hủy vé & hoàn tiền, đăng ký vé tháng HSSV trực tiếp trên trang chủ.
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Link
+              href="/?openTickets=true"
+              className="w-full py-3 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Ticket size={16} />
+              <span>Vào Trang Chủ & Mở Ví Vé Của Bạn</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            >
+              Đổi tài khoản cán bộ điều hành
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const renderContent = () => {
     if (loading) return <ContentSkeleton />

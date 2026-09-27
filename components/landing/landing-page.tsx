@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { AmbientTransitFx } from './ambient-transit-fx'
 import { FloatingSupportBot } from './floating-support-bot'
@@ -28,6 +28,16 @@ export function LandingPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
+
+  // Tự động mở Cửa Sổ Nổi Vé Điện Tử khi có param ?openTickets=true
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('openTickets') === 'true') {
+        setIsTicketModalOpen(true)
+      }
+    }
+  }, [])
 
   return (
     <div className="relative h-screen max-h-screen w-full overflow-hidden bg-[#EBF5FB] flex flex-col justify-between select-none font-sans text-slate-900">
