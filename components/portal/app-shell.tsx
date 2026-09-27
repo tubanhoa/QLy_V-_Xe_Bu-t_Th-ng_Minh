@@ -108,12 +108,18 @@ export function AppShell() {
               className="w-full py-3 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Ticket size={16} />
-              <span>Vào Trang Chủ & Mở Ví Vé Của Bạn</span>
+              <span>Vào Trang Chủ & Mở Cửa Sổ Ví Vé Của Bạn</span>
+            </Link>
+            <Link
+              href="/"
+              className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <span>Quay về Trang Chủ</span>
             </Link>
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              className="w-full py-2 rounded-xl text-slate-500 hover:text-slate-800 text-[11px] font-medium transition-all cursor-pointer"
             >
               Đổi tài khoản cán bộ điều hành
             </button>

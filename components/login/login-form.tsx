@@ -84,7 +84,7 @@ function LoginFormContent() {
         } else if (portalMode === 'staff') {
           router.push('/dashboard')
         } else {
-          router.push('/')
+          router.push('/?openTickets=true')
         }
       } else {
         message.error(res.message || 'Email hoặc mật khẩu không chính xác')
@@ -102,7 +102,7 @@ function LoginFormContent() {
       const res = await login('student.an@ictu.edu.vn', 'Password@123', false)
       if (res.success) {
         message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU!')
-        router.push(redirectParam || '/')
+        router.push(redirectParam || '/?openTickets=true')
       } else {
         message.error(res.message || 'Không thể kết nối dịch vụ Office 365')
       }
