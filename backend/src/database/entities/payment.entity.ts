@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  type Relation,
 } from 'typeorm';
 import { BookingEntity } from './booking.entity.js';
 import { PaymentMethod, PaymentStatus } from '../../common/constants/status.constant.js';
@@ -23,7 +24,7 @@ export class PaymentEntity {
 
   @ManyToOne(() => BookingEntity, (booking) => booking.payments)
   @JoinColumn({ name: 'booking_id' })
-  booking: BookingEntity;
+  booking: Relation<BookingEntity>;
 
   @Column({ name: 'payment_method', type: 'varchar', length: 20 })
   paymentMethod: PaymentMethod;

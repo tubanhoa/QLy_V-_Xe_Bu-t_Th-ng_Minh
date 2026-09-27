@@ -7,6 +7,7 @@ import {
   JoinColumn,
   Index,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { RouteEntity } from './route.entity.js';
 import { VehicleEntity } from './vehicle.entity.js';
@@ -69,5 +70,5 @@ export class TripEntity {
   createdAt: Date;
 
   @OneToMany(() => BookingEntity, (booking) => booking.trip)
-  bookings: BookingEntity[];
+  bookings: Relation<BookingEntity[]>;
 }

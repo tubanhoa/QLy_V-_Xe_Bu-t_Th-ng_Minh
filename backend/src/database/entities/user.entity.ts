@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { RoleEntity } from './role.entity.js';
 import { UserStatus } from '../../common/constants/status.constant.js';
@@ -33,7 +34,7 @@ export class UserEntity {
 
   @ManyToOne(() => RoleEntity, (role) => role.users, { eager: true })
   @JoinColumn({ name: 'role_id' })
-  role: RoleEntity;
+  role: Relation<RoleEntity>;
 
   @Column({ name: 'avatar_url', type: 'varchar', length: 500, nullable: true })
   avatarUrl: string;

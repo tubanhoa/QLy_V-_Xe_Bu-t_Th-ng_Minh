@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  type Relation,
 } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity.js';
 import { SeatType } from '../../common/constants/status.constant.js';
@@ -20,7 +21,7 @@ export class SeatEntity {
 
   @ManyToOne(() => VehicleEntity, (vehicle) => vehicle.seats, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'vehicle_id' })
-  vehicle: VehicleEntity;
+  vehicle: Relation<VehicleEntity>;
 
   @Column({ name: 'seat_number', type: 'varchar', length: 5 })
   seatNumber: string;

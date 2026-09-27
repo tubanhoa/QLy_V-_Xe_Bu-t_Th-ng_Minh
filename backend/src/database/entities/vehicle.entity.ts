@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { SeatEntity } from './seat.entity.js';
 import { VehicleStatus } from '../../common/constants/status.constant.js';
@@ -38,5 +39,5 @@ export class VehicleEntity {
   createdAt: Date;
 
   @OneToMany(() => SeatEntity, (seat) => seat.vehicle, { cascade: true })
-  seats: SeatEntity[];
+  seats: Relation<SeatEntity[]>;
 }

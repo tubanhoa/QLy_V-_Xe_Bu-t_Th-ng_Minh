@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  type Relation,
 } from 'typeorm';
 import { RouteEntity } from './route.entity.js';
 import { StationEntity } from './station.entity.js';
@@ -21,14 +22,14 @@ export class RouteStationEntity {
 
   @ManyToOne(() => RouteEntity, (route) => route.routeStations, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'route_id' })
-  route: RouteEntity;
+  route: Relation<RouteEntity>;
 
   @Column({ name: 'station_id', type: 'uuid' })
   stationId: string;
 
   @ManyToOne(() => StationEntity, (station) => station.routeStations, { eager: true })
   @JoinColumn({ name: 'station_id' })
-  station: StationEntity;
+  station: Relation<StationEntity>;
 
   @Column({ name: 'stop_order', type: 'integer' })
   stopOrder: number;
