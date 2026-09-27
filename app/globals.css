@@ -682,3 +682,12 @@ div[class*="nextjs-toast"] {
 .animate-headlight-glow {
   animation: headlight-glow 11s ease-in-out infinite;
 }
+
+/* Utility to hide scrollbars while preserving scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
