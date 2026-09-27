@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, DataSource, LessThanOrEqual } from 'typeorm';
+import { Repository, Between, In, DataSource, LessThanOrEqual, MoreThan } from 'typeorm';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
@@ -16,15 +16,19 @@ import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { VoucherEntity } from '../../database/entities/voucher.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
+import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { SeatLockService } from './seat-lock.service.js';
 import {
   HoldSeatsDto,
   CreateBookingDto,
   SearchTripsDto,
   ExchangeTicketDto,
+  CancelTicketDto,
+  HoldExchangeSeatDto,
+  ConfirmExchangeDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
-import { BookingStatus, TicketStatus, TripStatus } from '../../common/constants/status.constant.js';
+import { BookingStatus, TicketStatus, TripStatus, PaymentStatus } from '../../common/constants/status.constant.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { generateBookingCode, generateTicketCode } from '../../common/utils/booking-code.util.js';
 import { signQrPayload, generateQrDataUrl } from '../../common/utils/qr-code.util.js';
@@ -49,6 +53,9 @@ export class BookingService {
     @Optional()
     @InjectRepository(SeatHoldEntity)
     private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
+    @Optional()
+    @InjectRepository(PaymentEntity)
+    private readonly paymentRepository?: Repository<PaymentEntity>,
     @Optional()
     private readonly dataSource?: DataSource,
     @Optional()
@@ -778,13 +785,166 @@ export class BookingService {
     };
   }
 
-  async cancelTicket(ticketId: string, userId: string) {
+  /**
+   * Tính toán chính sách hủy vé và đổi vé theo thời gian thực trước giờ khởi hành
+   */
+  calculateCancellationAndExchangePolicy(ticket: TicketEntity, trip: TripEntity) {
+    const departureTime = new Date(trip.departureTime).getTime();
+    const now = Date.now();
+    const diffHours = (departureTime - now) / (1000 * 60 * 60);
+    const originalPrice = Number(ticket.originalPrice) || 0;
+
+    const policyRules = [
+      { condition: 'Trước giờ khởi hành >= 24h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
+      { condition: 'Trước giờ khởi hành từ 12h đến 24h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
+      { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
+      { condition: 'Trước giờ khởi hành < 2h hoặc đã chạy', canCancel: false, canExchange: false, refundPercent: 0 },
+    ];
+
+    if (ticket.status === TicketStatus.CANCELLED) {
+      return {
+        canCancel: false,
+        canExchange: false,
+        hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        originalPrice,
+        cancellationFeePercent: 0,
+        cancellationFeeAmount: 0,
+        refundAmount: 0,
+        exchangeFeePercent: 0,
+        exchangeFeeAmount: 0,
+        reason: 'Vé đã ở trạng thái đã hủy (CANCELLED)',
+        policyRules,
+      };
+    }
+
+    if (ticket.status === TicketStatus.CHECKED_IN) {
+      return {
+        canCancel: false,
+        canExchange: false,
+        hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        originalPrice,
+        cancellationFeePercent: 0,
+        cancellationFeeAmount: 0,
+        refundAmount: 0,
+        exchangeFeePercent: 0,
+        exchangeFeeAmount: 0,
+        reason: 'Vé đã được soát lên xe (CHECKED_IN), không thể hủy hoặc đổi chuyến',
+        policyRules,
+      };
+    }
+
+    if (ticket.status === TicketStatus.EXPIRED) {
+      return {
+        canCancel: false,
+        canExchange: false,
+        hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        originalPrice,
+        cancellationFeePercent: 0,
+        cancellationFeeAmount: 0,
+        refundAmount: 0,
+        exchangeFeePercent: 0,
+        exchangeFeeAmount: 0,
+        reason: 'Vé đã hết hạn sử dụng',
+        policyRules,
+      };
+    }
+
+    if (diffHours < 2) {
+      return {
+        canCancel: false,
+        canExchange: false,
+        hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        originalPrice,
+        cancellationFeePercent: 100,
+        cancellationFeeAmount: originalPrice,
+        refundAmount: 0,
+        exchangeFeePercent: 100,
+        exchangeFeeAmount: originalPrice,
+        reason: 'Chỉ được hủy hoặc đổi vé trước giờ khởi hành tối thiểu 2 tiếng theo quy định',
+        policyRules,
+      };
+    }
+
+    let cancellationFeePercent = 0;
+    let exchangeFeePercent = 0;
+
+    if (diffHours >= 24) {
+      cancellationFeePercent = 0;
+      exchangeFeePercent = 0;
+    } else if (diffHours >= 12) {
+      cancellationFeePercent = 10;
+      exchangeFeePercent = 5;
+    } else {
+      cancellationFeePercent = 20;
+      exchangeFeePercent = 10;
+    }
+
+    const cancellationFeeAmount = Math.round((originalPrice * cancellationFeePercent) / 100);
+    const refundAmount = originalPrice - cancellationFeeAmount;
+    const exchangeFeeAmount = Math.round((originalPrice * exchangeFeePercent) / 100);
+
+    return {
+      canCancel: true,
+      canExchange: true,
+      hoursUntilDeparture: Number(diffHours.toFixed(1)),
+      originalPrice,
+      cancellationFeePercent,
+      cancellationFeeAmount,
+      refundAmount,
+      exchangeFeePercent,
+      exchangeFeeAmount,
+      policyRules,
+    };
+  }
+
+  /**
+   * API Kiểm tra điều kiện và tính phí hủy/đổi vé theo thời gian
+   */
+  async getCancellationPolicy(ticketId: string, userId?: string) {
     const ticket = await this.ticketRepository.findOne({
-      where: { id: ticketId },
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
       relations: {
         booking: {
-          trip: true,
+          trip: { route: true, vehicle: true },
+          user: true,
         },
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe trong hệ thống');
+    }
+
+    if (userId && ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền xem thông tin vé này');
+    }
+
+    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+    return {
+      ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      passengerName: ticket.passengerName,
+      seatNumber: ticket.seat?.seatNumber,
+      departureTime: ticket.booking.trip?.departureTime,
+      ticketStatus: ticket.status,
+      ...policy,
+    };
+  }
+
+  /**
+   * API Hủy vé: Cập nhật trạng thái vé, giải phóng ghế trống lập tức và tự động hoàn tiền
+   */
+  async cancelTicket(ticketId: string, userId: string, dto?: CancelTicketDto) {
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: {
+          trip: { route: true },
+          user: true,
+          payments: true,
+        },
+        seat: true,
       },
     });
 
@@ -796,33 +956,195 @@ export class BookingService {
       throw new ForbiddenException('Bạn không có quyền hủy vé này');
     }
 
-    if (ticket.status === TicketStatus.CANCELLED || ticket.status === TicketStatus.CHECKED_IN) {
-      throw new BadRequestException(`Không thể hủy vé ở trạng thái ${ticket.status}`);
+    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+    if (!policy.canCancel) {
+      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để hủy');
     }
 
-    // Policy: Cancel at least 2 hours before departure
-    const departureTime = new Date(ticket.booking.trip.departureTime).getTime();
-    const now = Date.now();
-    const diffHours = (departureTime - now) / (1000 * 60 * 60);
-
-    if (diffHours < 2) {
-      throw new BadRequestException('Chỉ được hủy vé trước giờ khởi hành tối thiểu 2 tiếng theo quy định');
-    }
-
+    const previousStatus = ticket.status;
     ticket.status = TicketStatus.CANCELLED;
     await this.ticketRepository.save(ticket);
 
+    // 1. Giải phóng ghế trống lập tức trong CSDL và in-memory
+    if (this.seatHoldRepository) {
+      await this.seatHoldRepository.update(
+        { tripId: ticket.booking.tripId, seatId: ticket.seatId },
+        { status: 'released' },
+      );
+    }
+    if (this.seatLockService) {
+      await this.seatLockService.releaseSeats(ticket.booking.tripId, [ticket.seatId]);
+    }
+
+    // 2. Tự động xử lý quy trình hoàn tiền qua cổng thanh toán
+    let refundProcessed = false;
+    if (previousStatus === TicketStatus.PAID) {
+      const payment =
+        ticket.booking.payments?.[0] ||
+        (this.paymentRepository ? await this.paymentRepository.findOne({ where: { bookingId: ticket.bookingId } }) : null);
+      if (payment) {
+        payment.status = PaymentStatus.REFUNDED;
+        payment.refundTime = new Date();
+        payment.refundAmount = policy.refundAmount;
+        payment.refundReason = dto?.reason || 'Hành khách hủy vé theo quy định';
+        if (this.paymentRepository) {
+          await this.paymentRepository.save(payment);
+        }
+        refundProcessed = true;
+      }
+    }
+
+    // 3. Nếu toàn bộ vé trong đơn đặt đều đã bị hủy -> cập nhật booking sang CANCELLED
+    const remainingActiveTickets = await this.ticketRepository.count({
+      where: {
+        bookingId: ticket.bookingId,
+        status: In([TicketStatus.RESERVED, TicketStatus.PAID, TicketStatus.CHECKED_IN]),
+      },
+    });
+    if (remainingActiveTickets === 0) {
+      ticket.booking.status = BookingStatus.CANCELLED;
+      await this.bookingRepository.save(ticket.booking);
+    }
+
+    // 4. Tự động gửi Email xác nhận hủy vé và hoàn tiền cho hành khách
+    const recipientEmail = ticket.booking.user?.email;
+    if (this.notificationService && recipientEmail) {
+      await this.notificationService.sendTicketCancellationEmail({
+        recipientEmail,
+        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+        bookingCode: ticket.booking.bookingCode,
+        ticketCode: ticket.ticketCode,
+        routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh',
+        originalPrice: policy.originalPrice,
+        cancellationFee: policy.cancellationFeeAmount,
+        refundAmount: policy.refundAmount,
+        cancelledAt: new Date(),
+      });
+    }
+
     return {
       success: true,
-      message: 'Hủy vé thành công. Số tiền sẽ được xem xét hoàn trả theo chính sách.',
+      message: `Hủy vé ${ticket.ticketCode} thành công. ${policy.refundAmount > 0 ? `Số tiền hoàn lại là ${policy.refundAmount.toLocaleString('vi-VN')} VND.` : 'Vé không được hoàn tiền theo chính sách.'}`,
       ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
       status: ticket.status,
+      originalPrice: policy.originalPrice,
+      cancellationFee: policy.cancellationFeeAmount,
+      refundAmount: policy.refundAmount,
+      refundProcessed,
+      seatReleased: true,
     };
   }
 
-  async exchangeTicket(ticketId: string, dto: ExchangeTicketDto, userId: string) {
+  /**
+   * API Tìm kiếm chuyến mới cho luồng đổi chuyến
+   */
+  async getExchangeTrips(ticketId: string, userId: string, dateStr?: string) {
     const ticket = await this.ticketRepository.findOne({
-      where: { id: ticketId },
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: {
+          trip: { route: true, vehicle: true },
+        },
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe');
+    }
+
+    if (ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thao tác trên vé này');
+    }
+
+    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+    if (!policy.canExchange) {
+      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để đổi chuyến');
+    }
+
+    const currentTrip = ticket.booking.trip;
+    let queryDate = dateStr?.trim();
+    if (!queryDate) {
+      queryDate = new Date(currentTrip.departureTime).toISOString().split('T')[0];
+    }
+
+    const startOfDay = new Date(`${queryDate}T00:00:00`);
+    const endOfDay = new Date(`${queryDate}T23:59:59.999`);
+    const now = new Date();
+
+    const trips = await this.tripRepository
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .where('trip.routeId = :routeId', { routeId: currentTrip.routeId })
+      .andWhere('trip.id != :currentTripId', { currentTripId: currentTrip.id })
+      .andWhere('trip.departureTime BETWEEN :start AND :end', { start: startOfDay, end: endOfDay })
+      .andWhere('trip.departureTime > :now', { now })
+      .andWhere('trip.status != :cancelled', { cancelled: TripStatus.CANCELLED })
+      .orderBy('trip.departureTime', 'ASC')
+      .getMany();
+
+    const result = [];
+    for (const trip of trips) {
+      const seatCapacity = trip.vehicle?.seatCapacity || 40;
+      const bookedCount = await this.ticketRepository
+        .createQueryBuilder('ticket')
+        .innerJoin('ticket.booking', 'booking')
+        .where('booking.tripId = :tripId', { tripId: trip.id })
+        .andWhere('ticket.status NOT IN (:...excluded)', {
+          excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+        })
+        .getCount();
+
+      let holdCount = 0;
+      if (this.seatHoldRepository) {
+        holdCount = await this.seatHoldRepository.count({
+          where: {
+            tripId: trip.id,
+            status: 'holding',
+            expiresAt: MoreThan(now),
+          },
+        });
+      }
+
+      const availableSeats = Math.max(0, seatCapacity - bookedCount - holdCount);
+      const newTripPrice = Number(trip.route?.basePrice) || policy.originalPrice;
+      const priceDifference = (newTripPrice + policy.exchangeFeeAmount) - policy.originalPrice;
+
+      result.push({
+        tripId: trip.id,
+        routeCode: trip.route?.routeCode,
+        routeName: trip.route?.name,
+        origin: trip.route?.origin,
+        destination: trip.route?.destination,
+        departureTime: trip.departureTime,
+        vehiclePlate: trip.vehicle?.licensePlate,
+        availableSeats,
+        tripPrice: newTripPrice,
+        exchangeFee: policy.exchangeFeeAmount,
+        estimatedDifference: priceDifference,
+      });
+    }
+
+    return {
+      currentTicket: {
+        ticketId: ticket.id,
+        ticketCode: ticket.ticketCode,
+        seatNumber: ticket.seat?.seatNumber,
+        currentDepartureTime: currentTrip.departureTime,
+        originalPrice: policy.originalPrice,
+      },
+      availableTrips: result,
+    };
+  }
+
+  /**
+   * API Tạm giữ chỗ 10 phút trên chuyến mới cho luồng đổi vé (bảo toàn ghế cũ)
+   */
+  async holdExchangeSeat(ticketId: string, dto: HoldExchangeSeatDto, userId: string) {
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
       relations: {
         booking: {
           trip: true,
@@ -836,17 +1158,12 @@ export class BookingService {
     }
 
     if (ticket.booking.userId !== userId) {
-      throw new ForbiddenException('Bạn không có quyền đổi vé này');
+      throw new ForbiddenException('Bạn không có quyền thao tác trên vé này');
     }
 
-    if (ticket.status !== TicketStatus.PAID && ticket.status !== TicketStatus.RESERVED) {
-      throw new BadRequestException('Chỉ vé đã thanh toán hoặc đã đặt mới có thể đổi chuyến');
-    }
-
-    // Check departure > 2h
-    const departureTime = new Date(ticket.booking.trip.departureTime).getTime();
-    if ((departureTime - Date.now()) / (1000 * 60 * 60) < 2) {
-      throw new BadRequestException('Chỉ được đổi vé trước giờ khởi hành tối thiểu 2 tiếng');
+    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+    if (!policy.canExchange) {
+      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để đổi chuyến');
     }
 
     const newTrip = await this.tripRepository.findOne({ where: { id: dto.newTripId } });
@@ -859,8 +1176,8 @@ export class BookingService {
       throw new NotFoundException('Không tìm thấy ghế mới');
     }
 
-    // Check if new seat is already booked on new trip
-    const existing = await this.ticketRepository
+    // 1. Kiểm tra ghế mới đã được đặt chưa
+    const existingTicket = await this.ticketRepository
       .createQueryBuilder('ticket')
       .innerJoin('ticket.booking', 'booking')
       .where('booking.tripId = :tripId', { tripId: dto.newTripId })
@@ -870,20 +1187,169 @@ export class BookingService {
       })
       .getOne();
 
+    if (existingTicket) {
+      throw new ConflictException('Ghế này trên chuyến mới đã có người đặt');
+    }
+
+    // 2. Kiểm tra ghế mới có ai khác đang giữ chỗ không
+    const now = new Date();
+    if (this.seatHoldRepository) {
+      const activeHold = await this.seatHoldRepository
+        .createQueryBuilder('hold')
+        .where('hold.tripId = :tripId', { tripId: dto.newTripId })
+        .andWhere('hold.seatId = :seatId', { seatId: dto.newSeatId })
+        .andWhere('hold.status = :status', { status: 'holding' })
+        .andWhere('hold.expiresAt > :now', { now })
+        .getOne();
+
+      if (activeHold && activeHold.userId !== userId) {
+        throw new ConflictException('Ghế này đang được một hành khách khác tạm giữ');
+      }
+    }
+
+    // 3. Tạo giữ chỗ 10 phút trên chuyến mới (ghế cũ của vé vẫn giữ nguyên)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const holdToken = `hold-ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (this.seatHoldRepository) {
+      const hold = this.seatHoldRepository.create({
+        tripId: dto.newTripId,
+        seatId: dto.newSeatId,
+        userId,
+        holdToken,
+        status: 'holding',
+        expiresAt,
+      });
+      await this.seatHoldRepository.save(hold);
+    }
+
+    if (this.seatLockService) {
+      await this.seatLockService.holdSeats(dto.newTripId, [dto.newSeatId], userId, 600);
+    }
+
+    return {
+      success: true,
+      message: 'Đã tạm giữ chỗ trên chuyến mới thành công trong 10 phút. Ghế cũ của bạn vẫn được bảo toàn.',
+      ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      newTripId: dto.newTripId,
+      newSeatId: dto.newSeatId,
+      newSeatNumber: newSeat.seatNumber,
+      holdExpiresAt: expiresAt,
+    };
+  }
+
+  /**
+   * API Xác nhận đổi chuyến: Tính chênh lệch giá, giải phóng ghế cũ, cấp ghế mới, ký số lại QR và gửi email vé mới
+   */
+  async confirmExchange(ticketId: string, dto: ConfirmExchangeDto, userId: string) {
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: {
+          trip: { route: true, vehicle: true },
+          user: true,
+        },
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe');
+    }
+
+    if (ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền đổi vé này');
+    }
+
+    const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
+    if (!policy.canExchange) {
+      throw new BadRequestException(policy.reason || 'Vé không đủ điều kiện để đổi chuyến');
+    }
+
+    const oldTripId = ticket.booking.tripId;
+    const oldSeatId = ticket.seatId;
+    const oldSeatNumber = ticket.seat?.seatNumber;
+    const oldRouteName = ticket.booking.trip?.route?.name;
+
+    const newTrip = await this.tripRepository.findOne({
+      where: { id: dto.newTripId },
+      relations: { route: true, vehicle: true },
+    });
+    if (!newTrip) {
+      throw new NotFoundException('Không tìm thấy chuyến xe mới');
+    }
+
+    const newSeat = await this.seatRepository.findOne({ where: { id: dto.newSeatId } });
+    if (!newSeat) {
+      throw new NotFoundException('Không tìm thấy ghế mới');
+    }
+
+    // Kiểm tra trùng ghế trên chuyến mới
+    const existing = await this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoin('ticket.booking', 'booking')
+      .where('booking.tripId = :tripId', { tripId: dto.newTripId })
+      .andWhere('ticket.seatId = :seatId', { seatId: dto.newSeatId })
+      .andWhere('ticket.id != :ticketId', { ticketId: ticket.id })
+      .andWhere('ticket.status NOT IN (:...excluded)', {
+        excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+      })
+      .getOne();
+
     if (existing) {
       throw new ConflictException('Ghế này trên chuyến mới đã có người đặt');
     }
 
-    // Update ticket
+    // Tính toán chênh lệch giá vé và phí đổi vé
+    const oldPrice = Number(ticket.originalPrice);
+    const newTripPrice = Number(newTrip.route?.basePrice) || oldPrice;
+    const exchangeFee = policy.exchangeFeeAmount;
+    const totalNewCost = newTripPrice + exchangeFee;
+    const priceDifference = totalNewCost - oldPrice;
+
+    // 1. Giải phóng ghế cũ trên chuyến cũ
+    if (this.seatHoldRepository) {
+      await this.seatHoldRepository.update(
+        { tripId: oldTripId, seatId: oldSeatId },
+        { status: 'released' },
+      );
+    }
+    if (this.seatLockService) {
+      await this.seatLockService.releaseSeats(oldTripId, [oldSeatId]);
+    }
+
+    // 2. Chuyển seat hold ghế mới sang 'booked'
+    if (this.seatHoldRepository) {
+      const activeHold = await this.seatHoldRepository.findOne({
+        where: { tripId: dto.newTripId, seatId: dto.newSeatId, status: 'holding' },
+      });
+      if (activeHold) {
+        activeHold.status = 'booked';
+        await this.seatHoldRepository.save(activeHold);
+      } else {
+        const bookedHold = this.seatHoldRepository.create({
+          tripId: dto.newTripId,
+          seatId: dto.newSeatId,
+          userId,
+          holdToken: `booked-${Date.now()}`,
+          status: 'booked',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        await this.seatHoldRepository.save(bookedHold);
+      }
+    }
+
+    // 3. Cập nhật TicketEntity sang chuyến mới & ghế mới
     ticket.seatId = newSeat.id;
     ticket.booking.tripId = newTrip.id;
     await this.bookingRepository.save(ticket.booking);
 
-    // Re-sign QR
+    // 4. Ký số lại mã QR mới
     const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
     const { qrData, signature } = signQrPayload(
       {
         ticketCode: ticket.ticketCode,
+        bookingCode: ticket.booking.bookingCode,
         tripId: newTrip.id,
         seatNumber: newSeat.seatNumber,
         passengerName: ticket.passengerName,
@@ -896,13 +1362,47 @@ export class BookingService {
     ticket.qrSignatureHash = signature;
     await this.ticketRepository.save(ticket);
 
+    const qrDataUrl = await generateQrDataUrl(qrData);
+
+    // 5. Tự động gửi Email thông báo đổi vé thành công
+    const recipientEmail = ticket.booking.user?.email;
+    if (this.notificationService && recipientEmail) {
+      await this.notificationService.sendTicketExchangeEmail({
+        recipientEmail,
+        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+        ticketCode: ticket.ticketCode,
+        bookingCode: ticket.booking.bookingCode,
+        oldRouteName,
+        newRouteName: newTrip.route?.name || 'Tuyến xe buýt ICTU',
+        newOrigin: newTrip.route?.origin,
+        newDestination: newTrip.route?.destination,
+        newDepartureTime: newTrip.departureTime,
+        newSeatNumber: newSeat.seatNumber,
+        newVehiclePlate: newTrip.vehicle?.licensePlate,
+        exchangeFee,
+        priceDifference,
+        qrDataUrl,
+      });
+    }
+
     return {
       success: true,
       message: 'Đổi vé sang chuyến mới thành công!',
       ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      oldSeatNumber,
       newTripId: newTrip.id,
       newSeatNumber: newSeat.seatNumber,
+      newDepartureTime: newTrip.departureTime,
+      exchangeFee,
+      priceDifference,
+      qrData,
+      qrDataUrl,
     };
+  }
+
+  async exchangeTicket(ticketId: string, dto: ExchangeTicketDto, userId: string) {
+    return this.confirmExchange(ticketId, dto, userId);
   }
 
   async cleanupExpiredHolds() {

@@ -15,6 +15,35 @@ export interface SendTicketEmailParams {
   qrDataUrl: string;
 }
 
+export interface SendTicketCancellationEmailParams {
+  recipientEmail: string;
+  passengerName: string;
+  bookingCode: string;
+  ticketCode: string;
+  routeName: string;
+  originalPrice: number;
+  cancellationFee: number;
+  refundAmount: number;
+  cancelledAt?: Date | string;
+}
+
+export interface SendTicketExchangeEmailParams {
+  recipientEmail: string;
+  passengerName: string;
+  ticketCode: string;
+  bookingCode: string;
+  oldRouteName?: string;
+  newRouteName: string;
+  newOrigin?: string;
+  newDestination?: string;
+  newDepartureTime: Date | string;
+  newSeatNumber: string;
+  newVehiclePlate?: string;
+  exchangeFee: number;
+  priceDifference: number;
+  qrDataUrl: string;
+}
+
 export interface SentNotificationRecord {
   id: string;
   recipientEmail: string;
@@ -121,6 +150,168 @@ export class NotificationService {
     this.sentNotifications.push(record);
     this.logger.log(`[NotificationService] Đã gửi email vé điện tử thành công tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
 
+    return true;
+  }
+
+  /**
+   * Gửi Email xác nhận hủy vé và thông tin hoàn tiền
+   */
+  async sendTicketCancellationEmail(params: SendTicketCancellationEmailParams): Promise<boolean> {
+    const subject = `[SmartBus ICTU] Xác nhận HỦY VÉ thành công - Mã vé: ${params.ticketCode}`;
+    const formattedRefund = Number(params.refundAmount).toLocaleString('vi-VN');
+    const formattedFee = Number(params.cancellationFee).toLocaleString('vi-VN');
+    const formattedOriginal = Number(params.originalPrice).toLocaleString('vi-VN');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+          .header { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); color: white; padding: 24px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .content { padding: 24px; }
+          .badge { display: inline-block; background: #fee2e2; color: #b91c1c; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
+          .card { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+          .label { color: #64748b; }
+          .value { font-weight: 600; color: #0f172a; }
+          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
+            <p>Xác nhận hủy vé xe buýt</p>
+          </div>
+          <div class="content">
+            <div style="text-align: center;">
+              <span class="badge">ĐÃ HỦY VÉ THÀNH CÔNG</span>
+            </div>
+            <p>Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+            <p>Yêu cầu hủy vé xe buýt của quý khách đã được hệ thống xử lý thành công. Dưới đây là thông tin chi tiết:</p>
+            <div class="card">
+              <div class="row"><span class="label">Mã vé đã hủy:</span><span class="value" style="color: #dc2626;">${params.ticketCode}</span></div>
+              <div class="row"><span class="label">Mã đơn đặt:</span><span class="value">${params.bookingCode}</span></div>
+              <div class="row"><span class="label">Tuyến xe:</span><span class="value">${params.routeName}</span></div>
+              <div class="row"><span class="label">Giá vé gốc:</span><span class="value">${formattedOriginal} VND</span></div>
+              <div class="row"><span class="label">Phí hủy vé:</span><span class="value" style="color: #b91c1c;">${formattedFee} VND</span></div>
+              <div class="row" style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                <span class="label">Số tiền hoàn lại:</span><span class="value" style="color: #16a34a; font-size: 16px;">${formattedRefund} VND</span>
+              </div>
+            </div>
+            <p style="font-size: 13px; color: #64748b;">Số tiền hoàn lại sẽ được tự động hoàn về tài khoản thanh toán ban đầu của quý khách theo quy định của ngân hàng/cổng thanh toán.</p>
+          </div>
+          <div class="footer">
+            <p>Hệ Thống Quản Lý Vé Xe Buýt Thông Minh ICTU - Tổng đài: 1900 1234</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const record: SentNotificationRecord = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      recipientEmail: params.recipientEmail,
+      subject,
+      ticketCode: params.ticketCode,
+      bookingCode: params.bookingCode,
+      sentAt: new Date(),
+      status: 'sent',
+      htmlPreview: htmlContent,
+    };
+
+    this.sentNotifications.push(record);
+    this.logger.log(`[NotificationService] Đã gửi email xác nhận hủy vé tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
+    return true;
+  }
+
+  /**
+   * Gửi Email xác nhận ĐỔI VÉ thành công kèm vé điện tử mới
+   */
+  async sendTicketExchangeEmail(params: SendTicketExchangeEmailParams): Promise<boolean> {
+    const subject = `[SmartBus ICTU] Xác nhận ĐỔI VÉ XE thành công - Mã vé: ${params.ticketCode}`;
+    const formattedDeparture =
+      params.newDepartureTime instanceof Date
+        ? params.newDepartureTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+        : new Date(params.newDepartureTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const formattedFee = Number(params.exchangeFee).toLocaleString('vi-VN');
+    const formattedDiff = Number(params.priceDifference).toLocaleString('vi-VN');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+          .header { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; padding: 24px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .content { padding: 24px; }
+          .badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
+          .card { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+          .label { color: #64748b; }
+          .value { font-weight: 600; color: #0f172a; }
+          .qr-section { text-align: center; padding: 20px 0; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+          .qr-image { width: 220px; height: 220px; display: block; margin: 0 auto 12px auto; }
+          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
+            <p>Xác nhận Đổi Vé Xe Buýt Thành Công</p>
+          </div>
+          <div class="content">
+            <div style="text-align: center;">
+              <span class="badge">ĐỔI VÉ THÀNH CÔNG</span>
+            </div>
+            <p>Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+            <p>Yêu cầu đổi chuyến của quý khách đã hoàn tất. Thông tin chuyến xe mới của quý khách như sau:</p>
+            <div class="card">
+              <div class="row"><span class="label">Mã vé:</span><span class="value" style="color: #0284c7;">${params.ticketCode}</span></div>
+              <div class="row"><span class="label">Mã đơn đặt:</span><span class="value">${params.bookingCode}</span></div>
+              <div class="row"><span class="label">Tuyến xe mới:</span><span class="value">${params.newRouteName}</span></div>
+              ${params.newOrigin && params.newDestination ? `<div class="row"><span class="label">Lộ trình:</span><span class="value">${params.newOrigin} ➔ ${params.newDestination}</span></div>` : ''}
+              <div class="row"><span class="label">Thời gian xuất bến mới:</span><span class="value">${formattedDeparture}</span></div>
+              <div class="row"><span class="label">Số ghế mới:</span><span class="value" style="font-size: 16px; color: #0284c7;">${params.newSeatNumber}</span></div>
+              ${params.newVehiclePlate ? `<div class="row"><span class="label">Biển số xe:</span><span class="value">${params.newVehiclePlate}</span></div>` : ''}
+              <div class="row"><span class="label">Phí đổi vé:</span><span class="value">${formattedFee} VND</span></div>
+              <div class="row"><span class="label">Chênh lệch đã xử lý:</span><span class="value">${formattedDiff} VND</span></div>
+            </div>
+
+            <div class="qr-section">
+              <img class="qr-image" src="${params.qrDataUrl}" alt="Mã QR Vé Mới" />
+              <div style="font-size: 13px; color: #64748b;">Mã QR cũ đã vô hiệu. Vui lòng sử dụng mã QR mới này khi lên xe.</div>
+            </div>
+          </div>
+          <div class="footer">
+            <p>Hệ Thống Quản Lý Vé Xe Buýt Thông Minh ICTU - Tổng đài: 1900 1234</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const record: SentNotificationRecord = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      recipientEmail: params.recipientEmail,
+      subject,
+      ticketCode: params.ticketCode,
+      bookingCode: params.bookingCode,
+      sentAt: new Date(),
+      status: 'sent',
+      htmlPreview: htmlContent,
+    };
+
+    this.sentNotifications.push(record);
+    this.logger.log(`[NotificationService] Đã gửi email đổi vé mới thành công tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
     return true;
   }
 
