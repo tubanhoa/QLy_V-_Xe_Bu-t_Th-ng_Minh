@@ -96,10 +96,43 @@ export function SeatPickerModal({
   const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'zalopay' | 'bank_card' | 'vietqr' | 'ictupay'>('vnpay')
   const [paymentResponse, setPaymentResponse] = useState<PaymentUrlResponseData | null>(null)
   const [isCancellingPayment, setIsCancellingPayment] = useState(false)
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
+  const [paymentNotice, setPaymentNotice] = useState<{ type: 'error' | 'warning' | 'info'; text: string } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [voucherResult, setVoucherResult] = useState<VoucherValidationResult | null>(null)
+
+  // Tự động polling đối soát trạng thái giao dịch định kỳ khi đang mở QR thanh toán
+  useEffect(() => {
+    if (step !== 'payment-qr' || !bookingResult?.id) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await paymentService.checkPaymentStatus(bookingResult.id)
+        if (res.success && res.data) {
+          if (res.data.status === 'PAID') {
+            clearInterval(interval)
+            setBookingResult((prev) => (prev ? { ...prev, paymentStatus: 'PAID' } : prev))
+            setStep('success')
+          } else if (res.data.status === 'CANCELLED') {
+            clearInterval(interval)
+            setPaymentNotice({
+              type: 'error',
+              text: 'Đơn đặt vé đã bị hủy trên cổng thanh toán. Ghế của bạn đang được giải phóng.',
+            })
+            setTimeout(() => {
+              handleCancelPayment()
+            }, 1800)
+          }
+        }
+      } catch (e) {
+        // Silent poll warn
+      }
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [step, bookingResult?.id])
 
   // Tích hợp Hook Realtime Seat Locking & Anti-Race-Condition
   const {
@@ -173,9 +206,10 @@ export function SeatPickerModal({
   // Hủy thanh toán chủ động của hành khách để giải phóng ghế ngay lập tức (PR #21)
   const handleCancelPayment = async () => {
     setIsCancellingPayment(true)
+    setPaymentNotice(null)
     try {
       if (bookingResult?.id) {
-        await paymentService.cancelPayment(bookingResult.id)
+        await paymentService.cancelPayment(bookingResult.id).catch(() => {})
       }
       await releaseAllHeldSeats()
       setPaymentResponse(null)
@@ -190,6 +224,66 @@ export function SeatPickerModal({
     }
   }
 
+  // Đối soát trạng thái thanh toán thực tế với Backend trước khi cấp vé thành công
+  // Ngăn chặn tuyệt đối việc người dùng hủy thanh toán nhưng hệ thống vẫn xuất vé PAID
+  const handleVerifyPayment = async () => {
+    if (!bookingResult?.id) {
+      setPaymentNotice({
+        type: 'error',
+        text: 'Không tìm thấy mã đơn đặt vé để kiểm tra giao dịch.',
+      })
+      return
+    }
+
+    setIsVerifyingPayment(true)
+    setPaymentNotice(null)
+
+    try {
+      const statusRes = await paymentService.checkPaymentStatus(bookingResult.id)
+      if (statusRes.success && statusRes.data) {
+        const { status } = statusRes.data
+        if (status === 'PAID') {
+          // Giao dịch đã được cổng thanh toán xác nhận thành công
+          setBookingResult((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              paymentStatus: 'PAID',
+              tickets: prev.tickets.map((t) => ({ ...t, status: 'PAID' })),
+            }
+          })
+          setStep('success')
+          return
+        }
+
+        if (status === 'CANCELLED') {
+          // Giao dịch đã bị hủy hoặc cổng thanh toán báo FAILED
+          setPaymentNotice({
+            type: 'error',
+            text: 'Giao dịch thanh toán đã bị hủy. Hệ thống không xuất vé và ghế đã được giải phóng.',
+          })
+          setTimeout(() => {
+            handleCancelPayment()
+          }, 1800)
+          return
+        }
+      }
+
+      // Trường hợp PENDING: Cổng thanh toán chưa ghi nhận tiền
+      setPaymentNotice({
+        type: 'warning',
+        text: 'Hệ thống chưa nhận được xác nhận thanh toán từ ngân hàng / ví điện tử. Vui lòng hoàn tất quét mã QR chuyển khoản hoặc thử lại sau vài giây.',
+      })
+    } catch (err: any) {
+      setPaymentNotice({
+        type: 'error',
+        text: err?.message || 'Không thể kiểm tra trạng thái thanh toán. Vui lòng thử lại.',
+      })
+    } finally {
+      setIsVerifyingPayment(false)
+    }
+  }
+
   // Xử lý chốt đặt vé & khởi tạo thanh toán đa cổng (POST /api/v1/booking/create + POST /api/v1/payment/create-url)
   const handleConfirmBooking = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -197,6 +291,7 @@ export function SeatPickerModal({
 
     setIsSubmitting(true)
     setSubmitError(null)
+    setPaymentNotice(null)
 
     try {
       let bookingData: BookingResultData | null = null
@@ -222,7 +317,7 @@ export function SeatPickerModal({
           return
         }
       } else {
-        // Mock hoàn tất khi mở chế độ demo trực tiếp
+        // Mock hoàn tất khi mở chế độ demo trực tiếp: vé ban đầu ở trạng thái PENDING, KHÔNG PHẢI PAID
         bookingData = {
           id: `bkg-${Date.now()}`,
           bookingCode: `ICTU-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -237,7 +332,7 @@ export function SeatPickerModal({
             passengerName: passengerName.trim() || 'Hành khách',
             passengerPhone: phone.trim() || undefined,
             price: effectivePrice,
-            status: 'VALID',
+            status: paymentMethod === 'ictupay' ? 'PAID' : 'PENDING',
             qrCodeData: `ICTU-PASS:${routeCode}-${s.seatNumber}-${user?.studentId || 'SV'}`,
           })),
         }
@@ -686,8 +781,9 @@ export function SeatPickerModal({
           /* ===================================================================
               STEP 2.5: CỔNG THANH TOÁN ĐA PHƯƠNG THỨC · QR CODE TỨC THÌ (Base64)
               Đồng bộ với PR #21 Backend: MoMo, VNPay, ZaloPay, Thẻ ATM/Visa, VietQR
+              Khắc phục dứt điểm lỗi tràn trục dọc bị mất nửa trên mã QR (Flexbox overflow)
               =================================================================== */
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="flex-1 overflow-y-auto px-4 py-5 sm:p-6 flex flex-col items-center justify-start text-center space-y-3.5 my-auto">
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100/90 border border-emerald-300 px-3.5 py-1 text-xs font-black text-[#005A36]">
                 <Clock size={13} className="animate-spin text-[#005A36]" />
@@ -695,7 +791,7 @@ export function SeatPickerModal({
                   Đang giữ chỗ an toàn · Còn lại {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')}
                 </span>
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1">
                 Quét Mã QR Để Hoàn Tất Thanh Toán
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
@@ -715,14 +811,43 @@ export function SeatPickerModal({
               </p>
             </div>
 
+            {/* Thông báo đối soát / lỗi thanh toán (nếu có) */}
+            {paymentNotice && (
+              <div
+                className={cn(
+                  'w-full max-w-sm p-3 rounded-2xl text-xs font-bold text-left flex items-start gap-2 animate-in fade-in slide-in-from-top-1 shadow-sm',
+                  paymentNotice.type === 'error'
+                    ? 'bg-rose-50 border border-rose-300 text-rose-800'
+                    : paymentNotice.type === 'warning'
+                    ? 'bg-amber-50 border border-amber-300 text-amber-900'
+                    : 'bg-emerald-50 border border-emerald-300 text-[#005A36]',
+                )}
+              >
+                {paymentNotice.type === 'error' ? (
+                  <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                ) : paymentNotice.type === 'warning' ? (
+                  <Clock size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 leading-snug">{paymentNotice.text}</div>
+              </div>
+            )}
+
             {/* Khung mã QR Code Base64 từ Backend hoặc SVG fallback */}
-            <div className="w-full max-w-sm rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50 p-5 space-y-3.5 shadow-lg relative overflow-hidden">
-              <div className="bg-white p-3 rounded-2xl border border-emerald-200/80 shadow-md flex items-center justify-center mx-auto w-fit">
+            <div className="w-full max-w-sm rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50 p-4 sm:p-5 space-y-3 shadow-lg relative overflow-hidden shrink-0">
+              {/* 4 góc ngắm quét Finder Corners */}
+              <div className="absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t-2 border-l-2 border-[#005A36] rounded-tl-sm pointer-events-none" />
+              <div className="absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t-2 border-r-2 border-[#005A36] rounded-tr-sm pointer-events-none" />
+              <div className="absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b-2 border-l-2 border-[#005A36] rounded-bl-sm pointer-events-none" />
+              <div className="absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b-2 border-r-2 border-[#005A36] rounded-br-sm pointer-events-none" />
+
+              <div className="bg-white p-3 rounded-2xl border border-emerald-200/80 shadow-md flex items-center justify-center mx-auto w-fit shrink-0">
                 {paymentResponse?.qrDataUrl ? (
                   <img
                     src={paymentResponse.qrDataUrl}
                     alt="Mã QR thanh toán"
-                    className="size-48 object-contain rounded-xl"
+                    className="w-36 h-36 sm:w-40 sm:h-40 object-contain rounded-xl shrink-0"
                   />
                 ) : (
                   <QRCodeSVG
@@ -731,7 +856,7 @@ export function SeatPickerModal({
                       paymentResponse?.paymentUrl ||
                       `ICTU-PAY:${bookingResult?.bookingCode || 'DEMO'}`
                     }
-                    size={180}
+                    size={148}
                     level="H"
                     includeMargin={true}
                   />
@@ -766,7 +891,7 @@ export function SeatPickerModal({
             </div>
 
             {/* Các nút hành động */}
-            <div className="flex flex-col gap-2 w-full max-w-sm pt-1">
+            <div className="flex flex-col gap-2 w-full max-w-sm pt-0.5">
               {paymentResponse?.paymentUrl && (
                 <a
                   href={paymentResponse.paymentUrl}
@@ -781,18 +906,28 @@ export function SeatPickerModal({
 
               <button
                 type="button"
-                onClick={() => setStep('success')}
-                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                disabled={isVerifyingPayment}
+                onClick={handleVerifyPayment}
+                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
               >
-                <CheckCircle2 size={15} />
-                <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                {isVerifyingPayment ? (
+                  <>
+                    <span className="size-3.5 rounded-full border-2 border-[#005A36] border-t-transparent animate-spin" />
+                    <span>Đang đối soát giao dịch...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={15} />
+                    <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
                 disabled={isCancellingPayment}
                 onClick={handleCancelPayment}
-                className="w-full rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
               >
                 {isCancellingPayment ? (
                   <>
@@ -812,7 +947,7 @@ export function SeatPickerModal({
           /* ===================================================================
               STEP 3: THÀNH CÔNG · MÃ VÉ ĐIỆN TỬ & QR LÊN XE THỰC TẾ
               =================================================================== */
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="flex-1 overflow-y-auto px-4 py-6 sm:p-6 flex flex-col items-center justify-start text-center space-y-4 my-auto">
             <div className="size-14 rounded-3xl bg-emerald-100 text-[#005A36] flex items-center justify-center shadow-md animate-in zoom-in-75">
               <CheckCircle2 size={32} />
             </div>

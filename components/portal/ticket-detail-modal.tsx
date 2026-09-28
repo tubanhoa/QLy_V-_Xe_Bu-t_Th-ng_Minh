@@ -50,9 +50,13 @@ import type { TicketDetail } from '@/lib/types/ticket'
 import {
   TICKET_STATUS_COLOR,
   TICKET_STATUS_LABEL,
+  normalizeTicketStatus,
+  getTicketStatusColor,
+  getTicketStatusLabel,
 } from '@/lib/types/ticket'
 import { ExchangeTicketModal } from './exchange-ticket-modal'
 import { FeedbackModal } from './feedback-modal'
+import { cn } from '@/lib/utils'
 
 interface TicketDetailModalProps {
   ticketId: string | null
@@ -149,7 +153,10 @@ export function TicketDetailModal({
     setLoading(false)
 
     if (result.success && result.data) {
-      setTicket(result.data)
+      setTicket({
+        ...result.data,
+        status: normalizeTicketStatus(result.data.status),
+      })
       if (result.message && result.message.includes('Ngoại tuyến')) {
         setIsOffline(true)
       }
@@ -157,7 +164,10 @@ export function TicketDetailModal({
       // Cố gắng tìm thêm trong cache
       const cached = offlineTicketCache.getTicket(ticketId)
       if (cached) {
-        setTicket(cached)
+        setTicket({
+          ...cached,
+          status: normalizeTicketStatus(cached.status),
+        })
         setIsOffline(true)
       } else {
         setError(result.message || 'Không thể tải chi tiết vé')
@@ -242,7 +252,8 @@ export function TicketDetailModal({
 
   const canCancel =
     ticket &&
-    (ticket.status === 'PAID' || ticket.status === 'RESERVED') &&
+    (normalizeTicketStatus(ticket.status) === 'PAID' ||
+      normalizeTicketStatus(ticket.status) === 'RESERVED') &&
     new Date(ticket.departureTime).getTime() - Date.now() >= 2 * 60 * 60 * 1000
 
   const formatDate = (iso: string) =>
@@ -399,7 +410,9 @@ export function TicketDetailModal({
                 {/* 2. KHỐI THẺ VÉ VÀ MÃ QR CHỐNG LÀM GIẢ */}
                 <div
                   className={`relative rounded-3xl border-2 transition-all p-5 sm:p-6 text-center overflow-hidden ${
-                    isHighBrightness
+                    normalizeTicketStatus(ticket.status) === 'CANCELLED'
+                      ? 'border-rose-300 bg-rose-50/20'
+                      : isHighBrightness
                       ? 'border-emerald-400 bg-white shadow-xl ring-4 ring-emerald-500/10'
                       : 'border-dashed border-emerald-200 bg-emerald-50/30 shadow-xs'
                   }`}
@@ -413,8 +426,10 @@ export function TicketDetailModal({
                   {/* Tia laser quét nhẹ nhàng (Scanner Sweep Effect) */}
                   <div className="relative inline-block mx-auto mb-3">
                     <div
-                      className={`p-3.5 rounded-2xl border transition-all ${
-                        isHighBrightness
+                      className={`p-3.5 rounded-2xl border transition-all relative ${
+                        normalizeTicketStatus(ticket.status) === 'CANCELLED'
+                          ? 'bg-slate-50 border-rose-200 opacity-60'
+                          : isHighBrightness
                           ? 'bg-white border-slate-900/10 shadow-lg'
                           : 'bg-white border-emerald-100 shadow-xs'
                       }`}
@@ -439,13 +454,26 @@ export function TicketDetailModal({
                           />
                         </div>
                       )}
+
+                      {/* Watermark khi vé đã bị hủy */}
+                      {normalizeTicketStatus(ticket.status) === 'CANCELLED' && (
+                        <div className="absolute inset-0 bg-rose-950/75 backdrop-blur-[1px] rounded-2xl flex flex-col items-center justify-center text-white p-3 z-10 animate-in fade-in">
+                          <Ban size={36} className="text-rose-400 mb-1" />
+                          <span className="text-sm font-black tracking-wider uppercase text-rose-200">
+                            VÉ ĐÃ BỊ HỦY
+                          </span>
+                          <span className="text-[10px] text-rose-300 mt-0.5">Không còn hiệu lực quét cổng</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Laser Scanner sweep line animation */}
-                    <div
-                      className="absolute inset-x-3 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_8px_#10b981] animate-pulse pointer-events-none"
-                      style={{ top: '50%' }}
-                    />
+                    {normalizeTicketStatus(ticket.status) !== 'CANCELLED' && (
+                      <div
+                        className="absolute inset-x-3 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_8px_#10b981] animate-pulse pointer-events-none"
+                        style={{ top: '50%' }}
+                      />
+                    )}
                   </div>
 
                   {/* Thông tin vé dưới mã QR */}
@@ -472,9 +500,15 @@ export function TicketDetailModal({
                   </div>
 
                   {/* Hướng dẫn hành khách quét vé */}
-                  <div className="mt-3.5 rounded-xl bg-emerald-50 border border-emerald-200/90 p-2.5 text-[11px] text-emerald-950 font-medium">
-                    Đưa mã QR trên màn hình lại gần mắt đọc máy quét tự động ở cửa lên xe buýt. Cổng soát vé sẽ tự động mở khi có tiếng bíp xác nhận.
-                  </div>
+                  {normalizeTicketStatus(ticket.status) === 'CANCELLED' ? (
+                    <div className="mt-3.5 rounded-xl bg-rose-50 border border-rose-200/90 p-2.5 text-[11px] text-rose-950 font-bold">
+                      Giao dịch vé này đã bị hủy. Mã QR không còn hiệu lực qua cổng soát vé xe buýt thông minh.
+                    </div>
+                  ) : (
+                    <div className="mt-3.5 rounded-xl bg-emerald-50 border border-emerald-200/90 p-2.5 text-[11px] text-emerald-950 font-medium">
+                      Đưa mã QR trên màn hình lại gần mắt đọc máy quét tự động ở cửa lên xe buýt. Cổng soát vé sẽ tự động mở khi có tiếng bíp xác nhận.
+                    </div>
+                  )}
                 </div>
 
                 {/* 3. THÔNG TIN CHI TIẾT LỘ TRÌNH, GHẾ VÀ XE */}
@@ -503,7 +537,20 @@ export function TicketDetailModal({
                       <span className="text-base font-black text-slate-900 font-mono block mt-0.5">
                         {formatPrice(ticket.price)}
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-bold">Đã thanh toán</span>
+                      <span
+                        className={cn(
+                          'text-[10px] font-bold block',
+                          normalizeTicketStatus(ticket.status) === 'PAID'
+                            ? 'text-emerald-700'
+                            : normalizeTicketStatus(ticket.status) === 'CANCELLED'
+                            ? 'text-rose-700'
+                            : normalizeTicketStatus(ticket.status) === 'CHECKED_IN'
+                            ? 'text-teal-700'
+                            : 'text-amber-700',
+                        )}
+                      >
+                        {getTicketStatusLabel(ticket.status)}
+                      </span>
                     </div>
                   </div>
 

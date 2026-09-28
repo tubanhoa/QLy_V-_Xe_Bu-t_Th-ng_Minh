@@ -27,8 +27,9 @@ import { offlineTicketCache } from '@/lib/services/offline-ticket-cache'
 import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketFilterStatus } from '@/lib/types/ticket'
 import {
-  TICKET_STATUS_COLOR,
-  TICKET_STATUS_LABEL,
+  normalizeTicketStatus,
+  getTicketStatusColor,
+  getTicketStatusLabel,
 } from '@/lib/types/ticket'
 import { TicketDetailModal } from './ticket-detail-modal'
 
@@ -43,19 +44,23 @@ function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): Ti
   const now = Date.now()
   switch (filter) {
     case 'upcoming':
-      return tickets.filter(
-        (t) =>
-          (t.status === 'PAID' || t.status === 'RESERVED' || t.status === 'PENDING') &&
-          new Date(t.departureTime).getTime() > now,
-      )
+      return tickets.filter((t) => {
+        const st = normalizeTicketStatus(t.status)
+        return (
+          (st === 'PAID' || st === 'RESERVED' || st === 'PENDING') &&
+          new Date(t.departureTime).getTime() > now
+        )
+      })
     case 'past':
-      return tickets.filter(
-        (t) =>
-          t.status === 'CHECKED_IN' ||
-          new Date(t.departureTime).getTime() <= now,
-      )
+      return tickets.filter((t) => {
+        const st = normalizeTicketStatus(t.status)
+        return st === 'CHECKED_IN' || new Date(t.departureTime).getTime() <= now
+      })
     case 'cancelled':
-      return tickets.filter((t) => t.status === 'CANCELLED' || t.status === 'EXPIRED')
+      return tickets.filter((t) => {
+        const st = normalizeTicketStatus(t.status)
+        return st === 'CANCELLED' || st === 'EXPIRED'
+      })
     default:
       return tickets
   }
@@ -67,7 +72,8 @@ interface TicketCardProps {
 }
 
 function TicketCard({ ticket, onClick }: TicketCardProps) {
-  const statusColor = TICKET_STATUS_COLOR[ticket.status] ?? TICKET_STATUS_COLOR['PENDING']
+  const statusColor = getTicketStatusColor(ticket.status)
+  const statusLabel = getTicketStatusLabel(ticket.status)
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('vi-VN', {
@@ -102,7 +108,7 @@ function TicketCard({ ticket, onClick }: TicketCardProps) {
         </div>
 
         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
-          {TICKET_STATUS_LABEL[ticket.status]}
+          {statusLabel}
         </span>
       </div>
 
