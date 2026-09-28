@@ -324,7 +324,7 @@ export function SeatPickerModal({
           totalAmount: totalStandardPrice,
           discountAmount: totalSavings + voucherDiscount,
           finalAmount: finalPrice,
-          paymentStatus: paymentMethod === 'ictupay' ? 'PAID' : 'PENDING',
+          paymentStatus: paymentMethod === 'ictupay' ? 'RESERVED' : 'PENDING',
           tickets: selectedSeats.map((s) => ({
             id: `tkt-${s.seatNumber}`,
             ticketCode: `TK-2026-${s.seatNumber}`,
@@ -332,7 +332,7 @@ export function SeatPickerModal({
             passengerName: passengerName.trim() || 'Hành khách',
             passengerPhone: phone.trim() || undefined,
             price: effectivePrice,
-            status: paymentMethod === 'ictupay' ? 'PAID' : 'PENDING',
+            status: paymentMethod === 'ictupay' ? 'RESERVED' : 'PENDING',
             qrCodeData: `ICTU-PASS:${routeCode}-${s.seatNumber}-${user?.studentId || 'SV'}`,
           })),
         }
@@ -953,15 +953,27 @@ export function SeatPickerModal({
             </div>
 
             <div className="space-y-1">
-              <span className="rounded-full bg-emerald-100 text-[#005A36] px-3 py-1 text-xs font-black uppercase tracking-wider">
-                ĐẶT CHỖ THÀNH CÔNG
+              <span
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-black uppercase tracking-wider',
+                  paymentMethod === 'ictupay'
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                    : 'bg-emerald-100 text-[#005A36]',
+                )}
+              >
+                {paymentMethod === 'ictupay'
+                  ? 'GIỮ CHỖ THÀNH CÔNG · THANH TOÁN TẠI XE'
+                  : 'THANH TOÁN THÀNH CÔNG'}
               </span>
               <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
-                Vé Điện Tử Đã Sẵn Sàng Lên Xe
+                {paymentMethod === 'ictupay'
+                  ? 'Vé Giữ Chỗ Đã Được Xác Nhận'
+                  : 'Vé Điện Tử Đã Sẵn Sàng Lên Xe'}
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Mã QR đã được đồng bộ vào hệ thống kiểm soát cửa thông minh của xe buýt{' '}
-                <strong className="text-slate-800">{vehiclePlate}</strong>.
+                {paymentMethod === 'ictupay'
+                  ? `Chỗ ngồi đã được khóa trên xe buýt ${vehiclePlate}. Vui lòng thanh toán ${finalPrice.toLocaleString('vi-VN')} đ cho phụ xe khi lên xe.`
+                  : `Mã QR đã được đồng bộ vào hệ thống kiểm soát cửa thông minh của xe buýt ${vehiclePlate}.`}
               </p>
             </div>
 
@@ -995,8 +1007,21 @@ export function SeatPickerModal({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-white border border-emerald-200/80 p-2.5 text-[11px] text-emerald-950 font-medium">
-                Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.
+              <div
+                className={cn(
+                  'rounded-xl border p-2.5 text-[11px] font-medium leading-relaxed',
+                  paymentMethod === 'ictupay'
+                    ? 'bg-amber-50 border-amber-200/90 text-amber-950 text-left'
+                    : 'bg-white border-emerald-200/80 text-emerald-950',
+                )}
+              >
+                {paymentMethod === 'ictupay' ? (
+                  <>
+                    ⚠️ <strong>Lưu ý quan trọng:</strong> Quý khách đã chọn thanh toán bằng <strong>tiền mặt</strong>. Vui lòng xuất trình mã QR này và thanh toán <strong>{finalPrice.toLocaleString('vi-VN')} đ</strong> cho phụ xe trước giờ khởi hành để chuyển trạng thái vé sang Đã thanh toán.
+                  </>
+                ) : (
+                  'Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.'
+                )}
               </div>
             </div>
 
