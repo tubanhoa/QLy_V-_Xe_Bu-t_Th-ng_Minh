@@ -37,7 +37,8 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
         setSeatMap(res.data)
 
         // Tự động nhận diện nếu người dùng đang có ghế đang giữ (isHeldByMe)
-        const myHeld = res.data.seats.filter((s) => s.isHeldByMe)
+        const seats = Array.isArray(res.data?.seats) ? res.data.seats : []
+        const myHeld = seats.filter((s) => s.isHeldByMe)
         if (myHeld.length > 0) {
           setSelectedSeats(myHeld)
           // Tìm thời gian hết hạn sớm nhất
@@ -138,11 +139,11 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
           }
           // Cập nhật trạng thái ghế trên sơ đồ
           setSeatMap((prev) => {
-            if (!prev) return prev
+            if (!prev || !Array.isArray(prev.seats)) return prev
             return {
               ...prev,
-              holdingCount: Math.max(0, prev.holdingCount - 1),
-              availableCount: prev.availableCount + 1,
+              holdingCount: Math.max(0, (prev.holdingCount ?? 1) - 1),
+              availableCount: (prev.availableCount ?? 20) + 1,
               seats: prev.seats.map((s) =>
                 s.seatId === seat.seatId
                   ? { ...s, bookingStatus: 'available', isHeldByMe: false, holdExpiresAt: null }
@@ -170,7 +171,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
 
     // Optimistic UI: Tạm đánh dấu ghế đang được người dùng bấm
     setSeatMap((prev) => {
-      if (!prev) return prev
+      if (!prev || !Array.isArray(prev.seats)) return prev
       return {
         ...prev,
         seats: prev.seats.map((s) =>
@@ -240,7 +241,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
 
         // Hoàn nguyên trạng thái ghế sang "Người khác đang giữ"
         setSeatMap((prev) => {
-          if (!prev) return prev
+          if (!prev || !Array.isArray(prev.seats)) return prev
           return {
             ...prev,
             seats: prev.seats.map((s) =>

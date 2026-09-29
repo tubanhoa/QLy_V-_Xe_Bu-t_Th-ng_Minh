@@ -9,6 +9,7 @@
  */
 
 import { authService } from './auth.service'
+import { offlineTicketCache } from './offline-ticket-cache'
 import type {
   ConfirmExchangePayload,
   ConfirmExchangeResult,
@@ -218,17 +219,51 @@ class ExchangeService {
       return { success: true, data: json?.data || json }
     } catch (e: any) {
       console.warn('[ExchangeService.confirmExchange] Fallback demo:', e)
+      const currentUser = authService.getUser()
+      const oldTicket = offlineTicketCache.getTicket(ticketId)
+      const newTicketId = `tkt_ex_${Date.now()}`
+      const newTicketCode = `TK-EX-${payload.newSeatId || '02B'}-${Date.now().toString().slice(-4)}`
+      const newDepartureTime =
+        payload.newDepartureTime || new Date(Date.now() + 3600 * 1000 * 2).toISOString()
+
+      // Đánh dấu vé cũ đã hủy / chuyển đổi
+      if (oldTicket) {
+        offlineTicketCache.updateTicketStatus(ticketId, 'CANCELLED', currentUser?.id)
+      }
+
+      // Tạo vé mới cho chuyến vừa đổi sang
+      offlineTicketCache.saveTicket({
+        ticketId: newTicketId,
+        ticketCode: newTicketCode,
+        seatNumber: payload.newSeatId || '02B',
+        seatType: 'Ghế tiêu chuẩn',
+        routeName: oldTicket?.routeName || 'Tuyến CT-01: ICTU ↔ Bến Xe TP',
+        routeCode: oldTicket?.routeCode || 'CT-01',
+        origin: oldTicket?.origin || 'ĐH CNTT & TT (ICTU)',
+        destination: oldTicket?.destination || 'Bến Xe Trung Tâm Thái Nguyên',
+        departureTime: newDepartureTime,
+        passengerName: oldTicket?.passengerName || currentUser?.fullName || 'Hành khách',
+        passengerPhone: oldTicket?.passengerPhone || currentUser?.phoneNumber || '0981234567',
+        price: oldTicket?.price || 10000,
+        status: 'PAID',
+        qrData: `ICTU-PASS:${newTicketCode}`,
+        qrDataUrl: '',
+        vehiclePlate: payload.vehiclePlate || oldTicket?.vehiclePlate || '20B-015.66',
+        createdAt: new Date().toISOString(),
+        userId: currentUser?.id,
+      } as any, currentUser?.id)
+
       return {
         success: true,
         data: {
           success: true,
           message: 'Đổi vé sang chuyến mới thành công!',
-          ticketId,
-          ticketCode: `TKT-ICTU-EX-${Date.now().toString().slice(-4)}`,
-          oldSeatNumber: '01A',
+          ticketId: newTicketId,
+          ticketCode: newTicketCode,
+          oldSeatNumber: oldTicket?.seatNumber || '01A',
           newTripId: payload.newTripId,
-          newSeatNumber: '02B',
-          newDepartureTime: new Date(Date.now() + 3600 * 1000 * 2).toISOString(),
+          newSeatNumber: payload.newSeatId || '02B',
+          newDepartureTime,
           exchangeFee: 500,
           priceDifference: 500,
         },

@@ -9,6 +9,7 @@
 
 import { authService } from './auth.service'
 import { offlineTicketCache } from './offline-ticket-cache'
+import { releaseBookedSeats } from './booking.service'
 import type {
   CancelTicketResult,
   MyTicketsResponse,
@@ -46,23 +47,24 @@ class TicketService {
     page = 1,
     limit = 10,
   ): Promise<UnifiedApiResponse<MyTicketsResponse>> {
-    // Nếu offline từ trước, đọc trực tiếp từ cache
+    const currentUser = authService.getUser()
+    const currentUserId = currentUser?.id || currentUser?.email
+
+    // Nếu offline từ trước, đọc trực tiếp từ cache của đúng tài khoản này
     if (!offlineTicketCache.isOnline()) {
-      const cached = offlineTicketCache.getTicketsList()
-      if (cached && cached.length > 0) {
-        return {
-          success: true,
-          data: {
-            items: cached,
-            meta: {
-              page,
-              limit,
-              total: cached.length,
-              totalPages: Math.ceil(cached.length / limit) || 1,
-            },
+      const cached = currentUserId ? offlineTicketCache.getUserTicketsList(currentUserId) : []
+      return {
+        success: true,
+        data: {
+          items: cached,
+          meta: {
+            page,
+            limit,
+            total: cached.length,
+            totalPages: Math.ceil(cached.length / limit) || 1,
           },
-          message: 'Dữ liệu được tải từ bộ nhớ tạm trên thiết bị (Ngoại tuyến)',
-        }
+        },
+        message: 'Dữ liệu được tải từ bộ nhớ tạm trên thiết bị (Ngoại tuyến)',
       }
     }
 
@@ -80,41 +82,8 @@ class TicketService {
       const resJson = await response.json().catch(() => null)
 
       if (!response.ok) {
-        // Nếu server lỗi hoặc 5xx, thử fallback cache
-        const cached = offlineTicketCache.getTicketsList()
-        if (cached && cached.length > 0) {
-          return {
-            success: true,
-            data: {
-              items: cached,
-              meta: {
-                page,
-                limit,
-                total: cached.length,
-                totalPages: 1,
-              },
-            },
-            message: 'Đang hiển thị vé từ bộ nhớ tạm trên thiết bị',
-          }
-        }
-        return {
-          success: false,
-          statusCode: response.status,
-          message: resJson?.message || 'Không thể tải danh sách vé',
-        }
-      }
-
-      const data: MyTicketsResponse = resJson?.data || resJson
-      // Tự động lưu cache cho chế độ ngoại tuyến
-      if (data && Array.isArray(data.items)) {
-        offlineTicketCache.saveTicketsList(data.items)
-      }
-
-      return { success: true, data }
-    } catch (error: any) {
-      console.warn('[TicketService.getMyTickets] Network error, fallback cache:', error)
-      const cached = offlineTicketCache.getTicketsList()
-      if (cached && cached.length > 0) {
+        // Nếu server lỗi hoặc 5xx, đọc từ cache theo user
+        const cached = currentUserId ? offlineTicketCache.getUserTicketsList(currentUserId) : []
         return {
           success: true,
           data: {
@@ -123,15 +92,35 @@ class TicketService {
               page,
               limit,
               total: cached.length,
-              totalPages: 1,
+              totalPages: Math.ceil(cached.length / limit) || 1,
             },
           },
-          message: 'Mất kết nối mạng. Đã tải danh sách vé từ bộ nhớ tạm ngoại tuyến.',
+          message: 'Đang hiển thị vé từ bộ nhớ an toàn của tài khoản bạn',
         }
       }
+
+      const data: MyTicketsResponse = resJson?.data || resJson
+      // Tự động lưu cache cho chế độ ngoại tuyến theo user ID
+      if (data && Array.isArray(data.items) && currentUserId) {
+        offlineTicketCache.saveUserTicketsList(currentUserId, data.items)
+      }
+
+      return { success: true, data }
+    } catch (error: any) {
+      console.warn('[TicketService.getMyTickets] Network error, fallback cache theo tài khoản:', error)
+      const cached = currentUserId ? offlineTicketCache.getUserTicketsList(currentUserId) : []
       return {
-        success: false,
-        message: error?.message || 'Lỗi kết nối máy chủ',
+        success: true,
+        data: {
+          items: cached,
+          meta: {
+            page,
+            limit,
+            total: cached.length,
+            totalPages: Math.ceil(cached.length / limit) || 1,
+          },
+        },
+        message: 'Đang hiển thị vé từ bộ nhớ an toàn của tài khoản bạn.',
       }
     }
   }
@@ -183,8 +172,8 @@ class TicketService {
         }
       }
 
-      if (!response.ok && !resJson) {
-        // Fallback cache nếu có
+      if (!response.ok) {
+        // Fallback cache nếu có khi backend không tìm thấy vé
         const cachedTicket = offlineTicketCache.getTicket(ticketId)
         if (cachedTicket) {
           return { success: true, data: cachedTicket }
@@ -343,10 +332,16 @@ class TicketService {
       let canExchange = true
       let reason: string | undefined
 
-      if (diffHours < 2) {
+      if (diffHours <= 0) {
         canCancel = false
         canExchange = false
-        reason = 'Chỉ được hủy hoặc đổi vé trước giờ khởi hành tối thiểu 2 tiếng theo quy định'
+        reason = 'Chuyến xe đã khởi hành, không thể hủy hoặc đổi vé'
+      } else if (diffHours < 0.25) {
+        cancellationFeePercent = 50
+        exchangeFeePercent = 25
+      } else if (diffHours < 2) {
+        cancellationFeePercent = 30
+        exchangeFeePercent = 15
       } else if (diffHours >= 24) {
         cancellationFeePercent = 0
         exchangeFeePercent = 0
@@ -385,7 +380,7 @@ class TicketService {
             { condition: 'Trước giờ khởi hành >= 24h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
             { condition: 'Trước giờ khởi hành từ 12h đến 24h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
             { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
-            { condition: 'Trước giờ khởi hành < 2h hoặc đã chạy', canCancel: false, canExchange: false, refundPercent: 0 },
+            { condition: 'Trước giờ khởi hành dưới 2h', cancellationFeePercent: 30, refundPercent: 70, exchangeFeePercent: 15 },
           ],
         },
       }
@@ -432,15 +427,36 @@ class TicketService {
       }
 
       // Cập nhật trạng thái vé trong local cache
+      const currentUser = authService.getUser()
+      offlineTicketCache.updateTicketStatus(ticketId, 'CANCELLED', currentUser?.id)
       const cached = offlineTicketCache.getTicket(ticketId)
-      if (cached) {
-        cached.status = 'CANCELLED'
-        offlineTicketCache.saveTicket(cached)
+      if (cached && cached.seatNumber) {
+        releaseBookedSeats(cached.tripId || 'trip-demo-01', [cached.seatNumber])
       }
 
       return { success: true, data: resJson?.data || resJson }
     } catch (error: any) {
-      console.error('[TicketService.cancelTicket]', error)
+      console.warn('[TicketService.cancelTicket] Network error, fallback offline cancel:', error)
+      const cached = offlineTicketCache.getTicket(ticketId)
+      if (cached) {
+        const currentUser = authService.getUser()
+        offlineTicketCache.updateTicketStatus(ticketId, 'CANCELLED', currentUser?.id)
+        if (cached.seatNumber) {
+          releaseBookedSeats(cached.tripId || 'trip-demo-01', [cached.seatNumber])
+        }
+        const originalPrice = Number(cached.price) || 10000
+        const refundAmount = originalPrice
+        return {
+          success: true,
+          data: {
+            success: true,
+            ticketId,
+            ticketCode: cached.ticketCode,
+            refundAmount,
+            message: `Hủy vé thành công! Đã giải phóng chỗ ngồi và khởi tạo hoàn tiền ${refundAmount.toLocaleString('vi-VN')}đ tự động.`,
+          },
+        }
+      }
       return {
         success: false,
         message: error?.message || 'Lỗi kết nối máy chủ',

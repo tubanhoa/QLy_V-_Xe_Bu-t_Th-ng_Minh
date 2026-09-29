@@ -27,11 +27,12 @@ import { offlineTicketCache } from '@/lib/services/offline-ticket-cache'
 import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketFilterStatus } from '@/lib/types/ticket'
 import {
-  normalizeTicketStatus,
-  getTicketStatusColor,
-  getTicketStatusLabel,
+  TICKET_STATUS_COLOR,
+  TICKET_STATUS_LABEL,
 } from '@/lib/types/ticket'
 import { TicketDetailModal } from './ticket-detail-modal'
+import { ExchangeTicketModal } from './exchange-ticket-modal'
+import { CancellationPolicyModal } from './cancellation-policy-modal'
 
 const FILTER_TABS: { key: TicketFilterStatus; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
@@ -44,23 +45,19 @@ function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): Ti
   const now = Date.now()
   switch (filter) {
     case 'upcoming':
-      return tickets.filter((t) => {
-        const st = normalizeTicketStatus(t.status)
-        return (
-          (st === 'PAID' || st === 'RESERVED' || st === 'PENDING') &&
-          new Date(t.departureTime).getTime() > now
-        )
-      })
+      return tickets.filter(
+        (t) =>
+          (t.status === 'PAID' || t.status === 'RESERVED' || t.status === 'PENDING') &&
+          new Date(t.departureTime).getTime() > now - 24 * 3600 * 1000,
+      )
     case 'past':
-      return tickets.filter((t) => {
-        const st = normalizeTicketStatus(t.status)
-        return st === 'CHECKED_IN' || new Date(t.departureTime).getTime() <= now
-      })
+      return tickets.filter(
+        (t) =>
+          t.status === 'CHECKED_IN' ||
+          (t.status !== 'CANCELLED' && t.status !== 'EXPIRED' && new Date(t.departureTime).getTime() <= now - 24 * 3600 * 1000),
+      )
     case 'cancelled':
-      return tickets.filter((t) => {
-        const st = normalizeTicketStatus(t.status)
-        return st === 'CANCELLED' || st === 'EXPIRED'
-      })
+      return tickets.filter((t) => t.status === 'CANCELLED' || t.status === 'EXPIRED')
     default:
       return tickets
   }
@@ -69,11 +66,12 @@ function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): Ti
 interface TicketCardProps {
   ticket: TicketSummary
   onClick: () => void
+  onExchange?: () => void
+  onCancel?: () => void
 }
 
-function TicketCard({ ticket, onClick }: TicketCardProps) {
-  const statusColor = getTicketStatusColor(ticket.status)
-  const statusLabel = getTicketStatusLabel(ticket.status)
+function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) {
+  const statusColor = TICKET_STATUS_COLOR[ticket.status] ?? TICKET_STATUS_COLOR['PENDING']
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('vi-VN', {
@@ -95,7 +93,7 @@ function TicketCard({ ticket, onClick }: TicketCardProps) {
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="flex items-center gap-2">
           <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs">
-            CT-01
+            {ticket.routeCode || ticket.busNumber || 'CT-01'}
           </span>
           <div>
             <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-[#005A36] transition-colors leading-snug">
@@ -108,7 +106,7 @@ function TicketCard({ ticket, onClick }: TicketCardProps) {
         </div>
 
         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
-          {statusLabel}
+          {TICKET_STATUS_LABEL[ticket.status]}
         </span>
       </div>
 
@@ -123,14 +121,40 @@ function TicketCard({ ticket, onClick }: TicketCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+      <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 gap-2 text-xs">
         <span className="font-mono font-black text-sm text-[#005A36]">
           {formatPrice(ticket.price)}
         </span>
-        <div className="inline-flex items-center gap-1 font-bold text-slate-500 group-hover:text-[#005A36] transition-colors text-[11px]">
-          <QrCode size={13} />
-          <span>Xem mã QR</span>
-          <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+        <div className="flex items-center gap-1.5">
+          {(ticket.status === 'PAID' || ticket.status === 'RESERVED' || ticket.status === 'VALID') && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onExchange?.()
+                }}
+                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200 transition-colors cursor-pointer"
+              >
+                Đổi chuyến
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onCancel?.()
+                }}
+                className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] border border-rose-200 transition-colors cursor-pointer"
+              >
+                Hủy vé
+              </button>
+            </>
+          )}
+          <div className="inline-flex items-center gap-1 font-bold text-slate-500 group-hover:text-[#005A36] transition-colors text-[11px] ml-1">
+            <QrCode size={13} />
+            <span>Chi tiết & QR</span>
+            <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
       </div>
     </button>
@@ -144,6 +168,8 @@ export function MyTicketsPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TicketFilterStatus>('all')
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
+  const [cancellingTicket, setCancellingTicket] = useState<TicketSummary | null>(null)
+  const [exchangingTicket, setExchangingTicket] = useState<TicketSummary | null>(null)
   const [isOffline, setIsOffline] = useState(false)
 
   const loadTickets = useCallback(async () => {
@@ -305,6 +331,8 @@ export function MyTicketsPage() {
               key={t.ticketId}
               ticket={t}
               onClick={() => setSelectedTicketId(t.ticketId)}
+              onExchange={() => setExchangingTicket(t)}
+              onCancel={() => setCancellingTicket(t)}
             />
           ))}
         </div>
@@ -316,6 +344,39 @@ export function MyTicketsPage() {
           ticketId={selectedTicketId}
           onClose={() => setSelectedTicketId(null)}
           onCancelled={() => {
+            loadTickets()
+          }}
+        />
+      )}
+
+      {/* Direct Exchange Modal */}
+      {exchangingTicket && (
+        <ExchangeTicketModal
+          ticketId={exchangingTicket.ticketId}
+          ticketCode={exchangingTicket.ticketCode}
+          currentSeatNumber={exchangingTicket.seatNumber}
+          currentDepartureTime={exchangingTicket.departureTime}
+          currentPrice={exchangingTicket.price}
+          routeName={exchangingTicket.routeName}
+          onClose={() => setExchangingTicket(null)}
+          onSuccess={() => {
+            setExchangingTicket(null)
+            loadTickets()
+          }}
+        />
+      )}
+
+      {/* Direct Cancel Modal */}
+      {cancellingTicket && (
+        <CancellationPolicyModal
+          ticketId={cancellingTicket.ticketId}
+          ticketCode={cancellingTicket.ticketCode}
+          seatNumber={cancellingTicket.seatNumber}
+          departureTime={cancellingTicket.departureTime}
+          price={cancellingTicket.price}
+          onClose={() => setCancellingTicket(null)}
+          onSuccess={() => {
+            setCancellingTicket(null)
             loadTickets()
           }}
         />

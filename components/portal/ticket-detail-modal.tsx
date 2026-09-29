@@ -50,13 +50,10 @@ import type { TicketDetail } from '@/lib/types/ticket'
 import {
   TICKET_STATUS_COLOR,
   TICKET_STATUS_LABEL,
-  normalizeTicketStatus,
-  getTicketStatusColor,
-  getTicketStatusLabel,
 } from '@/lib/types/ticket'
 import { ExchangeTicketModal } from './exchange-ticket-modal'
+import { CancellationPolicyModal } from './cancellation-policy-modal'
 import { FeedbackModal } from './feedback-modal'
-import { cn } from '@/lib/utils'
 
 interface TicketDetailModalProps {
   ticketId: string | null
@@ -76,6 +73,7 @@ export function TicketDetailModal({
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelSuccess, setCancelSuccess] = useState(false)
   const [showExchangeModal, setShowExchangeModal] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
 
   // --- Offline State ---
@@ -153,10 +151,7 @@ export function TicketDetailModal({
     setLoading(false)
 
     if (result.success && result.data) {
-      setTicket({
-        ...result.data,
-        status: normalizeTicketStatus(result.data.status),
-      })
+      setTicket(result.data)
       if (result.message && result.message.includes('Ngoại tuyến')) {
         setIsOffline(true)
       }
@@ -164,10 +159,7 @@ export function TicketDetailModal({
       // Cố gắng tìm thêm trong cache
       const cached = offlineTicketCache.getTicket(ticketId)
       if (cached) {
-        setTicket({
-          ...cached,
-          status: normalizeTicketStatus(cached.status),
-        })
+        setTicket(cached)
         setIsOffline(true)
       } else {
         setError(result.message || 'Không thể tải chi tiết vé')
@@ -252,9 +244,7 @@ export function TicketDetailModal({
 
   const canCancel =
     ticket &&
-    (normalizeTicketStatus(ticket.status) === 'PAID' ||
-      normalizeTicketStatus(ticket.status) === 'RESERVED') &&
-    new Date(ticket.departureTime).getTime() - Date.now() >= 2 * 60 * 60 * 1000
+    (ticket.status === 'PAID' || ticket.status === 'RESERVED' || ticket.status === 'VALID')
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString('vi-VN', {
@@ -410,9 +400,7 @@ export function TicketDetailModal({
                 {/* 2. KHỐI THẺ VÉ VÀ MÃ QR CHỐNG LÀM GIẢ */}
                 <div
                   className={`relative rounded-3xl border-2 transition-all p-5 sm:p-6 text-center overflow-hidden ${
-                    normalizeTicketStatus(ticket.status) === 'CANCELLED'
-                      ? 'border-rose-300 bg-rose-50/20'
-                      : isHighBrightness
+                    isHighBrightness
                       ? 'border-emerald-400 bg-white shadow-xl ring-4 ring-emerald-500/10'
                       : 'border-dashed border-emerald-200 bg-emerald-50/30 shadow-xs'
                   }`}
@@ -426,10 +414,8 @@ export function TicketDetailModal({
                   {/* Tia laser quét nhẹ nhàng (Scanner Sweep Effect) */}
                   <div className="relative inline-block mx-auto mb-3">
                     <div
-                      className={`p-3.5 rounded-2xl border transition-all relative ${
-                        normalizeTicketStatus(ticket.status) === 'CANCELLED'
-                          ? 'bg-slate-50 border-rose-200 opacity-60'
-                          : isHighBrightness
+                      className={`p-3.5 rounded-2xl border transition-all ${
+                        isHighBrightness
                           ? 'bg-white border-slate-900/10 shadow-lg'
                           : 'bg-white border-emerald-100 shadow-xs'
                       }`}
@@ -451,29 +437,18 @@ export function TicketDetailModal({
                             includeMargin={true}
                             fgColor="#000000"
                             bgColor="#ffffff"
+                            style={{ width: '176px', height: '176px', display: 'block', aspectRatio: '1/1' }}
+                            className="shrink-0 aspect-square"
                           />
-                        </div>
-                      )}
-
-                      {/* Watermark khi vé đã bị hủy */}
-                      {normalizeTicketStatus(ticket.status) === 'CANCELLED' && (
-                        <div className="absolute inset-0 bg-rose-950/75 backdrop-blur-[1px] rounded-2xl flex flex-col items-center justify-center text-white p-3 z-10 animate-in fade-in">
-                          <Ban size={36} className="text-rose-400 mb-1" />
-                          <span className="text-sm font-black tracking-wider uppercase text-rose-200">
-                            VÉ ĐÃ BỊ HỦY
-                          </span>
-                          <span className="text-[10px] text-rose-300 mt-0.5">Không còn hiệu lực quét cổng</span>
                         </div>
                       )}
                     </div>
 
                     {/* Laser Scanner sweep line animation */}
-                    {normalizeTicketStatus(ticket.status) !== 'CANCELLED' && (
-                      <div
-                        className="absolute inset-x-3 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_8px_#10b981] animate-pulse pointer-events-none"
-                        style={{ top: '50%' }}
-                      />
-                    )}
+                    <div
+                      className="absolute inset-x-3 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_8px_#10b981] animate-pulse pointer-events-none"
+                      style={{ top: '50%' }}
+                    />
                   </div>
 
                   {/* Thông tin vé dưới mã QR */}
@@ -500,15 +475,9 @@ export function TicketDetailModal({
                   </div>
 
                   {/* Hướng dẫn hành khách quét vé */}
-                  {normalizeTicketStatus(ticket.status) === 'CANCELLED' ? (
-                    <div className="mt-3.5 rounded-xl bg-rose-50 border border-rose-200/90 p-2.5 text-[11px] text-rose-950 font-bold">
-                      Giao dịch vé này đã bị hủy. Mã QR không còn hiệu lực qua cổng soát vé xe buýt thông minh.
-                    </div>
-                  ) : (
-                    <div className="mt-3.5 rounded-xl bg-emerald-50 border border-emerald-200/90 p-2.5 text-[11px] text-emerald-950 font-medium">
-                      Đưa mã QR trên màn hình lại gần mắt đọc máy quét tự động ở cửa lên xe buýt. Cổng soát vé sẽ tự động mở khi có tiếng bíp xác nhận.
-                    </div>
-                  )}
+                  <div className="mt-3.5 rounded-xl bg-emerald-50 border border-emerald-200/90 p-2.5 text-[11px] text-emerald-950 font-medium">
+                    Đưa mã QR trên màn hình lại gần mắt đọc máy quét tự động ở cửa lên xe buýt. Cổng soát vé sẽ tự động mở khi có tiếng bíp xác nhận.
+                  </div>
                 </div>
 
                 {/* 3. THÔNG TIN CHI TIẾT LỘ TRÌNH, GHẾ VÀ XE */}
@@ -537,20 +506,7 @@ export function TicketDetailModal({
                       <span className="text-base font-black text-slate-900 font-mono block mt-0.5">
                         {formatPrice(ticket.price)}
                       </span>
-                      <span
-                        className={cn(
-                          'text-[10px] font-bold block',
-                          normalizeTicketStatus(ticket.status) === 'PAID'
-                            ? 'text-emerald-700'
-                            : normalizeTicketStatus(ticket.status) === 'CANCELLED'
-                            ? 'text-rose-700'
-                            : normalizeTicketStatus(ticket.status) === 'CHECKED_IN'
-                            ? 'text-teal-700'
-                            : 'text-amber-700',
-                        )}
-                      >
-                        {getTicketStatusLabel(ticket.status)}
-                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold">Đã thanh toán</span>
                     </div>
                   </div>
 
@@ -707,7 +663,7 @@ export function TicketDetailModal({
                     </Link>
 
                     {/* Exchange ticket button */}
-                    {(ticket.status === 'PAID' || ticket.status === 'RESERVED') && canCancel && (
+                    {(ticket.status === 'PAID' || ticket.status === 'RESERVED' || ticket.status === 'VALID') && (
                       <button
                         type="button"
                         onClick={() => setShowExchangeModal(true)}
@@ -733,15 +689,15 @@ export function TicketDetailModal({
                     )}
 
                     {/* Hủy vé button */}
-                    {canCancel && !cancelConfirm && !cancelSuccess && (
+                    {canCancel && !cancelSuccess && (
                       <button
                         type="button"
-                        onClick={() => setCancelConfirm(true)}
+                        onClick={() => setShowCancelModal(true)}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-black text-rose-700 transition-all cursor-pointer"
                         id={`cancel-ticket-btn-${ticket.ticketId}`}
                       >
                         <Ban className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Hủy vé (&gt; 2 tiếng)</span>
+                        <span>Hủy vé & Hoàn tiền</span>
                       </button>
                     )}
                   </div>
@@ -875,6 +831,24 @@ export function TicketDetailModal({
           onClose={() => setShowExchangeModal(false)}
           onSuccess={() => {
             setShowExchangeModal(false)
+            loadTicket()
+          }}
+        />
+      )}
+
+      {/* Cancellation Policy Modal */}
+      {showCancelModal && ticket && (
+        <CancellationPolicyModal
+          ticketId={ticket.ticketId}
+          ticketCode={ticket.ticketCode}
+          seatNumber={ticket.seatNumber}
+          departureTime={ticket.departureTime}
+          price={ticket.price}
+          onClose={() => setShowCancelModal(false)}
+          onSuccess={() => {
+            setShowCancelModal(false)
+            setTicket((prev) => (prev ? { ...prev, status: 'CANCELLED' } : prev))
+            onCancelled?.(ticket.ticketId)
             loadTicket()
           }}
         />

@@ -77,6 +77,8 @@ export interface HoldExchangeSeatResult {
 export interface ConfirmExchangePayload {
   newTripId: string
   newSeatId: string
+  newDepartureTime?: string
+  vehiclePlate?: string
   paymentMethod?: string
 }
 

@@ -17,10 +17,12 @@ export interface SeatMapData {
   routeName?: string
   departureTime?: string
   vehiclePlate?: string
+  seatCapacity?: number
   totalSeats: number
-  bookedCount: number
-  holdingCount: number
-  availableCount: number
+  bookedCount?: number
+  holdingCount?: number
+  availableCount?: number
+  availableSeatsCount?: number
   seats: SeatItem[]
 }
 
@@ -33,7 +35,11 @@ export interface HoldSeatsResult {
   success: boolean
   lockedSeats: string[]
   failedSeats: string[]
+  holdToken?: string
   expiresAt?: string | number
+  remainingSeconds?: number
+  totalAmount?: number
+  seatsHeld?: string[]
   message?: string
 }
 
@@ -46,12 +52,23 @@ export interface PassengerInfoPayload {
 export interface CreateBookingPayload {
   tripId: string
   passengers: PassengerInfoPayload[]
+  seatIds?: string[]
   voucherCode?: string
   paymentMethod?: string
+  totalAmount?: number
+  originStation?: string
+  destinationStation?: string
+  passengerName?: string
+  passengerPhone?: string
+  departureTime?: string
+  routeCode?: string
+  routeName?: string
+  vehiclePlate?: string
 }
 
 export interface TicketResultItem {
   id: string
+  ticketId?: string
   ticketCode: string
   seatNumber: string
   passengerName: string
@@ -59,14 +76,21 @@ export interface TicketResultItem {
   price: number
   status: string
   qrCodeData?: string
+  qrDataUrl?: string
 }
 
 export interface BookingResultData {
   id: string
+  bookingId?: string
   bookingCode: string
   totalAmount: number
-  discountAmount: number
-  finalAmount: number
+  discountAmount?: number
+  finalAmount?: number
   paymentStatus: string
   tickets: TicketResultItem[]
+  ticketId?: string
+  ticketCode?: string
+  qrCodeUrl?: string
+  qrDataUrl?: string
+  message?: string
 }

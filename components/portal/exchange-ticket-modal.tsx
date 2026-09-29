@@ -188,6 +188,8 @@ export function ExchangeTicketModal({
     const payload = {
       newTripId: selectedTrip.tripId,
       newSeatId: selectedSeat,
+      newDepartureTime: selectedTrip.departureTime,
+      vehiclePlate: selectedTrip.vehiclePlate,
       paymentMethod,
     }
 

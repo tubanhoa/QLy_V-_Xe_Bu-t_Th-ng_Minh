@@ -4,20 +4,26 @@
  * Branch: feature/SBTS-my-tickets-fe
  */
 
-export type TicketStatus = 'PENDING' | 'PAID' | 'RESERVED' | 'CANCELLED' | 'CHECKED_IN' | 'EXPIRED'
+export type TicketStatus = 'PENDING' | 'PAID' | 'VALID' | 'RESERVED' | 'CANCELLED' | 'CHECKED_IN' | 'EXPIRED'
 
 export interface TicketSummary {
   ticketId: string
   ticketCode: string
-  bookingCode: string
+  bookingCode?: string
   passengerName: string
   seatNumber: string
   status: TicketStatus
   price: number
   routeName: string
   departureTime: string
-  createdAt: string
+  createdAt?: string
   tripId?: string
+  origin?: string
+  destination?: string
+  vehiclePlate?: string
+  routeCode?: string
+  busNumber?: string
+  checkedInAt?: string | null
 }
 
 export interface TicketDetail extends TicketSummary {
@@ -60,24 +66,10 @@ export interface CancelTicketResult {
 
 export type TicketFilterStatus = 'all' | 'upcoming' | 'past' | 'cancelled'
 
-/**
- * Chuẩn hóa trạng thái vé từ Backend (thường là lowercase như 'cancelled', 'paid', 'reserved')
- * hoặc Frontend (uppercase 'CANCELLED', 'PAID') về enum chuẩn TicketStatus
- */
-export function normalizeTicketStatus(rawStatus?: string | null): TicketStatus {
-  if (!rawStatus) return 'PENDING'
-  const upper = String(rawStatus).toUpperCase().trim()
-  if (upper === 'PAID') return 'PAID'
-  if (upper === 'CANCELLED' || upper === 'CANCELED') return 'CANCELLED'
-  if (upper === 'CHECKED_IN' || upper === 'CHECKEDIN') return 'CHECKED_IN'
-  if (upper === 'EXPIRED') return 'EXPIRED'
-  if (upper === 'RESERVED') return 'RESERVED'
-  return 'PENDING'
-}
-
 export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
   PENDING: 'Chờ thanh toán',
   PAID: 'Đã thanh toán',
+  VALID: 'Vé hợp lệ',
   RESERVED: 'Đã đặt chỗ',
   CANCELLED: 'Đã hủy',
   CHECKED_IN: 'Đã check-in',
@@ -91,6 +83,11 @@ export const TICKET_STATUS_COLOR: Record<TicketStatus, { bg: string; text: strin
     border: 'border-amber-300',
   },
   PAID: {
+    bg: 'bg-emerald-100',
+    text: 'text-emerald-800',
+    border: 'border-emerald-300',
+  },
+  VALID: {
     bg: 'bg-emerald-100',
     text: 'text-emerald-800',
     border: 'border-emerald-300',
@@ -116,20 +113,3 @@ export const TICKET_STATUS_COLOR: Record<TicketStatus, { bg: string; text: strin
     border: 'border-slate-300',
   },
 }
-
-/**
- * Lấy nhãn hiển thị trạng thái vé an toàn tuyệt đối (hỗ trợ cả lowercase/uppercase)
- */
-export function getTicketStatusLabel(status?: string | null): string {
-  const normalized = normalizeTicketStatus(status)
-  return TICKET_STATUS_LABEL[normalized] || 'Chờ thanh toán'
-}
-
-/**
- * Lấy màu sắc nhãn trạng thái vé an toàn tuyệt đối
- */
-export function getTicketStatusColor(status?: string | null): { bg: string; text: string; border: string } {
-  const normalized = normalizeTicketStatus(status)
-  return TICKET_STATUS_COLOR[normalized] || TICKET_STATUS_COLOR.PENDING
-}
-

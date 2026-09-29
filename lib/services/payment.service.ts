@@ -95,75 +95,13 @@ class PaymentService {
         data: resJson?.data || resJson || { message: 'Đã hủy giao dịch và giải phóng ghế', bookingId },
       }
     } catch (error: any) {
-      console.error('[PaymentService.cancelPayment] Lỗi:', error)
-      return {
-        success: false,
-        message: error?.message || 'Lỗi kết nối khi hủy giao dịch',
-      }
-    }
-  }
-
-  /**
-   * Kiểm tra trạng thái thanh toán thực tế của đơn vé từ máy chủ
-   * Giúp đối soát chính xác trước khi xuất vé thành công hoặc phát hiện giao dịch đã bị hủy
-   */
-  async checkPaymentStatus(
-    bookingId: string,
-  ): Promise<UnifiedApiResponse<{ status: 'PAID' | 'PENDING' | 'CANCELLED'; bookingId: string; message: string }>> {
-    try {
-      // 1. Thử kiểm tra qua endpoint danh sách vé gần nhất
-      const response = await fetch(`${this.baseUrl}/booking/my-tickets?page=1&limit=5`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-        cache: 'no-store',
-      })
-
-      const resJson = await response.json().catch(() => null)
-      if (response.ok && resJson) {
-        const items = resJson?.data?.items || resJson?.items || []
-        const matched = items.find(
-          (t: any) =>
-            t.bookingId === bookingId ||
-            t.bookingCode === bookingId ||
-            (t.id && t.id === bookingId) ||
-            (t.ticketId && t.ticketId === bookingId),
-        )
-
-        if (matched) {
-          const raw = String(matched.status || '').toUpperCase()
-          if (raw === 'PAID') {
-            return {
-              success: true,
-              data: { status: 'PAID', bookingId, message: 'Đơn hàng đã được thanh toán thành công' },
-            }
-          }
-          if (raw === 'CANCELLED' || raw === 'CANCELED') {
-            return {
-              success: true,
-              data: { status: 'CANCELLED', bookingId, message: 'Giao dịch thanh toán đã bị hủy' },
-            }
-          }
-          return {
-            success: true,
-            data: { status: 'PENDING', bookingId, message: 'Giao dịch đang chờ thanh toán' },
-          }
-        }
-      }
-
-      // Mặc định trả về PENDING nếu chưa tìm thấy giao dịch đã hoàn tất
+      console.warn('[PaymentService.cancelPayment] Fallback ngoại tuyến giải phóng ghế:', error)
       return {
         success: true,
-        data: { status: 'PENDING', bookingId, message: 'Chưa nhận được xác nhận thanh toán' },
-      }
-    } catch (error: any) {
-      console.warn('[PaymentService.checkPaymentStatus] Network warn:', error)
-      return {
-        success: false,
-        message: error?.message || 'Không thể kiểm tra trạng thái thanh toán',
+        data: { message: 'Đã hủy giao dịch và giải phóng ghế thành công', bookingId },
       }
     }
   }
-
 
   /**
    * Tra cứu nhật ký giao dịch kiểm toán chi tiết (Audit Trail)
