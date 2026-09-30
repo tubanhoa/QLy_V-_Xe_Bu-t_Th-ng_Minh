@@ -6,12 +6,14 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
   const url = process.env.DATABASE_URL;
 
   if (url) {
+    const isCloud = url.includes('supabase') || url.includes('neon') || url.includes('pooler') || url.includes('sslmode=require');
     return {
       type: 'postgres',
       url,
       entities: ALL_ENTITIES,
       synchronize: !isProduction,
       logging: !isProduction,
+      ssl: isCloud ? { rejectUnauthorized: false } : undefined,
     };
   }
 
