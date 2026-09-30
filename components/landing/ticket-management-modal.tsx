@@ -46,10 +46,12 @@ import {
   X,
   Sparkles,
   Zap,
+  FileText,
 } from 'lucide-react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
 import { ticketService } from '@/lib/services/ticket.service'
+import { invoiceService } from '@/lib/services/invoice.service'
 import { offlineTicketCache } from '@/lib/services/offline-ticket-cache'
 import { downloadTicketAsImage, printTicketAsPdf } from '@/lib/utils/ticket-export'
 import { useAuth } from '@/lib/auth-context'
@@ -58,6 +60,7 @@ import { TICKET_STATUS_COLOR, TICKET_STATUS_LABEL } from '@/lib/types/ticket'
 import { ExchangeTicketModal } from '@/components/portal/exchange-ticket-modal'
 import { CancellationPolicyModal } from '@/components/portal/cancellation-policy-modal'
 import { FeedbackModal } from '@/components/portal/feedback-modal'
+import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
 import { cn } from '@/lib/utils'
 
 interface TicketManagementModalProps {
@@ -112,13 +115,30 @@ export function TicketManagementModal({
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailNotice, setEmailNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Sub-modals Đổi vé, Hủy vé & Đánh giá
+  // Sub-modals Đổi vé, Hủy vé, Đánh giá & Hóa đơn điện tử
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelSuccess, setCancelSuccess] = useState(false)
+
+  // --- E-Invoice Modal & PDF Download ---
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false)
+  const [isDownloadingInvoicePdf, setIsDownloadingInvoicePdf] = useState(false)
+
+  const handleDownloadInvoicePdf = async () => {
+    const code = ticketDetail?.bookingCode || ticketDetail?.ticketCode
+    if (!code) return
+    setIsDownloadingInvoicePdf(true)
+    try {
+      await invoiceService.downloadPdfByBookingCode(code)
+    } catch (err) {
+      console.error('Lỗi khi tải hóa đơn:', err)
+    } finally {
+      setIsDownloadingInvoicePdf(false)
+    }
+  }
 
   // 1. Kiểm tra trạng thái mạng
   useEffect(() => {
@@ -960,6 +980,53 @@ export function TicketManagementModal({
                       )}
                     </div>
 
+                    {/* Hóa đơn điện tử VAT 8% */}
+                    <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/60 via-white to-slate-50 p-3.5 space-y-2.5 text-xs no-print shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="size-6 rounded-lg bg-[#005A36] text-white flex items-center justify-center shadow-xs">
+                            <FileText size={13} />
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-slate-900 block leading-tight">
+                              Hóa đơn điện tử (E-Invoice)
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              Thuế suất GTGT 8% · Ký số ICTU CA
+                            </span>
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-[#005A36]">
+                          Đã phát hành
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowInvoicePreview(true)}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold hover:border-[#005A36] hover:text-[#005A36] transition-all cursor-pointer shadow-2xs"
+                        >
+                          <FileText size={13} className="text-[#005A36]" />
+                          <span>Xem chi tiết hóa đơn</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isDownloadingInvoicePdf}
+                          onClick={handleDownloadInvoicePdf}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                        >
+                          {isDownloadingInvoicePdf ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Download size={13} />
+                          )}
+                          <span>Tải hóa đơn (PDF)</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Các hành động tiện ích khác */}
                     <div className="space-y-2 pt-1 no-print">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1302,6 +1369,13 @@ export function TicketManagementModal({
           onClose={() => setShowFeedbackModal(false)}
         />
       )}
+
+      {/* Invoice Preview Modal */}
+      <InvoicePreviewModal
+        open={showInvoicePreview}
+        onClose={() => setShowInvoicePreview(false)}
+        bookingCode={ticketDetail?.bookingCode || ticketDetail?.ticketCode}
+      />
 
       {/* CSS In ấn trực tiếp */}
       <style jsx global>{`

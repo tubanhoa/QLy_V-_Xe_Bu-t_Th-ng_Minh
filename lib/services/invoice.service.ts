@@ -64,6 +64,46 @@ class InvoiceService {
   }
 
   /**
+   * Lấy thông tin hóa đơn điện tử theo ID hóa đơn
+   * GET /api/v1/invoices/:id
+   */
+  async getInvoiceById(
+    id: string,
+  ): Promise<UnifiedApiResponse<InvoiceData>> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/invoices/${encodeURIComponent(id)}`,
+        {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+          cache: 'no-store',
+        },
+      )
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không tìm thấy hóa đơn điện tử',
+        }
+      }
+
+      const data: InvoiceData = resJson?.data || resJson
+      return {
+        success: true,
+        data,
+      }
+    } catch (error: any) {
+      console.warn('[InvoiceService.getInvoiceById] Network error:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi tải hóa đơn',
+      }
+    }
+  }
+
+  /**
    * Tải tệp PDF hóa đơn điện tử về máy người dùng
    * GET /api/v1/invoices/booking/:bookingCode/pdf
    */
