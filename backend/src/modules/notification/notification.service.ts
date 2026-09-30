@@ -1,4 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
+import nodemailer, { type Transporter } from 'nodemailer';
+
+export interface EmailAttachment {
+  filename: string;
+  content?: Buffer | string;
+  path?: string;
+  contentType?: string;
+}
+
+export interface SendMailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  attachments?: EmailAttachment[];
+}
+
+export interface SendInvoiceEmailParams {
+  recipientEmail: string;
+  passengerName: string;
+  invoiceNumber: string;
+  bookingCode: string;
+  routeName: string;
+  totalAmount: number;
+  pdfBuffer: Buffer;
+  htmlContent?: string;
+}
 
 export interface SendTicketEmailParams {
   recipientEmail: string;
@@ -59,6 +86,39 @@ export interface SentNotificationRecord {
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private readonly sentNotifications: SentNotificationRecord[] = [];
+  private transporter: Transporter | null = null;
+
+  constructor() {
+    this.initTransporter();
+  }
+
+  private initTransporter() {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+
+    if (user && pass) {
+      try {
+        this.transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure,
+          auth: { user, pass },
+          tls: {
+            rejectUnauthorized: false,
+          },
+        });
+        this.logger.log(`[NotificationService] Transporter SMTP đã sẵn sàng kết nối: ${host}:${port} (${user})`);
+      } catch (err: any) {
+        this.logger.warn(`[NotificationService] Không thể khởi tạo SMTP transporter: ${err?.message}`);
+        this.transporter = null;
+      }
+    } else {
+      this.logger.log(`[NotificationService] Chưa cấu hình SMTP_USER / SMTP_PASS trong .env -> Chạy chế độ fallback (Mock/Log mode)`);
+    }
+  }
 
   /**
    * Tự động gửi Email vé điện tử kèm mã QR sau khi thanh toán thành công
@@ -316,6 +376,105 @@ export class NotificationService {
   }
 
   /**
+   * Gửi email chung qua Nodemailer SMTP hoặc Mock logger
+   */
+  async sendMail(options: SendMailOptions): Promise<boolean> {
+    const fromAddress =
+      process.env.SMTP_FROM ||
+      `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
+
+    const record: SentNotificationRecord = {
+      id: `mail-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      recipientEmail: options.to,
+      subject: options.subject,
+      ticketCode: '',
+      bookingCode: '',
+      sentAt: new Date(),
+      status: 'sent',
+      htmlPreview: options.html,
+    };
+
+    if (this.transporter) {
+      try {
+        await this.transporter.sendMail({
+          from: fromAddress,
+          to: options.to,
+          subject: options.subject,
+          text: options.text,
+          html: options.html,
+          attachments: options.attachments,
+        });
+        this.logger.log(`[NotificationService] Đã gửi email thành công qua SMTP tới: ${options.to} (Tiêu đề: ${options.subject})`);
+        this.sentNotifications.push(record);
+        return true;
+      } catch (error: any) {
+        this.logger.error(`[NotificationService] Lỗi gửi email qua SMTP: ${error?.message}. Ghi nhận log.`);
+        record.status = 'failed';
+        this.sentNotifications.push(record);
+        return false;
+      }
+    } else {
+      this.logger.log(
+        `[NotificationService] [Mock/Log Mode] Gửi email tới ${options.to}: ${options.subject} (Số tệp đính kèm: ${options.attachments?.length || 0})`,
+      );
+      this.sentNotifications.push(record);
+      return true;
+    }
+  }
+
+  /**
+   * Gửi email Hóa đơn điện tử kèm tệp đính kèm PDF
+   */
+  async sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<boolean> {
+    const subject = `[SmartBus ICTU] Hóa đơn điện tử ${params.invoiceNumber} - Đơn vé ${params.bookingCode}`;
+    const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
+
+    const htmlBody =
+      params.htmlContent ||
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 16px;">
+          <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">HÓA ĐƠN ĐIỆN TỬ - SMARTBUS ICTU</h2>
+          <p style="color: #64748b; font-size: 13px; margin: 6px 0 0 0;">Dịch vụ vận tải hành khách bằng xe buýt thông minh</p>
+        </div>
+        
+        <p style="margin-top: 20px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+        <p>Hệ thống trân trọng gửi quý khách hóa đơn điện tử cho giao dịch thanh toán đặt vé xe buýt thành công.</p>
+        
+        <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 14px 18px; margin: 18px 0; border-radius: 4px;">
+          <p style="margin: 4px 0;"><strong>Số hóa đơn:</strong> <span style="color: #2563eb; font-weight: bold;">${params.invoiceNumber}</span></p>
+          <p style="margin: 4px 0;"><strong>Mã đơn vé:</strong> <code>${params.bookingCode}</code></p>
+          <p style="margin: 4px 0;"><strong>Tuyến xe:</strong> ${params.routeName}</p>
+          <p style="margin: 4px 0;"><strong>Tổng tiền thanh toán:</strong> <span style="color: #059669; font-weight: bold; font-size: 16px;">${formattedTotal} VND</span></p>
+        </div>
+
+        <p>Tệp hóa đơn điện tử định dạng <strong>PDF chuẩn có chữ ký số điện tử</strong> đã được đính kèm ở bên dưới email này.</p>
+        <p style="color: #64748b; font-size: 13px;">Quý khách có thể xem và tải lại hóa đơn bất cứ lúc nào từ phần Lịch sử đặt vé trong ứng dụng.</p>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+        <div style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6;">
+          <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
+          Địa chỉ: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br/>
+          Hotline hỗ trợ: 1900 1234 | Email: hotro@smartbus.ictu.edu.vn
+        </div>
+      </div>
+    `;
+
+    return this.sendMail({
+      to: params.recipientEmail,
+      subject,
+      html: htmlBody,
+      attachments: [
+        {
+          filename: `Hoa_Don_${params.invoiceNumber}.pdf`,
+          content: params.pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+  }
+
+  /**
    * Lấy danh sách các thông báo / email đã gửi (phục vụ đối soát và kiểm thử)
    */
   getSentNotifications(filter?: { ticketCode?: string; recipientEmail?: string }): SentNotificationRecord[] {
@@ -333,3 +492,4 @@ export class NotificationService {
     this.sentNotifications.length = 0;
   }
 }
+

@@ -17,6 +17,7 @@ export * from './feedback.entity.js';
 export * from './activity-log.entity.js';
 export * from './seat-hold.entity.js';
 export * from './payment-log.entity.js';
+export * from './invoice.entity.js';
 
 import { RoleEntity } from './role.entity.js';
 import { UserEntity } from './user.entity.js';
@@ -37,6 +38,7 @@ import { FeedbackEntity } from './feedback.entity.js';
 import { ActivityLogEntity } from './activity-log.entity.js';
 import { SeatHoldEntity } from './seat-hold.entity.js';
 import { PaymentLogEntity } from './payment-log.entity.js';
+import { InvoiceEntity } from './invoice.entity.js';
 
 export const ALL_ENTITIES = [
   RoleEntity,
@@ -58,5 +60,7 @@ export const ALL_ENTITIES = [
   ActivityLogEntity,
   SeatHoldEntity,
   PaymentLogEntity,
+  InvoiceEntity,
 ];
+
 
