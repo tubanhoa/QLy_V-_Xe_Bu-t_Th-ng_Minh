@@ -333,7 +333,12 @@ export function SeatPickerModal({
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 p-0 sm:p-4 overscroll-contain animate-in fade-in duration-150"
     >
-      <div className="relative w-full h-[95vh] sm:h-auto sm:max-h-[92vh] max-w-5xl rounded-t-3xl sm:rounded-3xl border border-slate-100 bg-white shadow-2xl flex flex-col will-change-transform overflow-hidden">
+      <div className="relative w-full h-[95vh] sm:h-auto sm:max-h-[92vh] max-w-5xl rounded-t-3xl sm:rounded-3xl border border-slate-100 bg-white shadow-2xl flex flex-col will-change-transform overflow-hidden animate-slideUp">
+        {/* Mobile Pull-down indicator */}
+        <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+        </div>
+
         {/* ===================================================================
             HEADER: TRẠM DỰNG · BIỂN SỐ XE · ĐỒNG HỒ ĐẾM NGƯỢC GIỮ CHỖ
             =================================================================== */}
@@ -431,7 +436,7 @@ export function SeatPickerModal({
             {/* CỘT TRÁI: SƠ ĐỒ GHẾ XE BUÝT 28 CHỖ (Chiếm 56% trên Desktop) */}
             <div
               className={cn(
-                'lg:w-[56%] flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/60 flex flex-col items-center justify-between',
+                'lg:w-[56%] flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 bg-slate-50/60 flex flex-col items-center justify-between',
                 step === 'mobile-info' && 'hidden lg:flex',
               )}
             >
@@ -467,7 +472,7 @@ export function SeatPickerModal({
             {/* CỘT PHẢI: BẢNG CHECKOUT, THÔNG TIN HÀNH KHÁCH & THANH TOÁN (Chiếm 44% trên Desktop) */}
             <div
               className={cn(
-                'lg:w-[44%] flex-1 overflow-y-auto p-4 sm:p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-between',
+                'lg:w-[44%] flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 bg-white border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-between',
                 step === 'seats' && 'hidden lg:flex',
               )}
             >
@@ -849,7 +854,7 @@ export function SeatPickerModal({
               STEP 2.5: CỔNG THANH TOÁN ĐA PHƯƠNG THỨC · QR CODE TỨC THÌ (Base64)
               Đồng bộ với PR #21 Backend: MoMo, VNPay, ZaloPay, Thẻ ATM/Visa, VietQR
               =================================================================== */
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
+          <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
             <div className="space-y-1 shrink-0">
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100/90 border border-emerald-300 px-3.5 py-1 text-xs font-black text-[#005A36]">
                 <Clock size={13} className="animate-spin text-[#005A36]" />
@@ -952,7 +957,7 @@ export function SeatPickerModal({
                     <button
                       type="button"
                       onClick={() => copyToClipboard('113366668888', 'stk')}
-                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
+                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer touch-press touch-manipulation"
                       title="Sao chép số tài khoản"
                     >
                       {copiedField === 'stk' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
@@ -974,7 +979,7 @@ export function SeatPickerModal({
                     <button
                       type="button"
                       onClick={() => copyToClipboard(String(finalPrice), 'amount')}
-                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
+                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer touch-press touch-manipulation"
                       title="Sao chép số tiền"
                     >
                       {copiedField === 'amount' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
@@ -996,7 +1001,7 @@ export function SeatPickerModal({
                           'memo',
                         )
                       }
-                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
+                      className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer touch-press touch-manipulation"
                       title="Sao chép nội dung chuyển khoản"
                     >
                       {copiedField === 'memo' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
@@ -1013,13 +1018,13 @@ export function SeatPickerModal({
             </div>
 
             {/* Các nút hành động */}
-            <div className="flex flex-col gap-2 w-full max-w-sm pt-1 shrink-0 pb-4">
+            <div className="flex flex-col gap-2 w-full max-w-sm pt-1 shrink-0 pb-4 safe-pb-dock">
               {paymentResponse?.paymentUrl && (
                 <a
                   href={paymentResponse.paymentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer touch-press touch-manipulation"
                 >
                   <ExternalLink size={15} />
                   <span>Mở Trang Thanh Toán Cổng {paymentMethod.toUpperCase()}</span>
@@ -1032,7 +1037,7 @@ export function SeatPickerModal({
                   setStep('success')
                   refreshSeatMap()
                 }}
-                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
               >
                 <CheckCircle2 size={15} />
                 <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
@@ -1042,7 +1047,7 @@ export function SeatPickerModal({
                 type="button"
                 disabled={isCancellingPayment}
                 onClick={handleCancelPayment}
-                className="w-full rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
               >
                 {isCancellingPayment ? (
                   <>
@@ -1062,7 +1067,7 @@ export function SeatPickerModal({
           /* ===================================================================
               STEP 3: THÀNH CÔNG · MÃ VÉ ĐIỆN TỬ & QR LÊN XE THỰC TẾ
               =================================================================== */
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
+          <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
             <div className="size-14 rounded-3xl bg-emerald-100 text-[#005A36] flex items-center justify-center shadow-md shrink-0 animate-in zoom-in-75">
               <CheckCircle2 size={32} />
             </div>
@@ -1146,7 +1151,7 @@ export function SeatPickerModal({
                   <button
                     type="button"
                     onClick={() => setShowInvoiceModal(true)}
-                    className="w-full rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#005A36] py-2 text-xs font-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#005A36] py-2 text-xs font-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
                   >
                     <FileText size={14} />
                     <span>Xem & Tải Hóa Đơn Điện Tử (PDF)</span>
@@ -1156,7 +1161,7 @@ export function SeatPickerModal({
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-sm pt-2 shrink-0 pb-4">
+            <div className="flex flex-col sm:flex-row gap-2.5 w-full max-w-sm pt-2 shrink-0 pb-4 safe-pb-dock">
               <button
                 type="button"
                 onClick={() => {
@@ -1173,7 +1178,7 @@ export function SeatPickerModal({
                     window.location.href = '/my-tickets'
                   }
                 }}
-                className="flex-1 rounded-xl bg-white border border-[#005A36] text-[#005A36] hover:bg-emerald-50 py-2.5 text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 rounded-xl bg-white border border-[#005A36] text-[#005A36] hover:bg-emerald-50 py-2.5 text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
                 id="success-view-my-tickets"
               >
                 <Ticket size={14} />
@@ -1182,7 +1187,7 @@ export function SeatPickerModal({
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex-1 rounded-xl bg-[#005A36] py-2.5 text-xs font-black text-white hover:bg-[#004529] transition-all shadow-md cursor-pointer"
+                className="flex-1 rounded-xl bg-[#005A36] py-2.5 text-xs font-black text-white hover:bg-[#004529] transition-all shadow-md cursor-pointer touch-press touch-manipulation"
               >
                 Hoàn tất
               </button>
@@ -1191,10 +1196,10 @@ export function SeatPickerModal({
         )}
 
         {/* ===================================================================
-            MOBILE FLOATING DOCK (STICKY BOTTOM BAR KHI Ở STEP 'seats')
+            MOBILE FLOATING DOCKS (STICKY BOTTOM BARS CHO MOBILE THUMB-ZONE)
             =================================================================== */}
         {step === 'seats' && (
-          <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md p-3 px-4 flex items-center justify-between shadow-2xl shrink-0 z-30">
+          <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md p-3 px-4 flex items-center justify-between shadow-2xl shrink-0 z-30 safe-pb-dock">
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-500 font-bold">
@@ -1216,15 +1221,59 @@ export function SeatPickerModal({
               disabled={selectedSeats.length === 0}
               onClick={() => setStep('mobile-info')}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-black text-white transition-all shadow-md',
+                'inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-black text-white transition-all shadow-md active:scale-95 touch-press',
                 selectedSeats.length > 0
-                  ? 'bg-[#005A36] active:scale-95 cursor-pointer shadow-emerald-950/20'
+                  ? 'bg-[#005A36] cursor-pointer shadow-emerald-950/20'
                   : 'bg-slate-300 cursor-not-allowed shadow-none',
               )}
             >
               <span>Tiếp tục đặt vé</span>
               <ArrowRight size={14} />
             </button>
+          </div>
+        )}
+
+        {step === 'mobile-info' && (
+          <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md p-3 px-4 flex items-center justify-between shadow-2xl shrink-0 z-30 safe-pb-dock">
+            <div>
+              <span className="text-[10px] text-slate-500 font-bold block leading-none">Tổng thanh toán:</span>
+              <span className="text-base font-black text-[#005A36] font-mono leading-tight block mt-0.5">
+                {finalPrice.toLocaleString('vi-VN')}đ
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStep('seats')}
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 active:scale-95 touch-press"
+              >
+                Ghế ({selectedSeats.length})
+              </button>
+              <button
+                type="button"
+                disabled={selectedSeats.length === 0 || isSubmitting}
+                onClick={() => handleConfirmBooking()}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-black text-white transition-all shadow-md active:scale-95 touch-press',
+                  selectedSeats.length > 0 && !isSubmitting
+                    ? 'bg-[#005A36] cursor-pointer shadow-emerald-950/20'
+                    : 'bg-slate-300 cursor-not-allowed shadow-none',
+                )}
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Đang xuất vé...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={15} />
+                    <span>Xác nhận xuất vé</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>

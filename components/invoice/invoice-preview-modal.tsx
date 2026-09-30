@@ -305,7 +305,7 @@ export function InvoicePreviewModal({
         )}
 
         {/* Modal Body: Hóa đơn điện tử giấy tờ dạng Receipt A4 mô phỏng */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 space-y-4 bg-slate-50/50">
           {isLoading ? (
             <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 size={32} className="animate-spin text-[#005A36]" />
@@ -484,7 +484,7 @@ export function InvoicePreviewModal({
         </div>
 
         {/* Modal Sticky Bottom Actions (Mobile First - Dễ bấm bằng ngón cái) */}
-        <div className="p-3 sm:p-4 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-end gap-2.5 shrink-0 shadow-lg">
+        <div className="p-3 sm:p-4 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-end gap-2.5 shrink-0 shadow-lg safe-pb-dock">
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {/* Nút Gửi lại qua Email */}
             <button
@@ -492,7 +492,7 @@ export function InvoicePreviewModal({
               disabled={isSendingEmail || resendCooldown > 0}
               onClick={() => setShowEmailInput((prev) => !prev)}
               className={cn(
-                'flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white hover:border-[#005A36] hover:text-[#005A36] px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer',
+                'flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white hover:border-[#005A36] hover:text-[#005A36] px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-95 touch-press touch-manipulation cursor-pointer',
                 resendCooldown > 0 && 'opacity-60 cursor-not-allowed',
               )}
             >
@@ -509,7 +509,7 @@ export function InvoicePreviewModal({
               type="button"
               disabled={isDownloadingPdf}
               onClick={handleDownloadPdf}
-              className="flex-1 sm:flex-none rounded-xl bg-[#005A36] hover:bg-[#004529] text-white px-5 py-2.5 text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer shadow-emerald-950/20"
+              className="flex-1 sm:flex-none rounded-xl bg-[#005A36] hover:bg-[#004529] text-white px-5 py-2.5 text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 touch-press touch-manipulation cursor-pointer shadow-emerald-950/20"
             >
               {isDownloadingPdf ? (
                 <>

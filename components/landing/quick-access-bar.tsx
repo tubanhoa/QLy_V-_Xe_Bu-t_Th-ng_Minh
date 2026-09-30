@@ -68,8 +68,8 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
     <section aria-label="Thanh truy cập nhanh" className="relative z-20 shrink-0 px-4 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none">
       <div className="mx-auto max-w-5xl">
         {/* User's Exact Glassmorphism Specification Container */}
-        <div className="animate-hero-4 glass-card !w-auto !h-auto !rounded-[24px] sm:!rounded-[30px] p-2 sm:p-2.5">
-          <div className="grid grid-cols-5 gap-1.5 sm:gap-3 items-center">
+        <div className="animate-hero-4 glass-card !w-auto !h-auto !rounded-[24px] sm:!rounded-[30px] p-2 sm:p-2.5 shadow-sm">
+          <div className="flex sm:grid sm:grid-cols-5 gap-1.5 sm:gap-3 items-center overflow-x-auto no-scrollbar scroll-touch snap-x py-0.5">
             {items.map((item) => {
               const Icon = item.icon
               return (
@@ -77,22 +77,22 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
                   key={item.id}
                   type="button"
                   onClick={item.onClick}
-                  className="group relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl py-2 px-1 text-center transition-all duration-200 hover:bg-white/30 hover:-translate-y-1 active:scale-95"
+                  className="group relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl py-2 px-1 text-center transition-all duration-200 hover:bg-white/30 hover:-translate-y-0.5 touch-press min-w-[68px] sm:min-w-0 flex-1 shrink-0 snap-center cursor-pointer"
                 >
                   {/* Standardized Floating Pill Badge with Micro-pulse */}
                   {item.badge && (
-                    <span className="absolute -top-2 rounded-full bg-[#005A36] px-2.5 py-0.5 text-[9px] font-black text-white shadow-xs ring-1 ring-white/90">
+                    <span className="absolute -top-2 rounded-full bg-[#005A36] px-2 py-0.5 text-[8.5px] sm:text-[9px] font-black text-white shadow-xs ring-1 ring-white/90">
                       {item.badge}
                     </span>
                   )}
 
                   {/* Standardized Icon Circle: 10% primary background + primary icon */}
-                  <div className="flex size-11 sm:size-12 items-center justify-center rounded-2xl bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 backdrop-blur-sm transition-all duration-300 group-hover:bg-[#005A36] group-hover:text-white group-hover:scale-110 group-hover:shadow-md shadow-xs">
-                    <Icon size={20} strokeWidth={2.2} />
+                  <div className="flex size-10 sm:size-12 items-center justify-center rounded-2xl bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 backdrop-blur-sm transition-all duration-300 group-hover:bg-[#005A36] group-hover:text-white group-hover:scale-105 group-hover:shadow-md shadow-xs">
+                    <Icon size={19} strokeWidth={2.2} />
                   </div>
 
-                  {/* High Contrast Crystal Clear Label */}
-                  <span className="mt-1.5 text-xs sm:text-[13px] font-extrabold text-slate-900 group-hover:text-[#005A36] transition-colors truncate max-w-full drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)] group-hover:-translate-y-0.5">
+                  {/* High Contrast Crystal Clear Label with Line Clamp */}
+                  <span className="mt-1 sm:mt-1.5 text-[10.5px] sm:text-[13px] font-extrabold text-slate-900 group-hover:text-[#005A36] transition-colors line-clamp-2 max-w-full drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)] leading-tight">
                     {item.label}
                   </span>
                 </button>

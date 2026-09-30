@@ -225,11 +225,17 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
 
               {/* Instant Search Dropdown Popover */}
               {isSearchFocused && (
-                <div className="absolute top-full left-0 right-0 mt-2 z-40 rounded-2xl bg-white border border-slate-200/90 p-3 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                <div className="absolute top-full left-0 right-0 mt-2 z-40 rounded-2xl bg-white/95 border border-slate-200/90 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150 text-left max-h-[65vh] sm:max-h-[75vh] overflow-y-auto scroll-touch">
                   {/* Quick Stations */}
-                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between sticky top-0 bg-white/95 py-0.5 backdrop-blur-xs z-10">
                     <span>Trạm dừng đón trả phổ biến</span>
-                    <span className="text-[#005A36] text-[10px] font-bold">1 chạm chọn trạm</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchFocused(false)}
+                      className="text-slate-400 hover:text-slate-600 sm:hidden text-xs font-bold px-1"
+                    >
+                      Đóng
+                    </button>
                   </div>
                   <div className="space-y-1">
                     {POPULAR_STATIONS.filter(
@@ -246,17 +252,17 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                           setIsSearchFocused(false)
                           onSearchRoute?.(st.name)
                         }}
-                        className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-emerald-50 text-left transition-colors group/item"
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group/item touch-press active:bg-emerald-100/70 cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5">
-                          <div className="size-7 rounded-lg bg-emerald-100 text-[#005A36] flex items-center justify-center shrink-0">
-                            <MapPin size={14} />
+                          <div className="size-8 rounded-xl bg-emerald-100 text-[#005A36] flex items-center justify-center shrink-0">
+                            <MapPin size={15} />
                           </div>
                           <div>
-                            <span className="text-xs font-bold text-slate-800 group-hover/item:text-[#005A36] block">
+                            <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover/item:text-[#005A36] block">
                               {st.name}
                             </span>
-                            <span className="text-[10px] text-slate-400 block truncate max-w-[280px]">
+                            <span className="text-[10px] text-slate-400 block truncate max-w-[240px] sm:max-w-[280px]">
                               {st.desc}
                             </span>
                           </div>

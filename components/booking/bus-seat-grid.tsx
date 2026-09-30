@@ -62,12 +62,23 @@ export function BusSeatGrid({
     const isHoldingByOther = seat.bookingStatus === 'holding' && !seat.isHeldByMe
     const isPriority = seat.rowNumber === 1
 
+    const handleSeatClick = (seat: SeatItem) => {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate(12)
+        } catch {
+          // ignore
+        }
+      }
+      onToggleSeat(seat)
+    }
+
     return (
       <button
         key={seat.seatId}
         type="button"
         disabled={disabled || isBooked || isHoldingByOther || isLoading}
-        onClick={() => onToggleSeat(seat)}
+        onClick={() => handleSeatClick(seat)}
         title={
           isBooked
             ? `Ghế ${seat.seatNumber}: Đã bán`
@@ -78,8 +89,8 @@ export function BusSeatGrid({
             : `Ghế ${seat.seatNumber}: Ghế trống - Bấm để chọn`
         }
         className={cn(
-          'relative flex flex-col items-center justify-center rounded-xl sm:rounded-2xl transition-all duration-150 select-none will-change-transform',
-          'size-11 sm:size-12.5 md:size-13 text-xs font-black shadow-xs',
+          'relative flex flex-col items-center justify-center rounded-xl sm:rounded-2xl transition-all duration-150 select-none will-change-transform touch-manipulation touch-press',
+          'size-10.5 sm:size-12 md:size-13 text-xs font-black shadow-xs',
           // Shake animation when race condition conflict happens
           isConflicted && 'animate-bounce ring-4 ring-amber-500 bg-amber-100 text-amber-900',
           // State 1: Booked (Đã bán)

@@ -469,7 +469,12 @@ export function TicketManagementModal({
         aria-label="Cửa sổ Vé Điện Tử & Mã QR Soát Vé"
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       >
-        <div className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-4xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform">
+        <div className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-4xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform safe-top safe-bottom animate-slideUp">
+          {/* Mobile Pull-down indicator */}
+          <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50 via-white to-teal-50">
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+          </div>
+
           {/* 1. MODAL HEADER CHUẨN NHẬN DIỆN ICTU (GIỐNG TRIP SEARCH MODAL) */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-50 via-white to-teal-50 shrink-0 no-print">
             <div className="flex items-center gap-2.5 sm:gap-3">
@@ -588,7 +593,7 @@ export function TicketManagementModal({
               </div>
 
               {/* Filter Tabs */}
-              <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pt-0.5">
+              <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar scroll-touch pt-0.5">
                 <div className="flex rounded-xl bg-slate-200/70 p-1 text-xs font-bold shrink-0">
                   {FILTER_TABS.map((tab) => (
                     <button
@@ -596,7 +601,7 @@ export function TicketManagementModal({
                       type="button"
                       onClick={() => setFilter(tab.key)}
                       className={cn(
-                        'px-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs',
+                        'px-3.5 py-1.5 rounded-lg transition-all cursor-pointer text-xs whitespace-nowrap touch-press touch-manipulation',
                         filter === tab.key
                           ? 'bg-white text-[#005A36] shadow-xs font-black'
                           : 'text-slate-600 hover:text-slate-900',
@@ -615,7 +620,7 @@ export function TicketManagementModal({
           )}
 
           {/* 3. NỘI DUNG CHÍNH (DANH SÁCH THẺ VÉ HOẶC CHI TIẾT MÃ QR) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 space-y-4 safe-pb-dock">
             {/* TRƯỜNG HỢP A: CHƯA ĐĂNG NHẬP */}
             {!isAuthenticated && (
               <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 text-center space-y-3.5 shadow-xs my-auto">

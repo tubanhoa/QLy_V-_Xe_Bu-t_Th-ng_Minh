@@ -297,13 +297,18 @@ export function TicketDetailModal({
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
         role="dialog"
         aria-modal="true"
         aria-label="Chi tiết vé xe điện tử"
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div className="relative w-full max-w-xl max-h-[92vh] overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
+        <div className="relative w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform animate-slideUp">
+          {/* Mobile Pull-down indicator */}
+          <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50/90 via-white to-slate-50">
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+          </div>
+
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/90 via-white to-slate-50 shrink-0 no-print">
             <div className="flex items-center gap-3">
@@ -353,7 +358,7 @@ export function TicketDetailModal({
           )}
 
           {/* Body content */}
-          <div className="overflow-y-auto p-4 sm:p-6 space-y-4 text-slate-700 text-sm">
+          <div className="overflow-y-auto scroll-touch p-4 sm:p-6 space-y-4 text-slate-700 text-sm safe-pb-dock">
             {loading && (
               <div className="flex flex-col items-center justify-center py-14 gap-3">
                 <Loader2 className="w-9 h-9 text-[#005A36] animate-spin" />
