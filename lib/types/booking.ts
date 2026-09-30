@@ -60,6 +60,9 @@ export interface CreateBookingPayload {
   destinationStation?: string
   passengerName?: string
   passengerPhone?: string
+  passengerEmail?: string
+  invoiceEmail?: string
+  isInvoiceRequested?: boolean
   departureTime?: string
   routeCode?: string
   routeName?: string

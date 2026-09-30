@@ -4,3 +4,11 @@ import { twMerge } from 'tailwind-merge'
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+export function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false
+  const trimmed = email.trim()
+  // RFC 5322 compatible regular expression
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+  return emailRegex.test(trimmed)
+}
