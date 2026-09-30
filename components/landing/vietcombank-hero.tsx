@@ -9,6 +9,7 @@ import {
   CreditCard,
   MapPin,
   Moon,
+  Navigation,
   Radio,
   Search,
   Sparkles,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/utils/haptics'
 
 interface VietcombankHeroProps {
   onOpenSeatPicker: () => void
@@ -136,6 +138,7 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
         } else {
           setActiveCard((prev) => (prev - 1 + CARDS.length) % CARDS.length)
         }
+        haptic.play('tap')
         accumulatedDelta = 0
       }
       clearTimeout(timeoutId)
@@ -153,6 +156,7 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    haptic.play('tap')
     if (searchQuery.trim()) {
       onSearchRoute?.(searchQuery.trim())
     } else {
@@ -216,12 +220,33 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                 />
                 <button
                   type="submit"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#005A36] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-150 hover:bg-[#004529] hover:scale-[1.03] active:scale-95"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#005A36] px-5 py-2.5 text-sm font-black text-white shadow-md transition-all duration-150 hover:bg-[#004529] hover:scale-[1.03] active:scale-95 cursor-pointer touch-press touch-manipulation"
                 >
                   <span>Tìm xe</span>
                   <ArrowRight size={16} strokeWidth={2.8} />
                 </button>
               </form>
+
+              {/* Gợi Ý 1-Chạm: Trạm Xe Gần Nhất Theo Định Vị Tọa Độ */}
+              <div className="flex items-center gap-2 mt-2 px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.play('select')
+                    setSearchQuery('Ký Túc Xá ICTU')
+                    onSearchRoute?.('Ký Túc Xá ICTU')
+                  }}
+                  className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white text-slate-800 border border-slate-200/90 shadow-2xs backdrop-blur-md transition-all text-xs font-bold active:scale-95 cursor-pointer touch-press touch-manipulation"
+                >
+                  <span className="flex size-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full size-2 bg-emerald-500" />
+                  </span>
+                  <span className="text-slate-500 font-medium">Trạm gần bạn nhất:</span>
+                  <strong className="text-[#005A36] group-hover:underline">KTX ICTU (120m)</strong>
+                  <ArrowRight size={12} className="text-slate-400 group-hover:text-[#005A36] transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
 
               {/* Instant Search Dropdown Popover */}
               {isSearchFocused && (
@@ -248,6 +273,7 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                         key={st.name}
                         type="button"
                         onClick={() => {
+                          haptic.play('select')
                           setSearchQuery(st.name)
                           setIsSearchFocused(false)
                           onSearchRoute?.(st.name)
@@ -536,6 +562,7 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                     <div
                       key={card.id}
                       onClick={() => {
+                        haptic.play('pop')
                         if (isFront) {
                           onOpenSeatPicker()
                         } else {

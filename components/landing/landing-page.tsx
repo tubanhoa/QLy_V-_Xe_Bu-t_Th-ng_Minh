@@ -14,6 +14,7 @@ import { TicketManagementModal } from './ticket-management-modal'
 import { VietcombankHero } from './vietcombank-hero'
 import { AuthPromptModal } from '@/components/auth/auth-prompt-modal'
 import { MonthlyPassModal } from './monthly-pass-modal'
+import { MobileBottomDock } from './mobile-bottom-dock'
 import { useAuth } from '@/lib/auth-context'
 import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
 
@@ -287,6 +288,14 @@ export function LandingPage() {
           }
           setIsTripSearchOpen(true)
         }}
+      />
+
+      {/* Thanh Dock Điều Hướng Siêu Cấp Dành Cho Mobile Web */}
+      <MobileBottomDock
+        onOpenTripSearch={() => setIsTripSearchOpen(true)}
+        onOpenMyTickets={() => setIsTicketModalOpen(true)}
+        onOpenMonthlyPass={() => setIsMonthlyPassModalOpen(true)}
+        activeTicketsCount={1}
       />
     </div>
   )

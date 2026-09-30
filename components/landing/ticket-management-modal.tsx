@@ -25,6 +25,7 @@ import {
   Filter,
   CheckCircle2,
   AlertTriangle,
+  Copy,
   Download,
   Printer,
   Mail,
@@ -62,6 +63,7 @@ import { CancellationPolicyModal } from '@/components/portal/cancellation-policy
 import { FeedbackModal } from '@/components/portal/feedback-modal'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/utils/haptics'
 
 interface TicketManagementModalProps {
   open: boolean
@@ -126,6 +128,7 @@ export function TicketManagementModal({
   // --- E-Invoice Modal & PDF Download ---
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
   const [isDownloadingInvoicePdf, setIsDownloadingInvoicePdf] = useState(false)
+  const [copiedTicketCode, setCopiedTicketCode] = useState(false)
 
   const handleDownloadInvoicePdf = async () => {
     const code = ticketDetail?.bookingCode || ticketDetail?.ticketCode
@@ -599,7 +602,10 @@ export function TicketManagementModal({
                     <button
                       key={tab.key}
                       type="button"
-                      onClick={() => setFilter(tab.key)}
+                      onClick={() => {
+                        haptic.play('tap')
+                        setFilter(tab.key)
+                      }}
                       className={cn(
                         'px-3.5 py-1.5 rounded-lg transition-all cursor-pointer text-xs whitespace-nowrap touch-press touch-manipulation',
                         filter === tab.key
@@ -797,9 +803,26 @@ export function TicketManagementModal({
 
                       {/* Thông tin vé */}
                       <div className="space-y-1.5 max-w-md mx-auto">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-950 font-mono font-black text-sm border border-emerald-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              navigator.clipboard.writeText(ticketDetail.ticketCode).catch(() => {})
+                            }
+                            haptic.play('copy')
+                            setCopiedTicketCode(true)
+                            setTimeout(() => setCopiedTicketCode(false), 2000)
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-mono font-black text-sm border border-emerald-300 transition-all shadow-2xs active:scale-95 cursor-pointer touch-press touch-manipulation"
+                          title="Sao chép mã vé"
+                        >
                           <span>{ticketDetail.ticketCode}</span>
-                        </div>
+                          {copiedTicketCode ? (
+                            <Check size={13} className="text-emerald-700" />
+                          ) : (
+                            <Copy size={13} className="text-emerald-700" />
+                          )}
+                        </button>
 
                         <div className="text-sm sm:text-base font-extrabold text-slate-900">
                           {ticketDetail.routeName || 'Tuyến buýt ICTU Transit'}
@@ -1187,7 +1210,10 @@ export function TicketManagementModal({
                             <div className="pt-2 md:pt-0 flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setSelectedTicketId(t.ticketId)}
+                                onClick={() => {
+                                  haptic.play('tap')
+                                  setSelectedTicketId(t.ticketId)
+                                }}
                                 className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] hover:bg-[#004529] px-3.5 py-2.5 text-xs font-black text-white shadow-md transition-all active:scale-95 cursor-pointer"
                               >
                                 <QrCode size={15} />

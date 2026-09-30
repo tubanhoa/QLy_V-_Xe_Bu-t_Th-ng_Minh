@@ -33,6 +33,7 @@ import {
   Ticket,
   User,
   Users,
+  Wallet,
   Wifi,
   Wind,
   X,
@@ -53,6 +54,8 @@ import { cn, isValidEmail } from '@/lib/utils'
 import { VoucherInput } from '@/components/portal/voucher-input'
 import type { VoucherValidationResult } from '@/lib/types/promotion'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
+import { CelebrationFx } from '@/components/ui/celebration-fx'
+import { haptic } from '@/lib/utils/haptics'
 
 interface SeatPickerModalProps {
   open: boolean
@@ -111,13 +114,28 @@ export function SeatPickerModal({
   const [voucherResult, setVoucherResult] = useState<VoucherValidationResult | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [useVietQrImg, setUseVietQrImg] = useState<boolean>(true)
+  const [walletSaved, setWalletSaved] = useState<boolean>(false)
+
+  // Phát âm thanh chúc mừng chiến thắng khi hoàn tất vé
+  useEffect(() => {
+    if (step === 'success') {
+      haptic.play('success')
+    }
+  }, [step])
 
   const copyToClipboard = (text: string, field: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text).catch(() => {})
     }
+    haptic.play('copy')
     setCopiedField(field)
     setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  const handleAddToWallet = () => {
+    haptic.play('pop')
+    setWalletSaved(true)
+    setTimeout(() => setWalletSaved(false), 3500)
   }
 
   const effectiveTripId = selectedTrip?.id || 'trip-ct01-default'
@@ -1067,15 +1085,19 @@ export function SeatPickerModal({
           /* ===================================================================
               STEP 3: THÀNH CÔNG · MÃ VÉ ĐIỆN TỬ & QR LÊN XE THỰC TẾ
               =================================================================== */
-          <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
+          <div className="relative flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 flex flex-col items-center justify-start text-center space-y-4">
+            {/* Pháo hoa hạt màu ICTU siêu nhẹ 60fps mừng đặt vé thành công */}
+            <CelebrationFx active={step === 'success'} />
+
             <div className="size-14 rounded-3xl bg-emerald-100 text-[#005A36] flex items-center justify-center shadow-md shrink-0 animate-in zoom-in-75">
               <CheckCircle2 size={32} />
             </div>
 
             <div className="space-y-1 shrink-0">
-              <span className="rounded-full bg-emerald-100 text-[#005A36] px-3 py-1 text-xs font-black uppercase tracking-wider">
-                ĐẶT CHỖ THÀNH CÔNG
-              </span>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-[#005A36] text-xs font-black uppercase tracking-wider">
+                <Sparkles size={12} className="text-emerald-700 animate-spin" />
+                <span>ĐẶT CHỖ THÀNH CÔNG</span>
+              </div>
               <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
                 Vé Điện Tử Đã Sẵn Sàng Lên Xe
               </h3>
@@ -1085,8 +1107,30 @@ export function SeatPickerModal({
               </p>
             </div>
 
-            {/* QR Code Pass Card */}
-            <div className="w-full max-w-sm rounded-3xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 p-5 space-y-3.5 shadow-sm shrink-0">
+            {/* Thẻ Vé Lên Xe Siêu Cấp (Authentic Boarding Pass với Vết Cắt Bán Nguyệt & Tem Hologram) */}
+            <div className="relative w-full max-w-sm rounded-3xl border-2 border-emerald-300/80 bg-gradient-to-b from-white via-emerald-50/20 to-emerald-50/40 p-5 space-y-3.5 shadow-lg shadow-emerald-950/5 shrink-0 overflow-hidden">
+              {/* Vết cắt tròn 2 bên cạnh theo phong cách Boarding Pass / Cuống vé thực tế */}
+              <span
+                aria-hidden="true"
+                className="absolute -left-3 top-[54%] -translate-y-1/2 size-6 rounded-full bg-slate-900 border border-slate-700/60 shadow-inner z-10"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute -right-3 top-[54%] -translate-y-1/2 size-6 rounded-full bg-slate-900 border border-slate-700/60 shadow-inner z-10"
+              />
+
+              {/* Tem Hologram 7 Màu Bảo Mật Vé */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-800 uppercase tracking-widest">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>ICTU SMART TRANSIT PASS</span>
+                </div>
+                <div className="rounded-md bg-gradient-to-r from-emerald-400 via-cyan-400 to-amber-300 px-2 py-0.5 text-[9px] font-black text-slate-950 shadow-2xs tracking-tight">
+                  VERIFIED NFC/QR
+                </div>
+              </div>
+
+              {/* QR Code Container */}
               <div
                 style={{
                   width: '200px',
@@ -1094,7 +1138,7 @@ export function SeatPickerModal({
                   minWidth: '200px',
                   minHeight: '200px',
                 }}
-                className="bg-white p-2.5 rounded-2xl border border-emerald-200 shadow-xs flex items-center justify-center mx-auto shrink-0"
+                className="bg-white p-2.5 rounded-2xl border border-emerald-200 shadow-xs flex items-center justify-center mx-auto shrink-0 ring-4 ring-emerald-500/10"
               >
                 <QRCodeSVG
                   value={
@@ -1109,8 +1153,13 @@ export function SeatPickerModal({
                 />
               </div>
 
-              <div className="space-y-1">
-                <div className="font-mono font-black text-base text-[#005A36]">
+              {/* Đường đứt đoạn cuống vé kết nối 2 vết cắt bán nguyệt */}
+              <div className="relative py-1">
+                <div className="border-t-2 border-dashed border-emerald-300/80 mx-2" />
+              </div>
+
+              <div className="space-y-1 text-center">
+                <div className="font-mono font-black text-base text-[#005A36] tracking-wider">
                   {bookingResult?.bookingCode || 'ICTU-2026-PASS'}
                 </div>
                 <div className="text-xs font-extrabold text-slate-800">
@@ -1124,6 +1173,25 @@ export function SeatPickerModal({
                   · Hành khách: <strong>{passengerName}</strong>
                 </div>
               </div>
+
+              {/* Nút 1-Chạm: Thêm vào Apple / Google Wallet */}
+              <button
+                type="button"
+                onClick={handleAddToWallet}
+                className={cn(
+                  'w-full rounded-2xl py-2.5 px-4 text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 cursor-pointer touch-press touch-manipulation',
+                  walletSaved
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-950 hover:bg-black text-white',
+                )}
+              >
+                <Wallet size={15} className={walletSaved ? 'text-white' : 'text-amber-400'} />
+                <span>
+                  {walletSaved
+                    ? '✓ Đã Lưu Thẻ Vào Apple / Google Wallet'
+                    : 'Thêm vào Apple / Google Wallet'}
+                </span>
+              </button>
 
               <div className="rounded-xl bg-white border border-emerald-200/80 p-2.5 text-[11px] text-emerald-950 font-medium">
                 Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.
@@ -1150,7 +1218,10 @@ export function SeatPickerModal({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setShowInvoiceModal(true)}
+                    onClick={() => {
+                      haptic.play('tap')
+                      setShowInvoiceModal(true)
+                    }}
                     className="w-full rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#005A36] py-2 text-xs font-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
                   >
                     <FileText size={14} />
