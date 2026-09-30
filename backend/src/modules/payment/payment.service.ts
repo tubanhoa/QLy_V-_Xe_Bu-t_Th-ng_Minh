@@ -16,6 +16,7 @@ import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationService } from '../notification/notification.service.js';
+import { InvoiceService } from '../invoice/invoice.service.js';
 import { generateQrDataUrl } from '../../common/utils/qr-code.util.js';
 import {
   CreatePaymentUrlDto,
@@ -52,6 +53,8 @@ export class PaymentService {
     private readonly seatLockService?: SeatLockService,
     @Optional()
     private readonly notificationService?: NotificationService,
+    @Optional()
+    private readonly invoiceService?: InvoiceService,
   ) {}
 
   async logPaymentEvent(params: {
@@ -579,6 +582,15 @@ export class PaymentService {
           price: ticket.originalPrice,
           qrDataUrl,
         });
+      }
+    }
+
+    // Tự động khởi tạo hóa đơn điện tử và gửi email kèm file PDF đính kèm ngay sau khi thanh toán thành công
+    if (this.invoiceService) {
+      try {
+        await this.invoiceService.generateAndSendInvoiceForPayment(payment.id);
+      } catch (err: any) {
+        this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
       }
     }
   }

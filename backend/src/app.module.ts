@@ -16,6 +16,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { NotificationModule } from './modules/notification/notification.module.js';
 import { UploadModule } from './modules/upload/upload.module.js';
+import { InvoiceModule } from './modules/invoice/invoice.module.js';
 import { SeedModule } from './database/seeds/seed.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -42,9 +43,10 @@ import { AppService } from './app.service.js';
     AuditModule,
     NotificationModule,
     UploadModule,
+    InvoiceModule,
     SeedModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

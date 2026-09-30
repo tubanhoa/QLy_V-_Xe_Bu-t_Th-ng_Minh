@@ -8,6 +8,7 @@ import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { PaymentController } from './payment.controller.js';
 import { PaymentService } from './payment.service.js';
 import { BookingModule } from '../booking/booking.module.js';
+import { InvoiceModule } from '../invoice/invoice.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { BookingModule } from '../booking/booking.module.js';
       SeatHoldEntity,
     ]),
     BookingModule,
+    InvoiceModule,
   ],
   controllers: [PaymentController],
   providers: [PaymentService],

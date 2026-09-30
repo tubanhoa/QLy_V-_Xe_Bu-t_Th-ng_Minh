@@ -133,7 +133,8 @@ class BookingService {
   private baseUrl: string
 
   constructor() {
-    this.baseUrl = API_BASE_URL.replace(/\/+$/, '')
+    const raw = (API_BASE_URL || 'http://localhost:3001/api/v1').replace(/\/+$/, '')
+    this.baseUrl = raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`
   }
 
   private getAuthHeaders(): HeadersInit {
