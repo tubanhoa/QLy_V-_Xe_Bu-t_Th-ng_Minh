@@ -114,6 +114,11 @@ export class PaymentService {
       transactionId: txnRef,
       amount,
       status: PaymentStatus.PENDING,
+      paymentDetails: {
+        invoiceEmail: dto.invoiceEmail?.trim() || (booking.user as any)?.email,
+        bankCode: dto.bankCode,
+        ipAddress: dto.ipAddress || reqIp || '127.0.0.1',
+      },
     });
     await this.paymentRepository.save(payment);
 

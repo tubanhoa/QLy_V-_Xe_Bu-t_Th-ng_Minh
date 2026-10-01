@@ -143,45 +143,55 @@ export class BookingService {
     query.orderBy('trip.departureTime', 'ASC');
 
     const trips = await query.getMany();
+    if (trips.length === 0) return [];
 
-    const results = await Promise.all(
-      trips.map(async (trip) => {
-        const capacity = trip.vehicle?.seatCapacity || 28;
+    const tripIds = trips.map((t) => t.id);
 
-        const bookedCount = await this.ticketRepository
-          .createQueryBuilder('ticket')
-          .innerJoin('ticket.booking', 'booking')
-          .where('booking.tripId = :tripId', { tripId: trip.id })
-          .andWhere('ticket.status NOT IN (:...excluded)', {
-            excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
-          })
-          .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
-            pendingStatus: BookingStatus.PENDING,
-            now: new Date(),
-          })
-          .getCount();
+    // Tối ưu hóa truy vấn hàng loạt (Batch Query): Gom toàn bộ số vé đã đặt chỉ với 1 truy vấn GROUP BY duy nhất
+    const rawCounts = await this.ticketRepository
+      .createQueryBuilder('ticket')
+      .select('booking.tripId', 'tripId')
+      .addSelect('COUNT(ticket.id)', 'bookedCount')
+      .innerJoin('ticket.booking', 'booking')
+      .where('booking.tripId IN (:...tripIds)', { tripIds })
+      .andWhere('ticket.status NOT IN (:...excluded)', {
+        excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+      })
+      .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+        pendingStatus: BookingStatus.PENDING,
+        now: new Date(),
+      })
+      .groupBy('booking.tripId')
+      .getRawMany();
 
-        const availableSeats = Math.max(0, capacity - bookedCount);
+    const bookedCountMap = new Map<string, number>();
+    rawCounts.forEach((r) => {
+      bookedCountMap.set(r.tripId, parseInt(r.bookedCount, 10) || 0);
+    });
 
-        return {
-          id: trip.id,
-          routeId: trip.routeId,
-          routeName: trip.route?.name,
-          routeCode: trip.route?.routeCode,
-          origin: trip.route?.origin,
-          destination: trip.route?.destination,
-          departureTime: trip.departureTime,
-          arrivalTime: trip.arrivalTime,
-          status: trip.status,
-          basePrice: Number(trip.route?.basePrice) || 10000,
-          studentPrice: Number(trip.route?.studentPrice) || 5000,
-          totalSeats: capacity,
-          availableSeats,
-          vehiclePlate: trip.vehicle?.licensePlate,
-          vehicleType: trip.vehicle?.vehicleType,
-        };
-      }),
-    );
+    const results = trips.map((trip) => {
+      const capacity = trip.vehicle?.seatCapacity || 28;
+      const bookedCount = bookedCountMap.get(trip.id) || 0;
+      const availableSeats = Math.max(0, capacity - bookedCount);
+
+      return {
+        id: trip.id,
+        routeId: trip.routeId,
+        routeName: trip.route?.name,
+        routeCode: trip.route?.routeCode,
+        origin: trip.route?.origin,
+        destination: trip.route?.destination,
+        departureTime: trip.departureTime,
+        arrivalTime: trip.arrivalTime,
+        status: trip.status,
+        basePrice: Number(trip.route?.basePrice) || 10000,
+        studentPrice: Number(trip.route?.studentPrice) || 5000,
+        totalSeats: capacity,
+        availableSeats,
+        vehiclePlate: trip.vehicle?.licensePlate,
+        vehicleType: trip.vehicle?.vehicleType,
+      };
+    });
 
     return results;
   }

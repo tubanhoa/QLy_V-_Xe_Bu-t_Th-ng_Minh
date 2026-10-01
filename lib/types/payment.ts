@@ -22,6 +22,7 @@ export interface CreatePaymentUrlPayload {
   orderInfo?: string
   bankCode?: string
   ipAddress?: string
+  invoiceEmail?: string
 }
 
 export interface PaymentUrlResponseData {

@@ -168,8 +168,18 @@ export function MainHeader({
                     <span className="block text-sm font-black text-slate-900">Vé của tôi & Mã QR</span>
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
                   </div>
-                  <p className="mt-1 text-xs font-medium text-slate-600">Xem vé đã mua, quét mã QR, đổi vé & theo dõi xe realtime</p>
                 </button>
+                <Link
+                  href="/tra-cuu-hoa-don"
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block cursor-pointer"
+                  id="desktop-nav-invoice-lookup"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="block text-sm font-black text-slate-900">Tra cứu hóa đơn điện tử</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">VAT 8%</span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-slate-600">Tra cứu, xác thực chữ ký số & tải PDF hóa đơn theo NĐ 123</p>
+                </Link>
               </div>
             </div>
           </div>
@@ -434,6 +444,15 @@ export function MainHeader({
                 id="mobile-nav-my-tickets"
               >
                 Vé của tôi & Mã QR
+              </Link>
+              <Link
+                href="/tra-cuu-hoa-don"
+                onClick={() => setOpen(false)}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors flex items-center justify-between"
+                id="mobile-nav-invoice-lookup"
+              >
+                <span>Tra cứu hóa đơn điện tử</span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">VAT 8%</span>
               </Link>
               <button
                 type="button"
