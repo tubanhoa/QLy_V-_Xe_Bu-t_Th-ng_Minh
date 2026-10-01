@@ -16,7 +16,7 @@ export class FeedbackService {
     const feedback = this.feedbackRepository.create({
       userId,
       tripId: dto.tripId,
-      ratingScore: dto.ratingScore,
+      ratingScore: dto.ratingScore ?? (dto.category === 'refund_support' ? 1 : 5),
       content: dto.content,
       category: dto.category || 'service',
       status: 'new',

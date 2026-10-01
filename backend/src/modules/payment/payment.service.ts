@@ -35,6 +35,7 @@ import {
   TripStatus,
   PaymentMethod,
 } from '../../common/constants/status.constant.js';
+import { Role } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class PaymentService {
@@ -1164,6 +1165,96 @@ export class PaymentService {
     }
 
     return log;
+  }
+
+  /**
+   * Lấy thông tin chi tiết hoàn tiền của vé cho hành khách hoặc quản trị viên
+   */
+  async getRefundDetailByTicketId(ticketId: string, userId?: string, userRole?: string) {
+    const isPrivileged =
+      userRole === Role.ADMIN ||
+      userRole === Role.MANAGER ||
+      userRole === Role.DRIVER;
+
+    const ticket = await this.ticketRepository.findOne({
+      where: [{ id: ticketId }, { ticketCode: ticketId }],
+      relations: {
+        booking: { user: true, payments: true, trip: { route: true } },
+        seat: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy vé xe');
+    }
+
+    if (userId && !isPrivileged && ticket.booking.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền truy cập thông tin hoàn tiền của vé này');
+    }
+
+    let log: any = null;
+    if (this.refundLogRepository) {
+      log = await this.refundLogRepository.findOne({
+        where: [{ ticketId: ticket.id }, { bookingId: ticket.bookingId }],
+        order: { createdAt: 'DESC' },
+      });
+    }
+
+    const payment = ticket.booking?.payments?.[0];
+    const originalPrice = Number(ticket.originalPrice || 10000);
+
+    if (log) {
+      const orig = Number(log.originalAmount || originalPrice);
+      const fee = Number(log.feeAmount || 0);
+      return {
+        ticketId: ticket.id,
+        ticketCode: ticket.ticketCode,
+        status: log.status || 'SUCCESS',
+        refundAmount: Number(log.refundAmount),
+        originalPrice: orig,
+        cancellationFee: fee,
+        feePercent: orig > 0 ? Math.round((fee / orig) * 100) : 0,
+        refundMethod: log.gateway || payment?.paymentMethod || 'vnpay',
+        refundTransactionId: log.refundTransactionId || (payment?.transactionId ? `RF-${payment.transactionId}` : null),
+        refundTime: log.createdAt,
+        estimatedArrival: log.gateway === 'bank_transfer' ? '1 - 3 ngày làm việc' : 'Ngay lập tức đến 24 giờ',
+        reason: log.reason || 'Hủy vé theo chính sách hoàn tiền',
+      };
+    }
+
+    if (payment && (payment.status === PaymentStatus.REFUNDED || payment.refundAmount != null)) {
+      const refAmount = Number(payment.refundAmount != null ? payment.refundAmount : originalPrice);
+      const fee = Math.max(0, originalPrice - refAmount);
+      return {
+        ticketId: ticket.id,
+        ticketCode: ticket.ticketCode,
+        status: payment.status === PaymentStatus.REFUNDED ? 'SUCCESS' : 'PENDING',
+        refundAmount: refAmount,
+        originalPrice,
+        cancellationFee: fee,
+        feePercent: originalPrice > 0 ? Math.round((fee / originalPrice) * 100) : 0,
+        refundMethod: payment.paymentMethod || 'vnpay',
+        refundTransactionId: payment.transactionId ? `RF-${payment.transactionId}` : null,
+        refundTime: payment.refundTime || ticket.createdAt || new Date(),
+        estimatedArrival: 'Ngay lập tức đến 24 giờ',
+        reason: payment.refundReason || 'Hoàn tiền theo chính sách',
+      };
+    }
+
+    return {
+      ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      status: ticket.status === TicketStatus.REFUNDED ? 'SUCCESS' : 'PENDING',
+      refundAmount: originalPrice,
+      originalPrice,
+      cancellationFee: 0,
+      feePercent: 0,
+      refundMethod: payment?.paymentMethod || 'vnpay',
+      refundTransactionId: `RF-${ticket.ticketCode}`,
+      refundTime: ticket.createdAt || new Date(),
+      estimatedArrival: '1 - 24 giờ làm việc',
+      reason: 'Hủy vé và xử lý hoàn tiền tự động',
+    };
   }
 
   async getPaymentLogs(paymentId: string) {

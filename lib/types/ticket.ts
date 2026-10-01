@@ -4,7 +4,30 @@
  * Branch: feature/SBTS-my-tickets-fe
  */
 
-export type TicketStatus = 'PENDING' | 'PAID' | 'VALID' | 'RESERVED' | 'CANCELLED' | 'CHECKED_IN' | 'EXPIRED'
+export type TicketStatus =
+  | 'PENDING'
+  | 'PAID'
+  | 'VALID'
+  | 'RESERVED'
+  | 'CANCELLED'
+  | 'CHECKED_IN'
+  | 'EXPIRED'
+  | 'REFUNDED'
+
+export interface RefundInfo {
+  refundAmount: number
+  originalPrice: number
+  cancellationFee: number
+  feePercent: number
+  refundMethod: 'vnpay' | 'momo' | 'zalopay' | 'bank_transfer' | 'cash' | string
+  status: 'PENDING' | 'SUCCESS' | 'FAILED'
+  refundTransactionId?: string
+  refundTime?: string | Date
+  failureReason?: string
+  autoRefundReason?: string
+  gatewayResponseCode?: string
+  estimatedArrival?: string
+}
 
 export interface TicketSummary {
   ticketId: string
@@ -24,6 +47,7 @@ export interface TicketSummary {
   routeCode?: string
   busNumber?: string
   checkedInAt?: string | null
+  refundInfo?: RefundInfo
 }
 
 export interface TicketDetail extends TicketSummary {
@@ -62,9 +86,10 @@ export interface CancelTicketResult {
   message: string
   ticketId: string
   status: TicketStatus
+  refundInfo?: RefundInfo
 }
 
-export type TicketFilterStatus = 'all' | 'upcoming' | 'past' | 'cancelled'
+export type TicketFilterStatus = 'all' | 'upcoming' | 'past' | 'cancelled' | 'refunded'
 
 export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
   PENDING: 'Chờ thanh toán',
@@ -74,6 +99,7 @@ export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
   CANCELLED: 'Đã hủy',
   CHECKED_IN: 'Đã check-in',
   EXPIRED: 'Hết hạn',
+  REFUNDED: 'Đã hoàn tiền',
 }
 
 export const TICKET_STATUS_COLOR: Record<TicketStatus, { bg: string; text: string; border: string }> = {
@@ -111,5 +137,10 @@ export const TICKET_STATUS_COLOR: Record<TicketStatus, { bg: string; text: strin
     bg: 'bg-slate-100',
     text: 'text-slate-700',
     border: 'border-slate-300',
+  },
+  REFUNDED: {
+    bg: 'bg-purple-100',
+    text: 'text-purple-800',
+    border: 'border-purple-300',
   },
 }

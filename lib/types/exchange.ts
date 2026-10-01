@@ -114,7 +114,28 @@ export interface CancelTicketResponse {
   cancellationFee: number
   refundAmount: number
   refundProcessed: boolean
+  refundTransactionId?: string | null
+  refundStatus?: 'REFUNDED' | 'PENDING' | 'FAILED' | 'NO_REFUND' | string
+  refundMethod?: 'vnpay' | 'momo' | 'zalopay' | 'bank_transfer' | string
   seatReleased: boolean
+  estimatedArrival?: string
+}
+
+export interface RefundSupportTicketPayload {
+  ticketId: string
+  ticketCode: string
+  contactPhone: string
+  contactEmail: string
+  bankAccountNumber?: string
+  bankName?: string
+  accountHolderName?: string
+  description?: string
+}
+
+export interface RefundSupportTicketResult {
+  success: boolean
+  message: string
+  supportTicketId?: string
 }
 
 // Giữ lại các alias cũ để tương thích ngược code cũ

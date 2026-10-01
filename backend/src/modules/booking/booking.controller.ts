@@ -107,6 +107,18 @@ export class BookingController {
     return this.bookingService.getTicketQr(ticketId, userId, userRole);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get(['tickets/:id/refund', 'tickets/:id/refund-detail'])
+  @ApiOperation({ summary: 'Lấy chi tiết biên lai hoàn tiền của vé (Hành khách hoặc Quản trị viên)' })
+  async getTicketRefundDetail(
+    @Param('id') ticketId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole?: string,
+  ) {
+    return this.bookingService.getTicketRefundDetail(ticketId, userId, userRole);
+  }
+
   @Public()
   @UseGuards(RateLimitGuard)
   @RateLimit({

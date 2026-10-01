@@ -20,6 +20,7 @@ import {
   QrCode,
   Bus,
   WifiOff,
+  Receipt,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
@@ -33,12 +34,14 @@ import {
 import { TicketDetailModal } from './ticket-detail-modal'
 import { ExchangeTicketModal } from './exchange-ticket-modal'
 import { CancellationPolicyModal } from './cancellation-policy-modal'
+import { RefundDetailModal } from './refund-detail-modal'
 
 const FILTER_TABS: { key: TicketFilterStatus; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'upcoming', label: 'Sắp đi' },
   { key: 'past', label: 'Đã đi' },
   { key: 'cancelled', label: 'Đã hủy' },
+  { key: 'refunded', label: 'Đã hoàn tiền' },
 ]
 
 function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): TicketSummary[] {
@@ -58,6 +61,8 @@ function filterTickets(tickets: TicketSummary[], filter: TicketFilterStatus): Ti
       )
     case 'cancelled':
       return tickets.filter((t) => t.status === 'CANCELLED' || t.status === 'EXPIRED')
+    case 'refunded':
+      return tickets.filter((t) => t.status === 'REFUNDED' || (t.status === 'CANCELLED' && t.refundInfo != null))
     default:
       return tickets
   }
@@ -68,9 +73,10 @@ interface TicketCardProps {
   onClick: () => void
   onExchange?: () => void
   onCancel?: () => void
+  onViewRefund?: () => void
 }
 
-function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) {
+function TicketCard({ ticket, onClick, onExchange, onCancel, onViewRefund }: TicketCardProps) {
   const statusColor = TICKET_STATUS_COLOR[ticket.status] ?? TICKET_STATUS_COLOR['PENDING']
 
   const formatDate = (iso: string) =>
@@ -126,6 +132,19 @@ function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) 
           {formatPrice(ticket.price)}
         </span>
         <div className="flex items-center gap-1.5">
+          {(ticket.status === 'REFUNDED' || ticket.status === 'CANCELLED' || ticket.refundInfo != null) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onViewRefund?.()
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[11px] border border-purple-200 transition-colors cursor-pointer touch-press touch-manipulation inline-flex items-center gap-1"
+            >
+              <Receipt size={13} className="text-purple-600" />
+              <span>Hoàn tiền</span>
+            </button>
+          )}
           {(ticket.status === 'PAID' || ticket.status === 'RESERVED' || ticket.status === 'VALID') && (
             <>
               <button
@@ -170,6 +189,7 @@ export function MyTicketsPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [cancellingTicket, setCancellingTicket] = useState<TicketSummary | null>(null)
   const [exchangingTicket, setExchangingTicket] = useState<TicketSummary | null>(null)
+  const [viewingRefundTicket, setViewingRefundTicket] = useState<TicketSummary | null>(null)
   const [isOffline, setIsOffline] = useState(false)
 
   const loadTickets = useCallback(async () => {
@@ -333,6 +353,7 @@ export function MyTicketsPage() {
               onClick={() => setSelectedTicketId(t.ticketId)}
               onExchange={() => setExchangingTicket(t)}
               onCancel={() => setCancellingTicket(t)}
+              onViewRefund={() => setViewingRefundTicket(t)}
             />
           ))}
         </div>
@@ -346,6 +367,17 @@ export function MyTicketsPage() {
           onCancelled={() => {
             loadTickets()
           }}
+        />
+      )}
+
+      {/* Refund Detail Modal */}
+      {viewingRefundTicket && (
+        <RefundDetailModal
+          ticketId={viewingRefundTicket.ticketId}
+          ticketCode={viewingRefundTicket.ticketCode}
+          initialRefundInfo={viewingRefundTicket.refundInfo}
+          initialTicketPrice={viewingRefundTicket.price}
+          onClose={() => setViewingRefundTicket(null)}
         />
       )}
 

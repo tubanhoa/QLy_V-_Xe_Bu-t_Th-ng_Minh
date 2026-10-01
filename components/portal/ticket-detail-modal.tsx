@@ -42,6 +42,7 @@ import {
   Smartphone,
   FileText,
   LogIn,
+  Receipt,
 } from 'lucide-react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
@@ -58,6 +59,7 @@ import { ExchangeTicketModal } from './exchange-ticket-modal'
 import { CancellationPolicyModal } from './cancellation-policy-modal'
 import { FeedbackModal } from './feedback-modal'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
+import { RefundDetailModal } from './refund-detail-modal'
 
 interface TicketDetailModalProps {
   ticketId: string | null
@@ -79,6 +81,7 @@ export function TicketDetailModal({
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [showRefundModal, setShowRefundModal] = useState(false)
 
   // --- Offline State ---
   const [isOffline, setIsOffline] = useState(false)
@@ -898,8 +901,45 @@ export function TicketDetailModal({
                         <span>Hủy vé & Hoàn tiền</span>
                       </button>
                     )}
+
+                    {/* Xem chi tiết hoàn tiền button */}
+                    {(ticket.status === 'REFUNDED' || ticket.status === 'CANCELLED' || ticket.refundInfo != null) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRefundModal(true)}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-xs font-black text-purple-700 transition-all cursor-pointer"
+                        id={`refund-detail-btn-${ticket.ticketId}`}
+                      >
+                        <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Xem chi tiết hoàn tiền</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Banner hoàn tiền nếu vé đã hủy hoặc hoàn tiền */}
+                {(ticket.status === 'REFUNDED' || (ticket.status === 'CANCELLED' && ticket.refundInfo != null)) && (
+                  <div className="rounded-2xl bg-purple-50 border border-purple-200 p-3.5 flex items-center justify-between gap-2.5 text-xs text-purple-950">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Receipt className="w-4 h-4 text-purple-600 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold truncate">Biên lai hoàn tiền đã sẵn sàng</p>
+                        <p className="text-[11px] text-purple-700 truncate">
+                          {ticket.refundInfo?.refundAmount != null
+                            ? `Đã hoàn ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(ticket.refundInfo.refundAmount)} qua ${ticket.refundInfo.refundMethod || 'cổng thanh toán'}`
+                            : 'Xem chi tiết tiến trình tiền về tài khoản nguồn'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRefundModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      Xem ngay
+                    </button>
+                  </div>
+                )}
 
                 {/* Thông báo hủy thành công */}
                 {cancelSuccess && (
@@ -1049,6 +1089,21 @@ export function TicketDetailModal({
             onCancelled?.(ticket.ticketId)
             loadTicket()
           }}
+        />
+      )}
+
+      {/* Refund Detail Modal */}
+      {showRefundModal && ticket && (
+        <RefundDetailModal
+          open={showRefundModal}
+          ticketId={ticket.ticketId}
+          ticketCode={ticket.ticketCode}
+          passengerName={ticket.passengerName}
+          routeName={ticket.routeName}
+          seatNumber={ticket.seatNumber}
+          refundInfo={ticket.refundInfo}
+          initialTicketPrice={ticket.price}
+          onClose={() => setShowRefundModal(false)}
         />
       )}
 

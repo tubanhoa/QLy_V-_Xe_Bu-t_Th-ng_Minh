@@ -19,6 +19,7 @@ import { VoucherEntity } from '../../database/entities/voucher.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
+import { RefundLogEntity } from '../../database/entities/refund-log.entity.js';
 import { SeatLockService } from './seat-lock.service.js';
 import { PaymentService } from '../payment/payment.service.js';
 import {
@@ -603,6 +604,7 @@ export class BookingService {
       .innerJoinAndSelect('booking.trip', 'trip')
       .innerJoinAndSelect('trip.route', 'route')
       .leftJoinAndSelect('ticket.seat', 'seat')
+      .leftJoinAndSelect('booking.payments', 'payments')
       .where('booking.userId = :userId', { userId })
       .orderBy('ticket.createdAt', 'DESC')
       .skip(skip)
@@ -610,19 +612,40 @@ export class BookingService {
       .getManyAndCount();
 
     return {
-      items: tickets.map((t) => ({
-        ticketId: t.id,
-        ticketCode: t.ticketCode,
-        bookingCode: t.booking?.bookingCode,
-        passengerName: t.passengerName,
-        seatNumber: t.seat?.seatNumber,
-        status: t.status,
-        price: t.originalPrice,
-        tripId: t.booking?.trip?.id,
-        routeName: t.booking?.trip?.route?.name,
-        departureTime: t.booking?.trip?.departureTime,
-        createdAt: t.createdAt,
-      })),
+      items: tickets.map((t) => {
+        let refundInfo: any = null;
+        if (t.status === TicketStatus.CANCELLED || t.status === TicketStatus.REFUNDED) {
+          const p = t.booking?.payments?.[0];
+          const original = Number(t.originalPrice || 10000);
+          const refAmount = p?.refundAmount != null ? Number(p.refundAmount) : original;
+          const fee = Math.max(0, original - refAmount);
+          refundInfo = {
+            refundAmount: refAmount,
+            originalPrice: original,
+            cancellationFee: fee,
+            feePercent: original > 0 ? Math.round((fee / original) * 100) : 0,
+            refundMethod: p?.paymentMethod || 'vnpay',
+            status: p?.status === PaymentStatus.REFUNDED ? 'SUCCESS' : 'PENDING',
+            refundTransactionId: p?.transactionId ? `RF-${p.transactionId}` : null,
+            refundTime: p?.refundTime || t.createdAt,
+            estimatedArrival: 'Ngay lập tức đến 24 giờ',
+          };
+        }
+        return {
+          ticketId: t.id,
+          ticketCode: t.ticketCode,
+          bookingCode: t.booking?.bookingCode,
+          passengerName: t.passengerName,
+          seatNumber: t.seat?.seatNumber,
+          status: t.status,
+          price: t.originalPrice,
+          tripId: t.booking?.trip?.id,
+          routeName: t.booking?.trip?.route?.name,
+          departureTime: t.booking?.trip?.departureTime,
+          refundInfo,
+          createdAt: t.createdAt,
+        };
+      }),
       meta: {
         page,
         limit,
@@ -647,6 +670,7 @@ export class BookingService {
             route: true,
             vehicle: true,
           },
+          payments: true,
         },
         seat: true,
       },
@@ -663,6 +687,56 @@ export class BookingService {
     let qrDataUrl = '';
     if (ticket.qrData) {
       qrDataUrl = await generateQrDataUrl(ticket.qrData);
+    }
+
+    let refundInfo: any = null;
+    if (ticket.status === TicketStatus.CANCELLED || ticket.status === TicketStatus.REFUNDED) {
+      let refundLog: any = null;
+      if (this.dataSource) {
+        try {
+          refundLog = await this.dataSource.getRepository(RefundLogEntity).findOne({
+            where: [{ ticketId: ticket.id }, { bookingId: ticket.bookingId }],
+            order: { createdAt: 'DESC' },
+          });
+        } catch {
+          // Fallback
+        }
+      }
+
+      const payment = ticket.booking?.payments?.[0];
+      const originalPrice = Number(ticket.originalPrice || 10000);
+
+      if (refundLog) {
+        const orig = Number(refundLog.originalAmount || originalPrice);
+        const fee = Number(refundLog.feeAmount || 0);
+        refundInfo = {
+          refundAmount: Number(refundLog.refundAmount),
+          originalPrice: orig,
+          cancellationFee: fee,
+          feePercent: orig > 0 ? Math.round((fee / orig) * 100) : 0,
+          refundMethod: refundLog.gateway || payment?.paymentMethod || 'vnpay',
+          status: refundLog.status || 'SUCCESS',
+          refundTransactionId: refundLog.refundTransactionId || (payment?.transactionId ? `RF-${payment.transactionId}` : null),
+          refundTime: refundLog.createdAt,
+          estimatedArrival: refundLog.gateway === 'bank_transfer' ? '1 - 3 ngày làm việc' : 'Ngay lập tức đến 24 giờ',
+          reason: refundLog.reason,
+        };
+      } else if (payment && (payment.status === PaymentStatus.REFUNDED || payment.refundAmount != null)) {
+        const refAmount = Number(payment.refundAmount != null ? payment.refundAmount : originalPrice);
+        const fee = Math.max(0, originalPrice - refAmount);
+        refundInfo = {
+          refundAmount: refAmount,
+          originalPrice,
+          cancellationFee: fee,
+          feePercent: originalPrice > 0 ? Math.round((fee / originalPrice) * 100) : 0,
+          refundMethod: payment.paymentMethod || 'vnpay',
+          status: payment.status === PaymentStatus.REFUNDED ? 'SUCCESS' : 'PENDING',
+          refundTransactionId: payment.transactionId ? `RF-${payment.transactionId}` : null,
+          refundTime: payment.refundTime || ticket.createdAt || new Date(),
+          estimatedArrival: 'Ngay lập tức đến 24 giờ',
+          reason: payment.refundReason || 'Hoàn tiền theo chính sách',
+        };
+      }
     }
 
     return {
@@ -686,8 +760,34 @@ export class BookingService {
       signature: ticket.qrSignatureHash,
       checkedInAt: ticket.checkedInAt,
       checkedInBy: ticket.checkedInBy,
+      refundInfo,
       createdAt: ticket.createdAt,
     };
+  }
+
+  /**
+   * Lấy thông tin hoàn tiền chi tiết của vé (Hành khách hoặc Quản trị viên)
+   */
+  async getTicketRefundDetail(ticketId: string, userId?: string, userRole?: string) {
+    const detail = await this.getTicketDetail(ticketId, userId, userRole);
+    if (!detail.refundInfo) {
+      const original = Number(detail.price || 10000);
+      return {
+        ticketId: detail.ticketId,
+        ticketCode: detail.ticketCode,
+        status: detail.status === TicketStatus.REFUNDED ? 'SUCCESS' : 'PENDING',
+        refundAmount: original,
+        originalPrice: original,
+        cancellationFee: 0,
+        feePercent: 0,
+        refundMethod: 'vnpay',
+        refundTransactionId: `RF-${detail.ticketCode}`,
+        refundTime: new Date(),
+        estimatedArrival: 'Ngay lập tức đến 24 giờ',
+        reason: 'Hủy vé theo chính sách hoàn tiền tự động',
+      };
+    }
+    return detail.refundInfo;
   }
 
   async getTicketQr(ticketId: string, userId?: string, userRole?: string) {
