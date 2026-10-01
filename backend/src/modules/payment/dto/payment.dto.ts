@@ -149,3 +149,44 @@ export class RefundTicketDto {
   @IsNumber()
   refundPercentage?: number;
 }
+
+export class GetRefundLogsQueryDto {
+  @ApiPropertyOptional({ example: 1, default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20, default: 20 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'vnpay', description: 'vnpay, momo, zalopay, bank_transfer' })
+  @IsOptional()
+  @IsString()
+  gateway?: string;
+
+  @ApiPropertyOptional({ example: 'SUCCESS', description: 'SUCCESS, PENDING, FAILED' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: '2026-09-01' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-09-30' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ description: 'Tìm theo mã vé' })
+  @IsOptional()
+  @IsString()
+  ticketCode?: string;
+
+  @ApiPropertyOptional({ description: 'Tìm theo mã đơn đặt vé' })
+  @IsOptional()
+  @IsString()
+  bookingCode?: string;
+}
+

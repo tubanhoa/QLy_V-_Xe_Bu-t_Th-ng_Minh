@@ -285,3 +285,26 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 CREATE INDEX IF NOT EXISTS idx_logs_user ON activity_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_logs_action ON activity_logs(action);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON activity_logs(timestamp DESC);
+
+-- 18. Refund Logs (Reconciliation)
+CREATE TABLE IF NOT EXISTS refund_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
+    booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+    ticket_id UUID REFERENCES tickets(id) ON DELETE SET NULL,
+    gateway VARCHAR(50) NOT NULL,
+    refund_transaction_id VARCHAR(150),
+    original_amount DECIMAL(12,0) NOT NULL,
+    refund_amount DECIMAL(12,0) NOT NULL,
+    fee_amount DECIMAL(12,0) DEFAULT 0,
+    reason TEXT,
+    status VARCHAR(20) DEFAULT 'SUCCESS',
+    raw_request JSONB,
+    raw_response JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_refund_logs_gateway ON refund_logs(gateway);
+CREATE INDEX IF NOT EXISTS idx_refund_logs_status ON refund_logs(status);
+CREATE INDEX IF NOT EXISTS idx_refund_logs_created_at ON refund_logs(created_at DESC);
+
