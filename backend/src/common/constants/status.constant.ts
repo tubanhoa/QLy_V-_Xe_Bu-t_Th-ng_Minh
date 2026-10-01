@@ -17,6 +17,7 @@ export enum TicketStatus {
   PAID = 'paid',
   CHECKED_IN = 'checked_in',
   CANCELLED = 'cancelled',
+  REFUNDED = 'refunded',
   EXPIRED = 'expired',
 }
 
@@ -41,6 +42,7 @@ export enum PaymentStatus {
   SUCCESS = 'success',
   FAILED = 'failed',
   REFUNDED = 'refunded',
+  REFUND_PENDING = 'refund_pending',
 }
 
 /**

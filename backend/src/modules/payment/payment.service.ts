@@ -11,12 +11,14 @@ import { Repository, In } from 'typeorm';
 import * as crypto from 'node:crypto';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { PaymentLogEntity } from '../../database/entities/payment-log.entity.js';
+import { RefundLogEntity } from '../../database/entities/refund-log.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { InvoiceService } from '../invoice/invoice.service.js';
+import { GatewayRefundService, ProcessRefundParams } from './services/gateway-refund.service.js';
 import { generateQrDataUrl } from '../../common/utils/qr-code.util.js';
 import {
   CreatePaymentUrlDto,
@@ -24,11 +26,13 @@ import {
   MoMoIpnDto,
   ZaloPayIpnDto,
   ReconciliationQueryDto,
+  GetRefundLogsQueryDto,
 } from './dto/payment.dto.js';
 import {
   PaymentStatus,
   BookingStatus,
   TicketStatus,
+  TripStatus,
   PaymentMethod,
 } from '../../common/constants/status.constant.js';
 
@@ -49,6 +53,11 @@ export class PaymentService {
     @Optional()
     @InjectRepository(PaymentLogEntity)
     private readonly paymentLogRepository?: Repository<PaymentLogEntity>,
+    @Optional()
+    @InjectRepository(RefundLogEntity)
+    private readonly refundLogRepository?: Repository<RefundLogEntity>,
+    @Optional()
+    private readonly gatewayRefundService?: GatewayRefundService,
     @Optional()
     private readonly seatLockService?: SeatLockService,
     @Optional()
@@ -523,6 +532,156 @@ export class PaymentService {
 
     if (!payment) return;
 
+    if (payment.status === PaymentStatus.SUCCESS || payment.status === PaymentStatus.REFUNDED) {
+      return;
+    }
+
+    const tickets = await this.ticketRepository.find({
+      where: { bookingId: payment.bookingId },
+      relations: { seat: true },
+    });
+
+    // KỊCH BẢN B: TỰ ĐỘNG HOÀN TIỀN KHI GIAO DỊCH BỊ LỖI / TIMEOUT / QUÁ HẠN GIỮ CHỖ (AUTO-REFUND ON SYSTEM ERROR)
+    // 1. Kiểm tra đơn vé đã timeout (>10 phút hoặc quá expiresAt) hoặc bị hủy / hết hạn
+    const bookingCreatedDate = payment.booking?.bookingTime || (payment.booking as any)?.createdAt;
+    const isBookingTimedOut =
+      (payment.booking?.expiresAt && new Date(payment.booking.expiresAt).getTime() < Date.now()) ||
+      (bookingCreatedDate && Date.now() - new Date(bookingCreatedDate).getTime() > 10 * 60 * 1000);
+
+    const isBookingExpiredOrCancelled =
+      payment.booking &&
+      (payment.booking.status === BookingStatus.CANCELLED ||
+        payment.booking.status === BookingStatus.EXPIRED ||
+        Boolean(isBookingTimedOut));
+
+    // 2. Kiểm tra chuyến xe đã bị hủy đột xuất
+    const isTripCancelled =
+      payment.booking?.trip && payment.booking.trip.status === TripStatus.CANCELLED;
+
+    // 3. Kiểm tra ghế đã bị mất do quá hạn giữ chỗ (SeatHold expired) và đã bị khách khác mua mất
+    let isSeatLost = false;
+    if (payment.booking?.tripId && tickets.length > 0) {
+      const seatIds = tickets.map((t) => t.seatId);
+      if (typeof this.ticketRepository.createQueryBuilder === 'function') {
+        const conflictTicketCount = await this.ticketRepository
+          .createQueryBuilder('t')
+          .where('t.seatId IN (:...seatIds)', { seatIds })
+          .andWhere('t.bookingId != :bookingId', { bookingId: payment.bookingId })
+          .andWhere('t.status = :paidStatus', { paidStatus: TicketStatus.PAID })
+          .getCount();
+
+        if (conflictTicketCount > 0 && isBookingExpiredOrCancelled) {
+          isSeatLost = true;
+        }
+      } else if (typeof this.ticketRepository.find === 'function') {
+        const conflictTickets = await this.ticketRepository.find({
+          where: {
+            seatId: In(seatIds),
+            status: TicketStatus.PAID,
+          },
+        });
+        if (
+          conflictTickets &&
+          conflictTickets.some((t) => t.bookingId !== payment.bookingId) &&
+          isBookingExpiredOrCancelled
+        ) {
+          isSeatLost = true;
+        }
+      }
+    }
+
+    if (isBookingExpiredOrCancelled || isTripCancelled || isSeatLost) {
+      const autoRefundReason = 'Tự động hoàn tiền do đơn vé timeout / sự cố chuyến xe';
+      const fullAmount = Number(payment.amount || 0);
+
+      this.logger.warn(
+        `[Auto-Refund] Kích hoạt hoàn tiền tự động 100% cho giao dịch ${txnRef} (Booking: ${payment.booking?.bookingCode}) do: ${
+          isTripCancelled
+            ? 'Chuyến xe đã bị hủy đột xuất'
+            : isSeatLost
+            ? 'Ghế đã bị đặt bởi khách khác do hết hạn giữ chỗ'
+            : 'Đơn đặt vé đã timeout / hủy'
+        }`,
+      );
+
+      // Cập nhật trạng thái payment
+      payment.status = PaymentStatus.REFUND_PENDING;
+      payment.paymentTime = new Date();
+      payment.refundAmount = fullAmount;
+      payment.refundTime = new Date();
+      payment.refundReason = autoRefundReason;
+      payment.paymentDetails = {
+        ...payment.paymentDetails,
+        ...details,
+        autoRefundTriggered: true,
+        autoRefundReason,
+      };
+      await this.paymentRepository.save(payment);
+
+      // Cập nhật vé sang CANCELLED
+      await this.ticketRepository.update(
+        { bookingId: payment.bookingId },
+        { status: TicketStatus.CANCELLED },
+      );
+
+      // Gọi gateway refund thực hiện hoàn 100% tiền
+      let refundResult: any = null;
+      if (this.gatewayRefundService) {
+        const dummyTicket = tickets[0] || ({
+          id: payment.bookingId,
+          ticketCode: payment.booking?.bookingCode || txnRef,
+          originalPrice: fullAmount,
+        } as TicketEntity);
+
+        refundResult = await this.gatewayRefundService.processRefund({
+          ticket: dummyTicket,
+          booking: payment.booking,
+          payment,
+          refundAmount: fullAmount,
+          originalAmount: fullAmount,
+          feeAmount: 0,
+          reason: autoRefundReason,
+          triggeredBy: 'timeout_error',
+        });
+      }
+
+      // Gửi email xác nhận hoàn tiền 100% cho hành khách
+      if (
+        this.notificationService &&
+        payment.booking?.user?.email &&
+        typeof this.notificationService.sendRefundConfirmationEmail === 'function'
+      ) {
+        await this.notificationService.sendRefundConfirmationEmail({
+          recipientEmail: payment.booking.user.email,
+          passengerName: payment.booking.user.fullName,
+          ticketCode: tickets[0]?.ticketCode || payment.booking.bookingCode,
+          bookingCode: payment.booking.bookingCode,
+          routeName: payment.booking.trip?.route?.name || 'Tuyến xe buýt ICTU',
+          seatNumber: tickets.map((t) => t.seat?.seatNumber).filter(Boolean).join(', ') || 'Ghế đã chọn',
+          departureTime: payment.booking.trip?.departureTime,
+          originalPrice: fullAmount,
+          cancellationFeePercent: 0,
+          feeAmount: 0,
+          refundAmount: fullAmount,
+          gateway: payment.paymentMethod || 'gateway',
+          refundTransactionId: refundResult?.refundTransactionId,
+          reason: autoRefundReason,
+        });
+      }
+
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: payment.paymentMethod || 'gateway',
+        eventType: 'auto_refund_timeout',
+        responseData: { details, refundResult, reason: autoRefundReason },
+        status: 'success',
+      });
+
+      return;
+    }
+
     payment.status = PaymentStatus.SUCCESS;
     payment.paymentTime = new Date();
     payment.paymentDetails = details;
@@ -538,11 +697,6 @@ export class PaymentService {
       { bookingId: payment.bookingId },
       { status: TicketStatus.PAID },
     );
-
-    const tickets = await this.ticketRepository.find({
-      where: { bookingId: payment.bookingId },
-      relations: { seat: true },
-    });
 
     // Cập nhật trạng thái SeatHoldEntity sang 'booked'
     if (this.seatHoldRepository && payment.booking?.tripId) {
@@ -720,13 +874,58 @@ export class PaymentService {
     };
   }
 
-  async refundTicket(ticketId: string, dto: RefundTicketDto) {
+  /**
+   * Bộ điều phối gọi sang GatewayRefundService
+   */
+  async processRefund(params: {
+    ticket: TicketEntity;
+    booking: BookingEntity;
+    payment?: PaymentEntity;
+    refundAmount: number;
+    originalAmount: number;
+    feeAmount?: number;
+    reason?: string;
+    ipAddress?: string;
+    triggeredBy?: string;
+  }) {
+    if (this.gatewayRefundService) {
+      return this.gatewayRefundService.processRefund(params);
+    }
+
+    // Fallback nếu GatewayRefundService không được cung cấp (ví dụ môi trường mock test)
+    if (params.payment) {
+      params.payment.status = PaymentStatus.REFUNDED;
+      params.payment.refundTime = new Date();
+      params.payment.refundAmount = params.refundAmount;
+      params.payment.refundReason = params.reason || 'Hoàn tiền vé xe buýt';
+      await this.paymentRepository.save(params.payment);
+      return {
+        success: true,
+        status: 'SUCCESS' as const,
+        refundTransactionId: `REF_${Date.now()}_${params.ticket.ticketCode}`,
+        gateway: params.payment.paymentMethod || 'gateway',
+        rawRequest: null,
+        rawResponse: null,
+        message: 'Hoàn tiền thành công',
+        paymentStatus: PaymentStatus.REFUNDED,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * KÍCH HOẠT HOÀN TIỀN CHO VÉ XE ĐÃ HỦY THEO CHÍNH SÁCH
+   */
+  async refundTicket(ticketId: string, dto: RefundTicketDto, userId?: string) {
     const ticket = await this.ticketRepository.findOne({
       where: { id: ticketId },
       relations: {
         booking: {
+          user: true,
+          trip: { route: true, vehicle: true },
           payments: true,
         },
+        seat: true,
       },
     });
 
@@ -734,39 +933,237 @@ export class PaymentService {
       throw new NotFoundException('Không tìm thấy vé xe');
     }
 
-    if (ticket.status !== TicketStatus.CANCELLED) {
-      throw new BadRequestException('Chỉ có thể hoàn tiền cho vé đã ở trạng thái đã hủy (CANCELLED)');
+    if (ticket.status !== TicketStatus.CANCELLED && ticket.status !== TicketStatus.PAID) {
+      throw new BadRequestException('Chỉ có thể hoàn tiền cho vé đã ở trạng thái đã thanh toán hoặc đã hủy');
     }
 
-    const pct = dto.refundPercentage !== undefined ? dto.refundPercentage : 100;
-    const refundAmount = Math.round((Number(ticket.originalPrice) * pct) / 100);
+    // 1. Tính toán số tiền hoàn dựa trên Quy định hủy vé (Dual Trigger Policy)
+    let refundPct = dto.refundPercentage;
+    let feePct = 0;
+    const originalPrice = Number(ticket.originalPrice || 0);
 
-    const payment = ticket.booking.payments?.[0];
-    if (payment) {
-      payment.status = PaymentStatus.REFUNDED;
+    if (refundPct === undefined) {
+      const departureTime = ticket.booking?.trip?.departureTime
+        ? new Date(ticket.booking.trip.departureTime)
+        : null;
+
+      if (departureTime) {
+        const diffHours = (departureTime.getTime() - Date.now()) / (1000 * 60 * 60);
+        if (diffHours >= 24) {
+          refundPct = 100;
+          feePct = 0;
+        } else if (diffHours >= 12) {
+          refundPct = 90;
+          feePct = 10;
+        } else if (diffHours >= 2) {
+          refundPct = 80;
+          feePct = 20;
+        } else {
+          refundPct = 0;
+          feePct = 100;
+        }
+      } else {
+        refundPct = 100;
+        feePct = 0;
+      }
+    } else {
+      feePct = Math.max(0, 100 - refundPct);
+    }
+
+    const feeAmount = Math.round((originalPrice * feePct) / 100);
+    const refundAmount = Math.max(0, Math.round((originalPrice * refundPct) / 100));
+
+    // 2. Cập nhật trạng thái vé và giải phóng ghế lập tức
+    ticket.status = TicketStatus.REFUNDED;
+    await this.ticketRepository.save(ticket);
+
+    if (this.seatHoldRepository && ticket.booking?.tripId) {
+      await this.seatHoldRepository.update(
+        { tripId: ticket.booking.tripId, seatId: ticket.seatId },
+        { status: 'released' },
+      );
+    }
+    if (this.seatLockService && ticket.booking?.tripId) {
+      await this.seatLockService.releaseSeats(ticket.booking.tripId, [ticket.seatId]);
+    }
+
+    // 3. Thực thi nghiệp vụ hoàn tiền qua GatewayRefundService
+    const payment = ticket.booking?.payments?.[0];
+    const reason = dto.reason || 'Hành khách hủy vé theo quy định';
+    let gatewayResult: any = null;
+
+    if (this.gatewayRefundService && payment && refundAmount > 0) {
+      gatewayResult = await this.gatewayRefundService.processRefund({
+        ticket,
+        booking: ticket.booking,
+        payment,
+        refundAmount,
+        originalAmount: originalPrice,
+        feeAmount,
+        reason,
+        triggeredBy: 'passenger_cancellation',
+      });
+    } else if (payment) {
+      payment.status = refundAmount > 0 ? PaymentStatus.REFUNDED : PaymentStatus.FAILED;
       payment.refundTime = new Date();
       payment.refundAmount = refundAmount;
-      payment.refundReason = dto.reason || 'Hoàn tiền vé bị hủy';
+      payment.refundReason = reason;
       await this.paymentRepository.save(payment);
     }
 
+    // 4. Gửi email xác nhận hoàn tiền (Non-blocking Task Queue)
+    if (this.notificationService) {
+      const recipientEmail =
+        ticket.booking.user?.email ||
+        payment?.paymentDetails?.invoiceEmail ||
+        (payment?.paymentDetails as any)?.email;
+
+      if (recipientEmail && typeof this.notificationService.sendRefundConfirmationEmail === 'function') {
+        await this.notificationService.sendRefundConfirmationEmail({
+          recipientEmail,
+          passengerName: ticket.passengerName || ticket.booking.user?.fullName,
+          ticketCode: ticket.ticketCode,
+          bookingCode: ticket.booking.bookingCode,
+          routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+          seatNumber: ticket.seat?.seatNumber,
+          departureTime: ticket.booking.trip?.departureTime,
+          originalPrice,
+          cancellationFeePercent: feePct,
+          feeAmount,
+          refundAmount,
+          gateway: gatewayResult?.gateway || payment?.paymentMethod || 'gateway',
+          refundTransactionId: gatewayResult?.refundTransactionId,
+          reason,
+        });
+      }
+    }
+
+    // 5. Ghi nhật ký thanh toán
     await this.logPaymentEvent({
       paymentId: payment?.id,
       bookingId: ticket.bookingId,
       bookingCode: ticket.booking?.bookingCode,
       gateway: payment?.paymentMethod || 'gateway',
       eventType: 'refund',
-      requestData: { ticketId, dto },
-      responseData: { refundAmount },
+      requestData: { ticketId, dto, userId },
+      responseData: { refundAmount, feeAmount, gatewayResult },
       status: 'success',
     });
 
     return {
       success: true,
       message: `Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VND cho vé ${ticket.ticketCode}`,
+      ticketId: ticket.id,
+      ticketCode: ticket.ticketCode,
+      status: ticket.status,
+      originalPrice,
+      cancellationFee: feeAmount,
+      cancellationFeePercent: feePct,
       refundAmount,
+      refundTransactionId: gatewayResult?.refundTransactionId,
+      gateway: gatewayResult?.gateway || payment?.paymentMethod,
       refundTime: new Date(),
     };
+  }
+
+  /**
+   * HẠNG MỤC 3 & 5: Lấy danh sách logs hoàn tiền phục vụ đối soát tài chính
+   */
+  async getRefundLogs(query: GetRefundLogsQueryDto) {
+    if (!this.refundLogRepository) {
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+        totalRefundedAmount: 0,
+        totalFeeAmount: 0,
+      };
+    }
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const qb = this.refundLogRepository
+      .createQueryBuilder('log')
+      .leftJoinAndSelect('log.payment', 'payment')
+      .leftJoinAndSelect('log.booking', 'booking')
+      .leftJoinAndSelect('log.ticket', 'ticket');
+
+    if (query.gateway) {
+      qb.andWhere('log.gateway = :gateway', { gateway: query.gateway });
+    }
+    if (query.status) {
+      qb.andWhere('log.status = :status', { status: query.status.toUpperCase() });
+    }
+    if (query.startDate) {
+      qb.andWhere('log.createdAt >= :startDate', { startDate: new Date(query.startDate) });
+    }
+    if (query.endDate) {
+      qb.andWhere('log.createdAt <= :endDate', {
+        endDate: new Date(`${query.endDate}T23:59:59.999Z`),
+      });
+    }
+    if (query.ticketCode) {
+      qb.andWhere('ticket.ticketCode ILIKE :ticketCode', {
+        ticketCode: `%${query.ticketCode.trim()}%`,
+      });
+    }
+    if (query.bookingCode) {
+      qb.andWhere('booking.bookingCode ILIKE :bookingCode', {
+        bookingCode: `%${query.bookingCode.trim()}%`,
+      });
+    }
+
+    qb.orderBy('log.createdAt', 'DESC');
+
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    // Tính tổng số tiền đã hoàn và tổng phí hủy phục vụ đối soát tài chính
+    const sumResult = await this.refundLogRepository
+      .createQueryBuilder('r')
+      .select('SUM(r.refundAmount)', 'totalRefunded')
+      .addSelect('SUM(r.feeAmount)', 'totalFee')
+      .getRawOne();
+
+    const totalRefundedAmount = Number(sumResult?.totalRefunded || 0);
+    const totalFeeAmount = Number(sumResult?.totalFee || 0);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      totalRefundedAmount,
+      totalFeeAmount,
+    };
+  }
+
+  /**
+   * HẠNG MỤC 3: Xem chi tiết biên bản hoàn tiền và payload đối chiếu của cổng thanh toán
+   */
+  async getRefundLogDetail(id: string) {
+    if (!this.refundLogRepository) {
+      throw new NotFoundException('RefundLog repository không khả dụng');
+    }
+
+    const log = await this.refundLogRepository.findOne({
+      where: { id },
+      relations: {
+        payment: true,
+        booking: { user: true, trip: { route: true } },
+        ticket: { seat: true },
+      },
+    });
+
+    if (!log) {
+      throw new NotFoundException(`Không tìm thấy biên bản hoàn tiền với ID: ${id}`);
+    }
+
+    return log;
   }
 
   async getPaymentLogs(paymentId: string) {

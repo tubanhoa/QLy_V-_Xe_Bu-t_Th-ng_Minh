@@ -17,6 +17,7 @@ import {
   MoMoIpnDto,
   ZaloPayIpnDto,
   ReconciliationQueryDto,
+  GetRefundLogsQueryDto,
 } from './dto/payment.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -24,6 +25,7 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { RateLimitGuard, RateLimit } from '../../common/guards/rate-limit.guard.js';
 
 @ApiTags('Payments')
 @Controller('payment')
@@ -105,13 +107,41 @@ export class PaymentController {
     return this.paymentService.cancelPayment(bookingId, userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({
+    limit: 3,
+    windowSeconds: 600,
+    perTicketLimit: 1,
+    perTicketWindowSeconds: 60,
+    actionName: 'kích hoạt hoàn tiền vé xe',
+  })
   @ApiBearerAuth('JWT')
   @Post('refund/:ticketId')
-  @ApiOperation({ summary: 'Hoàn tiền vé bị hủy theo chính sách (Manager, Admin)' })
-  async refundTicket(@Param('ticketId') ticketId: string, @Body() dto: RefundTicketDto) {
-    return this.paymentService.refundTicket(ticketId, dto);
+  @ApiOperation({ summary: 'Kích hoạt hoàn tiền cho vé xe đã hủy (Chống spam: 1 lần/60s/vé, tối đa 3 lần/10 phút)' })
+  async refundTicket(
+    @Param('ticketId') ticketId: string,
+    @Body() dto: RefundTicketDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.paymentService.refundTicket(ticketId, dto, userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, 'ADMIN' as any, 'MANAGER' as any)
+  @ApiBearerAuth('JWT')
+  @Get(['refund-logs', 'refunds'])
+  @ApiOperation({ summary: 'Lấy danh sách log hoàn tiền phục vụ đối soát tài chính' })
+  async getRefundLogs(@Query() query: GetRefundLogsQueryDto) {
+    return this.paymentService.getRefundLogs(query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, 'ADMIN' as any, 'MANAGER' as any)
+  @ApiBearerAuth('JWT')
+  @Get(['refund-logs/:id', 'refunds/:id'])
+  @ApiOperation({ summary: 'Xem chi tiết biên bản hoàn tiền và payload đối chiếu của cổng thanh toán' })
+  async getRefundLogDetail(@Param('id') id: string) {
+    return this.paymentService.getRefundLogDetail(id);
   }
 }
 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
@@ -12,6 +12,7 @@ import { BookingController } from './booking.controller.js';
 import { BookingService } from './booking.service.js';
 import { SeatLockService } from './seat-lock.service.js';
 import { NotificationModule } from '../notification/notification.module.js';
+import { PaymentModule } from '../payment/payment.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificationModule } from '../notification/notification.module.js';
       PaymentEntity,
     ]),
     NotificationModule,
+    forwardRef(() => PaymentModule),
   ],
   controllers: [BookingController],
   providers: [BookingService, SeatLockService],

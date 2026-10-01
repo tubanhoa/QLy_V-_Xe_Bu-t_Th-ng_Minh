@@ -6,6 +6,8 @@ import {
   ForbiddenException,
   UnauthorizedException,
   Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, DataSource, LessThanOrEqual, MoreThan } from 'typeorm';
@@ -18,6 +20,7 @@ import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { SeatLockService } from './seat-lock.service.js';
+import { PaymentService } from '../payment/payment.service.js';
 import {
   HoldSeatsDto,
   CreateBookingDto,
@@ -56,6 +59,9 @@ export class BookingService {
     @Optional()
     @InjectRepository(PaymentEntity)
     private readonly paymentRepository?: Repository<PaymentEntity>,
+    @Optional()
+    @Inject(forwardRef(() => PaymentService))
+    private readonly paymentService?: PaymentService,
     @Optional()
     private readonly dataSource?: DataSource,
     @Optional()
@@ -1116,8 +1122,8 @@ export class BookingService {
       }
 
       // 3. Ngăn chặn hủy vé đã bị hủy trước đó
-      if (ticket.status === TicketStatus.CANCELLED) {
-        throw new BadRequestException('Vé này đã bị hủy trước đó');
+      if (ticket.status === TicketStatus.CANCELLED || ticket.status === TicketStatus.REFUNDED) {
+        throw new BadRequestException('Vé này đã bị hủy hoặc hoàn tiền trước đó');
       }
 
       const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
@@ -1142,19 +1148,39 @@ export class BookingService {
 
       // 5. Tự động xử lý quy trình hoàn tiền qua cổng thanh toán (chống hoàn tiền gấp đôi tuyệt đối)
       let refundProcessed = false;
+      let refundTxnId: string | null = null;
+      let gatewayResult: any = null;
       if (previousStatus === TicketStatus.PAID) {
         const payment =
           ticket.booking.payments?.[0] ||
           (this.paymentRepository ? await this.paymentRepository.findOne({ where: { bookingId: ticket.bookingId } }) : null);
+
         if (payment && payment.status !== PaymentStatus.REFUNDED) {
-          payment.status = PaymentStatus.REFUNDED;
-          payment.refundTime = new Date();
-          payment.refundAmount = policy.refundAmount;
-          payment.refundReason = dto?.reason || 'Hành khách hủy vé theo quy định';
-          if (this.paymentRepository) {
-            await this.paymentRepository.save(payment);
+          if (policy.refundAmount > 0) {
+            if (this.paymentService) {
+              gatewayResult = await this.paymentService.processRefund({
+                ticket,
+                booking: ticket.booking,
+                payment,
+                refundAmount: policy.refundAmount,
+                originalAmount: policy.originalPrice,
+                feeAmount: policy.cancellationFeeAmount,
+                reason: dto?.reason || 'Hành khách hủy vé theo quy định',
+                triggeredBy: 'passenger_cancellation',
+              });
+              refundTxnId = gatewayResult?.refundTransactionId || null;
+              refundProcessed = true;
+            } else {
+              payment.status = PaymentStatus.REFUNDED;
+              payment.refundTime = new Date();
+              payment.refundAmount = policy.refundAmount;
+              payment.refundReason = dto?.reason || 'Hành khách hủy vé theo quy định';
+              if (this.paymentRepository) {
+                await this.paymentRepository.save(payment);
+              }
+              refundProcessed = true;
+            }
           }
-          refundProcessed = true;
         }
       }
 
@@ -1171,7 +1197,10 @@ export class BookingService {
       }
 
       // 7. Tự động gửi Email xác nhận hủy vé và hoàn tiền cho hành khách
-      const recipientEmail = ticket.booking.user?.email;
+      const recipientEmail =
+        ticket.booking.user?.email ||
+        ticket.booking.payments?.[0]?.paymentDetails?.invoiceEmail;
+
       if (this.notificationService && recipientEmail) {
         await this.notificationService.sendTicketCancellationEmail({
           recipientEmail,
@@ -1191,11 +1220,13 @@ export class BookingService {
         message: `Hủy vé ${ticket.ticketCode} thành công. ${policy.refundAmount > 0 ? `Số tiền hoàn lại là ${policy.refundAmount.toLocaleString('vi-VN')} VND.` : 'Vé không được hoàn tiền theo chính sách.'}`,
         ticketId: ticket.id,
         ticketCode: ticket.ticketCode,
-        status: ticket.status,
+        status: TicketStatus.CANCELLED,
+        refundStatus: policy.refundAmount > 0 ? 'REFUNDED' : 'NO_REFUND',
         originalPrice: policy.originalPrice,
         cancellationFee: policy.cancellationFeeAmount,
         refundAmount: policy.refundAmount,
         refundProcessed,
+        refundTransactionId: refundTxnId,
         seatReleased: true,
       };
 
