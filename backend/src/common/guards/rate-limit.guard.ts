@@ -9,9 +9,11 @@ import {
 import { Reflector } from '@nestjs/core';
 
 export interface RateLimitOptions {
-  limit: number; // Tối đa số lần gọi
-  windowSeconds: number; // Trong khoảng thời gian (giây)
+  limit: number; // Tối đa số lần gọi cho IP / Tài khoản (VD: 3)
+  windowSeconds: number; // Trong khoảng thời gian (giây, VD: 600)
   actionName?: string; // Tên hành động để thông báo
+  perTicketLimit?: number; // Tối đa số lần gửi cho mỗi vé (VD: 1)
+  perTicketWindowSeconds?: number; // Cooldown cho mỗi vé (giây, VD: 60)
 }
 
 export const RATE_LIMIT_KEY = 'rate_limit';
@@ -41,15 +43,64 @@ export class RateLimitGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest();
     const res = context.switchToHttp().getResponse();
+    const now = Date.now();
 
+    // 1. Trích xuất mã nhận diện vé (nếu có) để áp dụng Per-Ticket Cooldown
+    const ticketKey =
+      req.params?.id ||
+      req.params?.ticketId ||
+      req.body?.ticketCode ||
+      req.body?.bookingCode;
+
+    if (options.perTicketLimit && ticketKey) {
+      const ticketWindowMs = (options.perTicketWindowSeconds || 60) * 1000;
+      const ticketLimit = options.perTicketLimit;
+      const ticketRecordKey = `ticket:${ticketKey}`;
+
+      let ticketRecord = RateLimitGuard.records.get(ticketRecordKey);
+      if (!ticketRecord) {
+        ticketRecord = { timestamps: [] };
+        RateLimitGuard.records.set(ticketRecordKey, ticketRecord);
+      }
+
+      ticketRecord.timestamps = ticketRecord.timestamps.filter(
+        (ts) => now - ts < ticketWindowMs,
+      );
+
+      if (ticketRecord.timestamps.length >= ticketLimit) {
+        const oldestTimestamp = ticketRecord.timestamps[0];
+        const retryAfterSeconds = Math.max(
+          1,
+          Math.ceil((oldestTimestamp + ticketWindowMs - now) / 1000),
+        );
+
+        if (res && typeof res.setHeader === 'function') {
+          res.setHeader('Retry-After', retryAfterSeconds.toString());
+        }
+
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: `Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau ${retryAfterSeconds} giây.`,
+            retryAfterSeconds,
+            retryAfter: retryAfterSeconds,
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    // 2. Kiểm tra giới hạn theo IP / Tài khoản người dùng (Per IP / User Rate Limit)
     const clientIp =
       req.headers['x-forwarded-for']?.toString().split(',')[0].trim() ||
       req.socket?.remoteAddress ||
       '127.0.0.1';
 
+    const userId = req.user?.id || req.user?.sub;
+    const userIdentifier = userId ? `user:${userId}` : `ip:${clientIp}`;
     const handlerName = context.getHandler().name;
-    const key = `${clientIp}:${handlerName}`;
-    const now = Date.now();
+    const key = `${userIdentifier}:${handlerName}`;
     const windowMs = options.windowSeconds * 1000;
 
     let record = RateLimitGuard.records.get(key);
@@ -81,7 +132,8 @@ export class RateLimitGuard implements CanActivate {
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `Quá giới hạn ${action}. Bạn chỉ được thực hiện tối đa ${options.limit} lần trong ${Math.round(options.windowSeconds / 60)} phút. Vui lòng thử lại sau ${timeStr}.`,
+          message: `Quá giới hạn ${action}. Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau ${timeStr}.`,
+          retryAfterSeconds,
           retryAfter: retryAfterSeconds,
           error: 'Too Many Requests',
         },
@@ -89,8 +141,16 @@ export class RateLimitGuard implements CanActivate {
       );
     }
 
-    // Ghi nhận lần gọi hợp lệ
+    // Ghi nhận lần gọi hợp lệ cho cả vé (nếu có) và IP/User
+    if (options.perTicketLimit && ticketKey) {
+      const ticketRecordKey = `ticket:${ticketKey}`;
+      const ticketRecord = RateLimitGuard.records.get(ticketRecordKey);
+      if (ticketRecord) {
+        ticketRecord.timestamps.push(now);
+      }
+    }
     record.timestamps.push(now);
+
     return true;
   }
 

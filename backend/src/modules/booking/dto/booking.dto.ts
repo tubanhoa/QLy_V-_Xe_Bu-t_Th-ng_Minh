@@ -146,3 +146,20 @@ export class ExchangeTicketDto {
   @IsString()
   paymentMethod?: string;
 }
+
+export class ResendTicketByCodeDto {
+  @ApiPropertyOptional({ example: 'TK-2026-02B', description: 'Mã vé xe buýt' })
+  @IsOptional()
+  @IsString()
+  ticketCode?: string;
+
+  @ApiPropertyOptional({ example: 'BK-ICTU-8168', description: 'Mã đơn đặt vé' })
+  @IsOptional()
+  @IsString()
+  bookingCode?: string;
+
+  @ApiPropertyOptional({ example: 'user@example.com', description: 'Email nhận lại vé (tùy chọn)' })
+  @IsOptional()
+  @IsEmail({}, { message: 'Địa chỉ email không đúng định dạng' })
+  email?: string;
+}

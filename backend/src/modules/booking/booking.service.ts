@@ -744,27 +744,49 @@ export class BookingService {
     };
   }
 
-  async resendTicketEmail(ticketId: string, userId: string, customEmail?: string) {
-    const ticket = await this.ticketRepository.findOne({
-      where: [{ id: ticketId }, { ticketCode: ticketId }],
-      relations: {
-        booking: {
-          user: true,
-          trip: { route: true, vehicle: true },
-        },
-        seat: true,
+  async resendTicketEmail(ticketId: string, userId?: string, customEmail?: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ticketId);
+    let ticket: TicketEntity | null = null;
+    const relations = {
+      booking: {
+        user: true,
+        trip: { route: true, vehicle: true },
       },
-    });
+      seat: true,
+    };
+
+    if (isUuid) {
+      ticket = await this.ticketRepository.findOne({
+        where: [{ id: ticketId }, { ticketCode: ticketId }],
+        relations,
+      });
+    } else {
+      ticket = await this.ticketRepository.findOne({
+        where: [{ ticketCode: ticketId }],
+        relations,
+      });
+      if (!ticket) {
+        try {
+          ticket = await this.ticketRepository.findOne({
+            where: [{ id: ticketId }],
+            relations,
+          });
+        } catch {
+          // Bỏ qua lỗi cú pháp UUID trong PostgreSQL
+        }
+      }
+    }
 
     if (!ticket) {
       throw new NotFoundException('Không tìm thấy vé xe');
     }
 
-    if (ticket.booking.userId !== userId) {
+
+    if (userId && ticket.booking?.userId && ticket.booking.userId !== userId) {
       throw new ForbiddenException('Bạn không có quyền thao tác trên vé này');
     }
 
-    const recipientEmail = customEmail || ticket.booking.user?.email;
+    const recipientEmail = customEmail?.trim() || ticket.booking?.user?.email;
     if (!recipientEmail) {
       throw new BadRequestException('Không tìm thấy địa chỉ email để gửi vé');
     }
@@ -777,15 +799,15 @@ export class BookingService {
     if (this.notificationService) {
       await this.notificationService.sendTicketConfirmationEmail({
         recipientEmail,
-        passengerName: ticket.passengerName || ticket.booking.user?.fullName,
-        bookingCode: ticket.booking.bookingCode,
+        passengerName: ticket.passengerName || ticket.booking?.user?.fullName,
+        bookingCode: ticket.booking?.bookingCode,
         ticketCode: ticket.ticketCode,
-        routeName: ticket.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
-        origin: ticket.booking.trip?.route?.origin,
-        destination: ticket.booking.trip?.route?.destination,
-        departureTime: ticket.booking.trip?.departureTime || new Date(),
+        routeName: ticket.booking?.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+        origin: ticket.booking?.trip?.route?.origin,
+        destination: ticket.booking?.trip?.route?.destination,
+        departureTime: ticket.booking?.trip?.departureTime || new Date(),
         seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
-        vehiclePlate: ticket.booking.trip?.vehicle?.licensePlate,
+        vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
         price: ticket.originalPrice,
         qrDataUrl,
       });
@@ -795,6 +817,115 @@ export class BookingService {
       success: true,
       message: `Đã gửi lại vé điện tử thành công tới email ${recipientEmail}`,
       recipientEmail,
+    };
+  }
+
+  /**
+   * Gửi lại email vé điện tử công khai theo Mã vé hoặc Mã đơn đặt vé (Khách vãng lai / Không bắt buộc JWT)
+   */
+  async resendTicketEmailByCode(code?: string, customEmail?: string) {
+    if (!code || !code.trim()) {
+      throw new BadRequestException('Vui lòng cung cấp mã vé hoặc mã đơn đặt vé');
+    }
+
+    const cleanCode = code.trim();
+    const isCodeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanCode);
+
+    // 1. Tìm theo ticketCode hoặc ticketId
+    const ticketRelations = {
+      booking: {
+        user: true,
+        trip: { route: true, vehicle: true },
+      },
+      seat: true,
+    };
+
+    let ticket = await this.ticketRepository.findOne({
+      where: isCodeUuid ? [{ ticketCode: cleanCode }, { id: cleanCode }] : [{ ticketCode: cleanCode }],
+      relations: ticketRelations,
+    });
+
+    if (!ticket && !isCodeUuid) {
+      try {
+        ticket = await this.ticketRepository.findOne({
+          where: [{ id: cleanCode }],
+          relations: ticketRelations,
+        });
+      } catch {
+        // Bỏ qua lỗi cú pháp UUID trong PostgreSQL
+      }
+    }
+
+    // 2. Nếu không tìm thấy theo mã vé, thử tìm theo mã đơn đặt vé (bookingCode)
+    if (!ticket) {
+      const bookingRelations = {
+        user: true,
+        trip: { route: true, vehicle: true },
+        tickets: { seat: true },
+      };
+
+      let booking = await this.bookingRepository.findOne({
+        where: isCodeUuid ? [{ bookingCode: cleanCode }, { id: cleanCode }] : [{ bookingCode: cleanCode }],
+        relations: bookingRelations,
+      });
+
+      if (!booking && !isCodeUuid) {
+        try {
+          booking = await this.bookingRepository.findOne({
+            where: [{ id: cleanCode }],
+            relations: bookingRelations,
+          });
+        } catch {
+          // Bỏ qua lỗi cú pháp UUID trong PostgreSQL
+        }
+      }
+
+
+      if (!booking) {
+        throw new NotFoundException(`Không tìm thấy vé hoặc đơn đặt vé với mã: ${cleanCode}`);
+      }
+
+      if (!booking.tickets || booking.tickets.length === 0) {
+        throw new NotFoundException(`Đơn đặt ${cleanCode} không chứa vé nào khả dụng`);
+      }
+
+      ticket = booking.tickets[0];
+      ticket.booking = booking;
+    }
+
+    const recipientEmail = customEmail?.trim() || ticket.booking?.user?.email;
+    if (!recipientEmail) {
+      throw new BadRequestException('Không tìm thấy địa chỉ email để gửi vé. Vui lòng nhập email nhận vé.');
+    }
+
+    let qrDataUrl = '';
+    if (ticket.qrData) {
+      qrDataUrl = await generateQrDataUrl(ticket.qrData);
+    }
+
+    if (this.notificationService) {
+      await this.notificationService.sendTicketConfirmationEmail({
+        recipientEmail,
+        passengerName: ticket.passengerName || ticket.booking?.user?.fullName,
+        bookingCode: ticket.booking?.bookingCode,
+        ticketCode: ticket.ticketCode,
+        routeName: ticket.booking?.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+        origin: ticket.booking?.trip?.route?.origin,
+        destination: ticket.booking?.trip?.route?.destination,
+        departureTime: ticket.booking?.trip?.departureTime || new Date(),
+        seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
+        vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+        price: ticket.originalPrice,
+        qrDataUrl,
+      });
+    }
+
+    return {
+      success: true,
+      message: `Đã gửi lại vé điện tử thành công tới email ${recipientEmail}`,
+      recipientEmail,
+      ticketCode: ticket.ticketCode,
+      bookingCode: ticket.booking?.bookingCode,
     };
   }
 

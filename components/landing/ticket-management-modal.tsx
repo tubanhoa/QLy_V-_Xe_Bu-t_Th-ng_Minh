@@ -111,11 +111,16 @@ export function TicketManagementModal({
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadSuccess, setDownloadSuccess] = useState(false)
 
-  // State Gửi lại Email vé
+  // State Gửi lại Email vé & Chống spam Cooldown
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [customEmail, setCustomEmail] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
-  const [emailNotice, setEmailNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [emailNotice, setEmailNotice] = useState<{
+    type: 'success' | 'error' | 'warning'
+    text: string
+    showLoginBtn?: boolean
+  } | null>(null)
 
   // Sub-modals Đổi vé, Hủy vé, Đánh giá & Hóa đơn điện tử
   const [showExchangeModal, setShowExchangeModal] = useState(false)
@@ -384,9 +389,67 @@ export function TicketManagementModal({
     printTicketAsPdf()
   }
 
+  // Khôi phục cooldown từ sessionStorage theo ticketId (ngăn F5 bypass spam)
+  useEffect(() => {
+    const tId = ticketDetail?.ticketId || selectedTicketId
+    if (!tId) return
+    const key = `resend_cooldown_${tId}`
+    try {
+      const stored = sessionStorage.getItem(key)
+      if (stored) {
+        const elapsed = Math.floor((Date.now() - Number(stored)) / 1000)
+        if (elapsed < 60) {
+          setResendCooldown(60 - elapsed)
+        } else {
+          sessionStorage.removeItem(key)
+        }
+      }
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, [ticketDetail?.ticketId, selectedTicketId])
+
+  // Cooldown đếm ngược 60s
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [resendCooldown])
+
   // Gửi lại email vé
   const handleResendEmail = async () => {
     if (!ticketDetail) return
+
+    // 3.1: Chặn lỗi đỏ khi người dùng bấm gửi trên Vé Mẫu / Vé Offline
+    const isDemoTicket =
+      !ticketDetail.ticketId ||
+      ticketDetail.ticketCode?.startsWith('TK-2026-') ||
+      ticketDetail.ticketId?.startsWith('tkt_')
+
+    if (isDemoTicket) {
+      setEmailNotice({
+        type: 'warning',
+        text: '⚠️ Đây là vé mẫu mô phỏng trên trình duyệt. Vui lòng đăng nhập tài khoản thực và đặt vé trực tuyến để lưu vào hệ thống và gửi email tự động.',
+      })
+      return
+    }
+
+    if (resendCooldown > 0) {
+      setEmailNotice({
+        type: 'warning',
+        text: `🛡️ Hệ thống đang bảo vệ chống spam. Vui lòng đợi ${resendCooldown} giây trước khi gửi tiếp.`,
+      })
+      return
+    }
+
     setSendingEmail(true)
     setEmailNotice(null)
 
@@ -396,13 +459,47 @@ export function TicketManagementModal({
     )
     setSendingEmail(false)
 
+    const cooldownKey = `resend_cooldown_${ticketDetail.ticketId}`
+
     if (res.success) {
+      // BƯỚC 3.2: Kích hoạt Cooldown 60s và lưu timestamp vào sessionStorage
+      setResendCooldown(60)
+      try {
+        sessionStorage.setItem(cooldownKey, Date.now().toString())
+      } catch {}
+
       setEmailNotice({
         type: 'success',
         text: res.message || 'Đã gửi lại vé điện tử kèm mã QR tới email thành công!',
       })
       setTimeout(() => setShowEmailModal(false), 3500)
     } else {
+      // BƯỚC 3.2: Xử lý mã lỗi 429 Too Many Requests từ Backend
+      if (res.statusCode === 429) {
+        const retrySec = res.retryAfterSeconds || 60
+        setResendCooldown(retrySec)
+        try {
+          const fakeTimestamp = Date.now() - (60 - retrySec) * 1000
+          sessionStorage.setItem(cooldownKey, fakeTimestamp.toString())
+        } catch {}
+
+        setEmailNotice({
+          type: 'warning',
+          text: `🛡️ Hệ thống đang bảo vệ chống spam. Vui lòng đợi ${retrySec} giây trước khi gửi tiếp.`,
+        })
+        return
+      }
+
+      // BƯỚC 3.3: Xử lý thông minh khi gặp lỗi 401 Unauthorized
+      if (res.statusCode === 401) {
+        setEmailNotice({
+          type: 'error',
+          text: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại để xác thực quyền gửi vé.',
+          showLoginBtn: true,
+        })
+        return
+      }
+
       setEmailNotice({
         type: 'error',
         text: res.message || 'Không thể gửi email vé. Vui lòng kiểm tra lại địa chỉ email.',
@@ -984,24 +1081,46 @@ export function TicketManagementModal({
                             />
                             <button
                               type="button"
-                              disabled={sendingEmail}
+                              disabled={sendingEmail || resendCooldown > 0}
                               onClick={handleResendEmail}
-                              className="px-4 py-2 rounded-xl bg-[#005A36] text-white font-bold text-xs hover:bg-[#00472b] disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                              className="px-4 py-2 rounded-xl bg-[#005A36] text-white font-bold text-xs hover:bg-[#00472b] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
                             >
                               {sendingEmail && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                              <span>Gửi vé</span>
+                              {resendCooldown > 0 && <Clock className="w-3.5 h-3.5 animate-pulse" />}
+                              <span>
+                                {sendingEmail
+                                  ? 'Đang gửi...'
+                                  : resendCooldown > 0
+                                    ? `Gửi lại sau (${resendCooldown}s)`
+                                    : 'Gửi vé'}
+                              </span>
                             </button>
                           </div>
 
                           {emailNotice && (
                             <div
-                              className={`p-2 rounded-lg text-[11px] font-medium ${
+                              className={`p-2.5 rounded-xl text-[11px] font-medium transition-all ${
                                 emailNotice.type === 'success'
                                   ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                  : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                  : emailNotice.type === 'warning'
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    : 'bg-rose-100 text-rose-900 border border-rose-300'
                               }`}
                             >
-                              {emailNotice.text}
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="flex-1">{emailNotice.text}</span>
+                              </div>
+                              {emailNotice.showLoginBtn && (
+                                <div className="mt-2 pt-1 border-t border-rose-200">
+                                  <a
+                                    href="/dang-nhap"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#005A36] text-white text-[11px] font-bold hover:bg-[#00472b] transition-all cursor-pointer shadow-xs"
+                                  >
+                                    <LogIn size={13} />
+                                    <span>Đăng nhập lại ngay</span>
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

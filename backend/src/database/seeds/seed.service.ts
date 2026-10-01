@@ -106,6 +106,16 @@ export class SeedService implements OnApplicationBootstrap {
         faculty: 'Công Nghệ Thông Tin',
         status: UserStatus.ACTIVE,
       },
+      {
+        fullName: 'Sinh Viên Mẫu ICTU',
+        email: 'sinhvien.ictu@gmail.com',
+        phoneNumber: '0909999888',
+        passwordHash,
+        roleId: roleMap.get(Role.PASSENGER)!.id,
+        studentId: 'DTC245180025',
+        faculty: 'Công Nghệ Thông Tin',
+        status: UserStatus.ACTIVE,
+      },
     ];
 
     for (const u of usersData) {
@@ -119,7 +129,9 @@ export class SeedService implements OnApplicationBootstrap {
     // 3. Seed Stations
     const stationsData = [
       { name: 'Trạm ĐH CNTT & TT Thái Nguyên (ICTU)', address: 'Đường Z115, Quyết Thắng, TP. Thái Nguyên', latitude: 21.585284, longitude: 105.806297, isHub: true },
-      { name: 'Trạm Cổng KTX ĐH Thái Nguyên', address: 'Đường Lương Ngọc Quyến, TP. Thái Nguyên', latitude: 21.590123, longitude: 105.815234, isHub: false },
+      { name: 'Trạm Cổng KTX ĐH Thái Nguyên (KTX ICTU)', address: 'Đường Z115, Quyết Thắng, TP. Thái Nguyên', latitude: 21.587123, longitude: 105.808234, isHub: false },
+      { name: 'Trạm ĐH Sư Phạm Thái Nguyên', address: 'Số 20 Lương Ngọc Quyến, TP. Thái Nguyên', latitude: 21.591234, longitude: 105.818901, isHub: true },
+      { name: 'Trạm Bến Xe Đồng Quang', address: 'Đường Quang Trung, TP. Thái Nguyên', latitude: 21.593456, longitude: 105.821234, isHub: true },
       { name: 'Trạm Ngã 3 Mỏ Chè', address: 'Đường Quang Trung, TP. Thái Nguyên', latitude: 21.595432, longitude: 105.823456, isHub: false },
       { name: 'Trạm Bệnh Viện Đa Khoa Trung Ương', address: 'Số 479 Lương Ngọc Quyến, TP. Thái Nguyên', latitude: 21.598765, longitude: 105.832109, isHub: true },
       { name: 'Trạm Bến Xe Trung Tâm Thái Nguyên', address: 'Đường Lương Ngọc Quyến, Quang Trung, TP. Thái Nguyên', latitude: 21.604321, longitude: 105.845678, isHub: true },
@@ -163,16 +175,16 @@ export class SeedService implements OnApplicationBootstrap {
             routeId: route1.id,
             stationId: station.id,
             stopOrder: order,
-            distanceFromOriginKm: (order - 1) * 3.5,
-            estimatedMinutes: (order - 1) * 8,
+            distanceFromOriginKm: (order - 1) * 2.5,
+            estimatedMinutes: (order - 1) * 7,
           }),
         );
         order++;
       }
-      this.logger.log('Seeded route: CT-01 with 5 stations');
+      this.logger.log(`Seeded route: CT-01 with ${stationsData.length} stations`);
     }
 
-    // 4b. Seed Route CT-02 (Tuyến độc lập: Bến Xe Nam ↔ KCN Sông Công, không qua KTX/Bệnh Viện)
+    // 4b. Seed Route CT-02 (Tuyến độc lập: Bến Xe Nam ↔ KCN Sông Công)
     const ct02StationsData = [
       { name: 'Trạm Bến Xe Nam Thái Nguyên', address: 'Phường Tích Lương, TP. Thái Nguyên', latitude: 21.543210, longitude: 105.854321, isHub: true },
       { name: 'Trạm Ngã 4 Tích Lương', address: 'Đường 3 Tháng 2, Tích Lương, TP. Thái Nguyên', latitude: 21.532100, longitude: 105.865432, isHub: false },
@@ -224,7 +236,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.logger.log('Seeded route: CT-02 with 3 stations');
     }
 
-    // 5. Seed Vehicles & Seats
+    // 5. Seed Vehicles & Seats (Đảm bảo mỗi xe có đủ đúng 28 ghế)
     const vehiclesData = [
       { licensePlate: '20B-012.34', model: 'VinFast eBus 2024 (EV)', vehicleType: 'electric', seatCapacity: 28 },
       { licensePlate: '20B-056.78', model: 'VinFast eBus 2024 (EV)', vehicleType: 'electric', seatCapacity: 28 },
@@ -242,20 +254,22 @@ export class SeedService implements OnApplicationBootstrap {
           status: VehicleStatus.ACTIVE,
         });
         vehicle = await this.vehicleRepo.save(vehicle);
+      }
 
-        // Generate 28 seats
-        const seats: SeatEntity[] = [];
-        const cols = ['A', 'B', 'C', 'D'];
-        let count = 0;
-        for (let r = 1; r <= 7; r++) {
-          for (const c of cols) {
-            if (count >= 28) break;
-            count++;
-            const rowStr = r < 10 ? `0${r}` : `${r}`;
-            seats.push(
+      // Đảm bảo đủ đúng 28 ghế (01A -> 07D) cho mỗi xe
+      const existingSeats = await this.seatRepo.find({ where: { vehicleId: vehicle.id } });
+      const existingSeatNumbers = new Set(existingSeats.map((s) => s.seatNumber));
+      const missingSeats: SeatEntity[] = [];
+      const cols = ['A', 'B', 'C', 'D'];
+      for (let r = 1; r <= 7; r++) {
+        for (const c of cols) {
+          const rowStr = r < 10 ? `0${r}` : `${r}`;
+          const seatNumber = `${rowStr}${c}`;
+          if (!existingSeatNumbers.has(seatNumber)) {
+            missingSeats.push(
               this.seatRepo.create({
                 vehicleId: vehicle.id,
-                seatNumber: `${rowStr}${c}`,
+                seatNumber,
                 rowNumber: r,
                 columnLabel: c,
                 seatType: r === 1 ? SeatType.PRIORITY : SeatType.STANDARD,
@@ -264,38 +278,122 @@ export class SeedService implements OnApplicationBootstrap {
             );
           }
         }
-        await this.seatRepo.save(seats);
-        this.logger.log(`Seeded vehicle: ${v.licensePlate} with 28 seats`);
+      }
+
+      if (missingSeats.length > 0) {
+        await this.seatRepo.save(missingSeats);
+        this.logger.log(`Seeded ${missingSeats.length} missing seats for vehicle: ${v.licensePlate}`);
       }
       vehicles.push(vehicle);
     }
 
-    // 6. Seed Sample Trips for Today
-    const todayTrips = await this.tripRepo.find({ take: 1 });
-    if (todayTrips.length === 0 && route1 && vehicles.length > 0) {
-      const driver = await this.userRepo.findOne({ where: { email: 'driver.nam@smartbus.ictu.vn' } });
-      const now = new Date();
+    // 6. Rolling Window Seed (Lăn ngày tự động): Hôm nay + 3 ngày tới
+    // Đảm bảo luôn có các chuyến xe SCHEDULED từ 06:00 đến 19:30 mỗi ngày
+    const driver =
+      (await this.userRepo.findOne({ where: { email: 'driver.nam@smartbus.ictu.vn' } })) ||
+      (await this.userRepo.findOne({ where: { roleId: roleMap.get(Role.DRIVER)?.id } }));
 
-      const hours = [7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18];
-      for (const h of hours) {
-        const dep = new Date(now);
-        dep.setHours(h, 0, 0, 0);
+    const routeCT01 = route1 || (await this.routeRepo.findOne({ where: { routeCode: 'CT-01' } }));
+    const routeCT02 = route2 || (await this.routeRepo.findOne({ where: { routeCode: 'CT-02' } }));
 
-        const arr = new Date(dep);
-        arr.setMinutes(arr.getMinutes() + 45);
+    // Khung giờ chạy cho tuyến CT-01: Cách nhau 45 phút từ 06:00 đến 19:30 (19 chuyến/ngày)
+    const ct01Schedule = [
+      { h: 6, m: 0 }, { h: 6, m: 45 },
+      { h: 7, m: 30 }, { h: 8, m: 15 },
+      { h: 9, m: 0 }, { h: 9, m: 45 },
+      { h: 10, m: 30 }, { h: 11, m: 15 },
+      { h: 12, m: 0 }, { h: 12, m: 45 },
+      { h: 13, m: 30 }, { h: 14, m: 15 },
+      { h: 15, m: 0 }, { h: 15, m: 45 },
+      { h: 16, m: 30 }, { h: 17, m: 15 },
+      { h: 18, m: 0 }, { h: 18, m: 45 },
+      { h: 19, m: 30 },
+    ];
 
-        await this.tripRepo.save(
-          this.tripRepo.create({
-            routeId: route1.id,
-            vehicleId: vehicles[0].id,
-            driverId: driver?.id,
-            departureTime: dep,
-            arrivalTime: arr,
-            status: TripStatus.SCHEDULED,
-          }),
-        );
+    // Khung giờ chạy cho tuyến CT-02: Cách nhau 45 phút từ 06:30 đến 19:15 (18 chuyến/ngày)
+    const ct02Schedule = [
+      { h: 6, m: 30 }, { h: 7, m: 15 },
+      { h: 8, m: 0 }, { h: 8, m: 45 },
+      { h: 9, m: 30 }, { h: 10, m: 15 },
+      { h: 11, m: 0 }, { h: 11, m: 45 },
+      { h: 12, m: 30 }, { h: 13, m: 15 },
+      { h: 14, m: 0 }, { h: 14, m: 45 },
+      { h: 15, m: 30 }, { h: 16, m: 15 },
+      { h: 17, m: 0 }, { h: 17, m: 45 },
+      { h: 18, m: 30 }, { h: 19, m: 15 },
+    ];
+
+    const todayDate = new Date();
+    for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
+      const targetDate = new Date(todayDate);
+      targetDate.setDate(todayDate.getDate() + dayOffset);
+      const y = targetDate.getFullYear();
+      const m = targetDate.getMonth();
+      const d = targetDate.getDate();
+
+      const startOfDay = new Date(y, m, d, 0, 0, 0, 0);
+      const endOfDay = new Date(y, m, d, 23, 59, 59, 999);
+
+      const existingTripsCount = await this.tripRepo
+        .createQueryBuilder('trip')
+        .where('trip.departureTime BETWEEN :start AND :end', {
+          start: startOfDay,
+          end: endOfDay,
+        })
+        .andWhere('trip.status = :status', { status: TripStatus.SCHEDULED })
+        .getCount();
+
+      if (existingTripsCount < 10) {
+        const tripsToCreate: TripEntity[] = [];
+
+        // Tạo chuyến cho CT-01
+        if (routeCT01 && vehicles.length > 0) {
+          for (let i = 0; i < ct01Schedule.length; i++) {
+            const time = ct01Schedule[i];
+            const dep = new Date(y, m, d, time.h, time.m, 0, 0);
+            const arr = new Date(dep.getTime() + 45 * 60 * 1000);
+            const vehicle = vehicles[i % Math.min(2, vehicles.length)];
+
+            tripsToCreate.push(
+              this.tripRepo.create({
+                routeId: routeCT01.id,
+                vehicleId: vehicle.id,
+                driverId: driver?.id,
+                departureTime: dep,
+                arrivalTime: arr,
+                status: TripStatus.SCHEDULED,
+              }),
+            );
+          }
+        }
+
+        // Tạo chuyến cho CT-02
+        if (routeCT02 && vehicles.length > 1) {
+          for (let i = 0; i < ct02Schedule.length; i++) {
+            const time = ct02Schedule[i];
+            const dep = new Date(y, m, d, time.h, time.m, 0, 0);
+            const arr = new Date(dep.getTime() + 40 * 60 * 1000);
+            const vehicle = vehicles.length >= 3 ? vehicles[1 + (i % 2)] : vehicles[1];
+
+            tripsToCreate.push(
+              this.tripRepo.create({
+                routeId: routeCT02.id,
+                vehicleId: vehicle.id,
+                driverId: driver?.id,
+                departureTime: dep,
+                arrivalTime: arr,
+                status: TripStatus.SCHEDULED,
+              }),
+            );
+          }
+        }
+
+        if (tripsToCreate.length > 0) {
+          await this.tripRepo.save(tripsToCreate);
+          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          this.logger.log(`Seeded ${tripsToCreate.length} rolling window trips for date ${dateStr} (CT-01 & CT-02)`);
+        }
       }
-      this.logger.log(`Seeded ${hours.length} sample trips for today on route CT-01`);
     }
 
     // 7. Seed Vouchers
@@ -321,3 +419,4 @@ export class SeedService implements OnApplicationBootstrap {
     this.logger.log('Database seeding check completed successfully!');
   }
 }
+

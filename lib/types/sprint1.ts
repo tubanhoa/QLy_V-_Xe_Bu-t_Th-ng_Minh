@@ -120,6 +120,7 @@ export interface UnifiedApiResponse<T> {
   message?: string
   errorCode?: string
   statusCode?: number
+  retryAfterSeconds?: number
 }
 
 // 3. User Story 2: Chọn vị trí ghế (Seat Layout & Realtime Status)

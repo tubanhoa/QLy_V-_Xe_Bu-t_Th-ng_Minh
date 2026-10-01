@@ -19,6 +19,7 @@ import {
   CancelTicketDto,
   HoldExchangeSeatDto,
   ConfirmExchangeDto,
+  ResendTicketByCodeDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
@@ -106,17 +107,44 @@ export class BookingController {
     return this.bookingService.getTicketQr(ticketId, userId, userRole);
   }
 
-  @UseGuards(JwtAuthGuard, RateLimitGuard)
-  @RateLimit({ limit: 3, windowSeconds: 600, actionName: 'gửi lại email vé điện tử' })
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    limit: 3,
+    windowSeconds: 600,
+    perTicketLimit: 1,
+    perTicketWindowSeconds: 60,
+    actionName: 'gửi lại email vé điện tử',
+  })
   @ApiBearerAuth('JWT')
   @Post('tickets/:id/resend-email')
-  @ApiOperation({ summary: 'Gửi lại email vé điện tử kèm mã QR (Giới hạn 3 lần/10 phút)' })
+  @ApiOperation({ summary: 'Gửi lại email vé điện tử kèm mã QR (Chống spam: 1 lần/60s/vé, tối đa 3 lần/10 phút)' })
   async resendTicketEmail(
     @Param('id') ticketId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('id') userId?: string,
     @Body('email') customEmail?: string,
   ) {
-    return this.bookingService.resendTicketEmail(ticketId, userId, customEmail);
+    return this.bookingService.resendTicketEmail(ticketId, userId || undefined, customEmail);
+  }
+
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    limit: 3,
+    windowSeconds: 600,
+    perTicketLimit: 1,
+    perTicketWindowSeconds: 60,
+    actionName: 'gửi lại email vé điện tử',
+  })
+  @Post('tickets/resend-by-code')
+  @ApiOperation({ summary: 'Gửi lại email vé điện tử theo mã vé hoặc mã đơn đặt (Công khai cho khách vãng lai)' })
+  async resendTicketEmailByCode(
+    @Body() dto: ResendTicketByCodeDto,
+  ) {
+    return this.bookingService.resendTicketEmailByCode(
+      dto.ticketCode || dto.bookingCode,
+      dto.email,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

@@ -48,6 +48,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if (responseObj['failedSeats']) {
           extraFields['failedSeats'] = responseObj['failedSeats'];
         }
+
+        if (responseObj['retryAfterSeconds'] !== undefined) {
+          extraFields['retryAfterSeconds'] = responseObj['retryAfterSeconds'];
+        }
+
+        if (responseObj['retryAfter'] !== undefined) {
+          extraFields['retryAfter'] = responseObj['retryAfter'];
+        }
       }
 
       // Nếu là lỗi máy chủ (>= 500) trong production, ẩn chi tiết kỹ thuật nội bộ

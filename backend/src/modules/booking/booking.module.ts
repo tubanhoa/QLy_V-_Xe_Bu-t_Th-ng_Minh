@@ -11,6 +11,7 @@ import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { BookingController } from './booking.controller.js';
 import { BookingService } from './booking.service.js';
 import { SeatLockService } from './seat-lock.service.js';
+import { NotificationModule } from '../notification/notification.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SeatLockService } from './seat-lock.service.js';
       SeatHoldEntity,
       PaymentEntity,
     ]),
+    NotificationModule,
   ],
   controllers: [BookingController],
   providers: [BookingService, SeatLockService],

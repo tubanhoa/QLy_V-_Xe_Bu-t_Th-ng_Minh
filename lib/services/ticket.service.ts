@@ -266,11 +266,70 @@ class TicketService {
         },
       )
       const resJson = await response.json().catch(() => null)
+      const retryHeader = response.headers.get('retry-after')
+      const retryAfterSeconds =
+        resJson?.retryAfterSeconds ||
+        resJson?.retryAfter ||
+        (retryHeader ? Number(retryHeader) : undefined)
+
+      if (!response.ok) {
+        // Nếu bị 401 (chưa đăng nhập/hết hạn) hoặc 404, thử fallback gọi qua endpoint công khai theo mã
+        if (response.status === 401 || response.status === 404) {
+          const fallbackRes = await this.resendTicketEmailByCode(ticketId, email)
+          if (fallbackRes.success) {
+            return fallbackRes
+          }
+        }
+
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể gửi lại email vé',
+          retryAfterSeconds,
+        }
+      }
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi gửi lại email vé',
+      }
+    }
+  }
+
+  /**
+   * Gửi lại vé điện tử theo mã vé hoặc mã đơn đặt vé (Public / Khách vãng lai)
+   */
+  async resendTicketEmailByCode(
+    code: string,
+    email?: string,
+  ): Promise<UnifiedApiResponse<ResendTicketEmailResult>> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/booking/tickets/resend-by-code`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketCode: code,
+            bookingCode: code,
+            email: email?.trim() || undefined,
+          }),
+        },
+      )
+      const resJson = await response.json().catch(() => null)
+      const retryHeader = response.headers.get('retry-after')
+      const retryAfterSeconds =
+        resJson?.retryAfterSeconds ||
+        resJson?.retryAfter ||
+        (retryHeader ? Number(retryHeader) : undefined)
+
       if (!response.ok) {
         return {
           success: false,
           statusCode: response.status,
           message: resJson?.message || 'Không thể gửi lại email vé',
+          retryAfterSeconds,
         }
       }
       return { success: true, data: resJson?.data || resJson }

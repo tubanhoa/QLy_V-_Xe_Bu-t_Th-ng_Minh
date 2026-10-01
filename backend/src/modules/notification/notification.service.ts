@@ -208,7 +208,25 @@ export class NotificationService {
     };
 
     this.sentNotifications.push(record);
-    this.logger.log(`[NotificationService] Đã gửi email vé điện tử thành công tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
+    this.logger.log(`[NotificationService] Đã ghi nhận gửi email vé điện tử tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
+
+    if (this.transporter) {
+      try {
+        const fromAddress =
+          process.env.SMTP_FROM ||
+          `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
+        await this.transporter.sendMail({
+          from: fromAddress,
+          to: params.recipientEmail,
+          subject,
+          html: htmlContent,
+        });
+        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${params.recipientEmail}`);
+      } catch (err: any) {
+        this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${params.recipientEmail}: ${err?.message}`);
+        record.status = 'failed';
+      }
+    }
 
     return true;
   }
@@ -286,6 +304,24 @@ export class NotificationService {
 
     this.sentNotifications.push(record);
     this.logger.log(`[NotificationService] Đã gửi email xác nhận hủy vé tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
+
+    if (this.transporter) {
+      try {
+        const fromAddress =
+          process.env.SMTP_FROM ||
+          `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
+        await this.transporter.sendMail({
+          from: fromAddress,
+          to: params.recipientEmail,
+          subject,
+          html: htmlContent,
+        });
+      } catch (err: any) {
+        this.logger.error(`[NotificationService] Lỗi gửi email hủy vé qua SMTP: ${err?.message}`);
+        record.status = 'failed';
+      }
+    }
+
     return true;
   }
 
@@ -372,6 +408,24 @@ export class NotificationService {
 
     this.sentNotifications.push(record);
     this.logger.log(`[NotificationService] Đã gửi email đổi vé mới thành công tới ${params.recipientEmail} (Mã vé: ${params.ticketCode})`);
+
+    if (this.transporter) {
+      try {
+        const fromAddress =
+          process.env.SMTP_FROM ||
+          `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
+        await this.transporter.sendMail({
+          from: fromAddress,
+          to: params.recipientEmail,
+          subject,
+          html: htmlContent,
+        });
+      } catch (err: any) {
+        this.logger.error(`[NotificationService] Lỗi gửi email đổi vé qua SMTP: ${err?.message}`);
+        record.status = 'failed';
+      }
+    }
+
     return true;
   }
 

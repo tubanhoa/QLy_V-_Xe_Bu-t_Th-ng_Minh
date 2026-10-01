@@ -476,14 +476,16 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
   // --- SEC-03: Rate Limiting cho API gửi lại Email & Tra cứu Voucher ---
 
   it('SEC-03.1 [Rate Limit Resend Email]: Giới hạn tối đa 3 lần/10 phút/IP, lần thứ 4 trả về 429 Too Many Requests kèm Retry-After', async () => {
-    const ticket = {
-      id: 'tkt-rate-limit-01',
+    RateLimitGuard.clearMemory();
+    const tickets = [1, 2, 3, 4].map((i) => ({
+      id: `tkt-rate-limit-0${i}`,
       bookingId: 'bk-rate-01',
-      seatId: 'seat-1',
-      ticketCode: 'TKT-RATE-001',
+      seatId: `seat-${i}`,
+      ticketCode: `TKT-RATE-00${i}`,
       status: TicketStatus.PAID,
       qrData: 'ENCRYPTED_DATA',
-    };
+    }));
+
     const booking = {
       id: 'bk-rate-01',
       userId: mockUserPassenger.id,
@@ -492,33 +494,33 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
       user: mockUserPassenger,
       trip: mockTrip,
     };
-    storedTickets.push(ticket);
+    storedTickets.push(...tickets);
     storedBookings.push(booking);
 
-    // Lần 1
+    // Lần 1 (Vé 1)
     const r1 = await request(app.getHttpServer())
-      .post(`/api/v1/booking/tickets/${ticket.id}/resend-email`)
+      .post(`/api/v1/booking/tickets/${tickets[0].id}/resend-email`)
       .set('Authorization', tokenPassenger)
       .send();
     expect(r1.status).toBe(201);
 
-    // Lần 2
+    // Lần 2 (Vé 2)
     const r2 = await request(app.getHttpServer())
-      .post(`/api/v1/booking/tickets/${ticket.id}/resend-email`)
+      .post(`/api/v1/booking/tickets/${tickets[1].id}/resend-email`)
       .set('Authorization', tokenPassenger)
       .send();
     expect(r2.status).toBe(201);
 
-    // Lần 3
+    // Lần 3 (Vé 3)
     const r3 = await request(app.getHttpServer())
-      .post(`/api/v1/booking/tickets/${ticket.id}/resend-email`)
+      .post(`/api/v1/booking/tickets/${tickets[2].id}/resend-email`)
       .set('Authorization', tokenPassenger)
       .send();
     expect(r3.status).toBe(201);
 
-    // Lần 4: Vượt ngưỡng cho phép -> Phải trả về 429 Too Many Requests
+    // Lần 4: Vượt ngưỡng cho phép theo IP/User -> Phải trả về 429 Too Many Requests
     const r4 = await request(app.getHttpServer())
-      .post(`/api/v1/booking/tickets/${ticket.id}/resend-email`)
+      .post(`/api/v1/booking/tickets/${tickets[3].id}/resend-email`)
       .set('Authorization', tokenPassenger)
       .send();
 
@@ -526,6 +528,45 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
     expect(r4.body.message).toContain('Quá giới hạn gửi lại email vé điện tử');
     expect(r4.headers['retry-after']).toBeDefined();
     expect(Number(r4.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('SEC-03.2 [Rate Limit Cooldown Per Ticket]: Giới hạn 1 lần/60 giây cho mỗi vé, gọi liên tiếp cùng vé trả về 429', async () => {
+    RateLimitGuard.clearMemory();
+    const singleTicket = {
+      id: 'tkt-cooldown-ticket-01',
+      bookingId: 'bk-cooldown-01',
+      seatId: 'seat-cooldown-1',
+      ticketCode: 'TKT-CD-001',
+      status: TicketStatus.PAID,
+      qrData: 'ENCRYPTED_DATA',
+    };
+    const booking = {
+      id: 'bk-cooldown-01',
+      userId: mockUserPassenger.id,
+      bookingCode: 'BK-CD-001',
+      status: BookingStatus.PAID,
+      user: mockUserPassenger,
+      trip: mockTrip,
+    };
+    storedTickets.push(singleTicket);
+    storedBookings.push(booking);
+
+    // Lần 1: Thành công
+    const r1 = await request(app.getHttpServer())
+      .post(`/api/v1/booking/tickets/${singleTicket.id}/resend-email`)
+      .set('Authorization', tokenPassenger)
+      .send();
+    expect(r1.status).toBe(201);
+
+    // Lần 2 liên tiếp cho cùng vé: Phải trả về 429 Too Many Requests kèm Retry-After
+    const r2 = await request(app.getHttpServer())
+      .post(`/api/v1/booking/tickets/${singleTicket.id}/resend-email`)
+      .set('Authorization', tokenPassenger)
+      .send();
+    expect(r2.status).toBe(429);
+    expect(r2.body.message).toContain('Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau');
+    expect(r2.headers['retry-after']).toBeDefined();
+    expect(Number(r2.headers['retry-after'])).toBeGreaterThanOrEqual(1);
   });
 
   // --- AUTH-01: Chuyển đổi lưu trữ Token sang Cookie HttpOnly Secure ---

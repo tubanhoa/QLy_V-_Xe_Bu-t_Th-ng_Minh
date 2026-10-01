@@ -5,6 +5,12 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
   const isProduction = process.env.NODE_ENV === 'production';
   const url = process.env.DATABASE_URL;
 
+  const poolOptions = {
+    max: 10, // Giới hạn connection pool tránh cạn kiệt slots Supabase Free Tier
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+  };
+
   if (url) {
     const isCloud = url.includes('supabase') || url.includes('neon') || url.includes('pooler') || url.includes('sslmode=require');
     return {
@@ -14,6 +20,7 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
       synchronize: !isProduction,
       logging: !isProduction,
       ssl: isCloud ? { rejectUnauthorized: false } : undefined,
+      extra: poolOptions,
     };
   }
 
@@ -27,5 +34,7 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
     entities: ALL_ENTITIES,
     synchronize: !isProduction,
     logging: !isProduction,
+    extra: poolOptions,
   };
 };
+

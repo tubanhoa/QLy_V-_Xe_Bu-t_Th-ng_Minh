@@ -41,6 +41,7 @@ import {
   Check,
   Smartphone,
   FileText,
+  LogIn,
 } from 'lucide-react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
@@ -91,11 +92,16 @@ export function TicketDetailModal({
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadSuccess, setDownloadSuccess] = useState(false)
 
-  // --- Email Resend ---
+  // --- Email Resend & Anti-Spam Cooldown ---
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [customEmail, setCustomEmail] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
-  const [emailNotice, setEmailNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [emailNotice, setEmailNotice] = useState<{
+    type: 'success' | 'error' | 'warning'
+    text: string
+    showLoginBtn?: boolean
+  } | null>(null)
 
   // --- E-Invoice Modal & PDF Download ---
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
@@ -199,6 +205,40 @@ export function TicketDetailModal({
     }
   }, [ticketId, loadTicket])
 
+  // Khôi phục cooldown từ sessionStorage theo ticketId (ngăn F5 bypass spam)
+  useEffect(() => {
+    if (!ticketId) return
+    const key = `resend_cooldown_${ticketId}`
+    try {
+      const stored = sessionStorage.getItem(key)
+      if (stored) {
+        const elapsed = Math.floor((Date.now() - Number(stored)) / 1000)
+        if (elapsed < 60) {
+          setResendCooldown(60 - elapsed)
+        } else {
+          sessionStorage.removeItem(key)
+        }
+      }
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, [ticketId])
+
+  // Cooldown đếm ngược 60s
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [resendCooldown])
+
   // 4. Xử lý xuất vé dạng ảnh PNG (Retina 2x)
   const handleDownloadImage = async () => {
     if (!ticket) return
@@ -224,19 +264,81 @@ export function TicketDetailModal({
   // 6. Xử lý gửi lại Email vé điện tử
   const handleResendEmail = async () => {
     if (!ticket) return
+
+    // 3.1: Chặn lỗi đỏ khi người dùng bấm gửi trên Vé Mẫu / Vé Offline
+    const ticketAny = ticket as any
+    const isDemoTicket =
+      (!ticket.ticketId && !ticketAny.id) ||
+      ticket.ticketCode?.startsWith('TK-2026-') ||
+      ticket.ticketId?.startsWith('tkt_') ||
+      ticketAny.id?.startsWith('tkt_')
+
+    if (isDemoTicket) {
+      setEmailNotice({
+        type: 'warning',
+        text: '⚠️ Đây là vé mẫu mô phỏng trên trình duyệt. Vui lòng đăng nhập tài khoản thực và đặt vé trực tuyến để lưu vào hệ thống và gửi email tự động.',
+      })
+      return
+    }
+
+    if (resendCooldown > 0) {
+      setEmailNotice({
+        type: 'warning',
+        text: `🛡️ Hệ thống đang bảo vệ chống spam. Vui lòng đợi ${resendCooldown} giây trước khi gửi tiếp.`,
+      })
+      return
+    }
+
     setSendingEmail(true)
     setEmailNotice(null)
 
-    const result = await ticketService.resendTicketEmail(ticket.ticketId, customEmail.trim() || undefined)
+    const result = await ticketService.resendTicketEmail(
+      ticket.ticketId,
+      customEmail.trim() || undefined,
+    )
     setSendingEmail(false)
 
+    const cooldownKey = `resend_cooldown_${ticket.ticketId}`
+
     if (result.success) {
+      // BƯỚC 3.2: Kích hoạt Cooldown 60s và lưu timestamp vào sessionStorage
+      setResendCooldown(60)
+      try {
+        sessionStorage.setItem(cooldownKey, Date.now().toString())
+      } catch {}
+
       setEmailNotice({
         type: 'success',
         text: result.message || 'Đã gửi vé điện tử kèm mã QR tới email của bạn thành công!',
       })
       setTimeout(() => setShowEmailModal(false), 3500)
     } else {
+      // BƯỚC 3.2: Xử lý mã lỗi 429 Too Many Requests từ Backend
+      if (result.statusCode === 429) {
+        const retrySec = result.retryAfterSeconds || 60
+        setResendCooldown(retrySec)
+        try {
+          const fakeTimestamp = Date.now() - (60 - retrySec) * 1000
+          sessionStorage.setItem(cooldownKey, fakeTimestamp.toString())
+        } catch {}
+
+        setEmailNotice({
+          type: 'warning',
+          text: `🛡️ Hệ thống đang bảo vệ chống spam. Vui lòng đợi ${retrySec} giây trước khi gửi tiếp.`,
+        })
+        return
+      }
+
+      // BƯỚC 3.3: Xử lý thông minh khi gặp lỗi 401 Unauthorized
+      if (result.statusCode === 401) {
+        setEmailNotice({
+          type: 'error',
+          text: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại để xác thực quyền gửi vé.',
+          showLoginBtn: true,
+        })
+        return
+      }
+
       setEmailNotice({
         type: 'error',
         text: result.message || 'Không thể gửi email vé. Vui lòng kiểm tra lại địa chỉ email.',
@@ -648,25 +750,47 @@ export function TicketDetailModal({
                         />
                         <button
                           type="button"
-                          disabled={sendingEmail}
+                          disabled={sendingEmail || resendCooldown > 0}
                           onClick={handleResendEmail}
-                          className="px-4 py-2 rounded-xl bg-[#005A36] text-white font-bold text-xs hover:bg-[#00472b] disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                          className="px-4 py-2 rounded-xl bg-[#005A36] text-white font-bold text-xs hover:bg-[#00472b] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
                           id="submit-resend-email-btn"
                         >
                           {sendingEmail && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          <span>Gửi vé</span>
+                          {resendCooldown > 0 && <Clock className="w-3.5 h-3.5 animate-pulse" />}
+                          <span>
+                            {sendingEmail
+                              ? 'Đang gửi...'
+                              : resendCooldown > 0
+                                ? `Gửi lại sau (${resendCooldown}s)`
+                                : 'Gửi vé'}
+                          </span>
                         </button>
                       </div>
 
                       {emailNotice && (
                         <div
-                          className={`p-2 rounded-lg text-[11px] font-medium ${
+                          className={`p-2.5 rounded-xl text-[11px] font-medium transition-all ${
                             emailNotice.type === 'success'
                               ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                              : 'bg-rose-100 text-rose-900 border border-rose-300'
+                              : emailNotice.type === 'warning'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-rose-100 text-rose-900 border border-rose-300'
                           }`}
                         >
-                          {emailNotice.text}
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="flex-1">{emailNotice.text}</span>
+                          </div>
+                          {emailNotice.showLoginBtn && (
+                            <div className="mt-2 pt-1 border-t border-rose-200">
+                              <Link
+                                href="/dang-nhap"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#005A36] text-white text-[11px] font-bold hover:bg-[#00472b] transition-all cursor-pointer shadow-xs"
+                              >
+                                <LogIn size={13} />
+                                <span>Đăng nhập lại ngay</span>
+                              </Link>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
