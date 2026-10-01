@@ -31,6 +31,11 @@ export class CreatePaymentUrlDto {
   @IsOptional()
   @IsString()
   returnUrl?: string;
+
+  @ApiPropertyOptional({ example: 'ductrandanh06@gmail.com', description: 'Địa chỉ Email nhận Hóa đơn điện tử VAT' })
+  @IsOptional()
+  @IsString()
+  invoiceEmail?: string;
 }
 
 export class MoMoIpnDto {

@@ -20,6 +20,7 @@ import {
   Megaphone,
   QrCode,
   Radio,
+  ReceiptText,
   RefreshCw,
   Route,
   Search,
@@ -487,11 +488,29 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
                           <strong className="block text-slate-800">{lookupResult.trip}</strong>
                         </div>
                       </div>
+                      <div className="pt-2 border-t border-emerald-200/60 flex justify-end">
+                        <a
+                          href={`/tra-cuu-hoa-don?code=${encodeURIComponent(lookupResult.code)}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-black text-[#005A36] hover:underline"
+                        >
+                          <ReceiptText size={13} />
+                          <span>Xem hóa đơn điện tử VAT 8% ➔</span>
+                        </a>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center py-6 text-slate-400 text-xs">
                       <QrCode size={36} className="mx-auto text-slate-300 mb-2" />
                       Nhập mã vé được gửi qua tin nhắn SMS hoặc email để kiểm tra thời gian xe đón và mã QR lên xe.
+                      <div className="mt-4 pt-3 border-t border-slate-100">
+                        <a
+                          href="/tra-cuu-hoa-don"
+                          className="inline-flex items-center gap-1.5 text-xs font-black text-[#005A36] hover:underline"
+                        >
+                          <ReceiptText size={14} />
+                          <span>Cần tra cứu hóa đơn điện tử (E-Invoice)? Nhấn vào đây ➔</span>
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>

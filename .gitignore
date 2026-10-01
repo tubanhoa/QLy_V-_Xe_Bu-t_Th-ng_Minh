@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Temporary git clone
 .temp_git_clone
+
+# Editor
+.vscode/

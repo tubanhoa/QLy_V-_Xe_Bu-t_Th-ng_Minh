@@ -318,6 +318,7 @@ export function SeatPickerModal({
         bookingId: validBookingId,
         paymentMethod: paymentMethod as PaymentGateway,
         orderInfo: `Thanh toan ve xe buyt ICTU ${bookingData.bookingCode}`,
+        invoiceEmail: isInvoiceRequested && invoiceEmail.trim() ? invoiceEmail.trim() : undefined,
       })
 
       if (payRes.success && payRes.data) {

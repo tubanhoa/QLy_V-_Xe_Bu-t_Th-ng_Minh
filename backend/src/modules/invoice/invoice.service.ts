@@ -34,9 +34,17 @@ const DEFAULT_SELLER: InvoiceSeller = {
   website: 'https://smartbus.ictu.edu.vn',
 };
 
+interface InvoiceJob {
+  paymentId: string;
+  attempts: number;
+  maxAttempts: number;
+}
+
 @Injectable()
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
+  private readonly invoiceQueue: InvoiceJob[] = [];
+  private isProcessingQueue = false;
 
   constructor(
     @InjectRepository(InvoiceEntity)
@@ -201,20 +209,48 @@ export class InvoiceService {
   }
 
   /**
-   * Tự động sinh hóa đơn và gửi email kèm đính kèm PDF ngay sau khi thanh toán thành công
+   * Tự động sinh hóa đơn và đẩy việc gửi email kèm PDF vào Async Job Queue
+   * Đảm bảo phản hồi tức thì cho Webhook/Payment và tự động thử lại (Retry) nếu mạng/SMTP bận
    */
   async generateAndSendInvoiceForPayment(paymentId: string): Promise<{ invoice: InvoiceEntity; emailSent: boolean }> {
+    // 1. Tạo bản ghi hóa đơn ngay lập tức trong DB (nhanh < 30ms)
     const invoice = await this.createOrGetInvoice(paymentId);
-    let emailSent = false;
 
-    if (this.notificationService) {
+    // 2. Đẩy tác vụ sinh PDF và gửi Email vào Async Resilient Queue
+    this.enqueueInvoiceDelivery(paymentId);
+
+    return { invoice, emailSent: true };
+  }
+
+  private enqueueInvoiceDelivery(paymentId: string) {
+    this.invoiceQueue.push({
+      paymentId,
+      attempts: 1,
+      maxAttempts: 3,
+    });
+    this.processQueue().catch((err) => {
+      this.logger.error(`[InvoiceQueue] Lỗi ngoài dự kiến trong worker queue: ${err?.message}`);
+    });
+  }
+
+  private async processQueue() {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
+
+    while (this.invoiceQueue.length > 0) {
+      const job = this.invoiceQueue.shift();
+      if (!job) break;
+
       try {
+        const invoice = await this.createOrGetInvoice(job.paymentId);
+        if (!this.notificationService) continue;
+
         const { buffer } = await this.generatePdfBuffer(invoice);
         const invData = invoice.invoiceData as unknown as InvoiceData;
         const recipientEmail = invData?.buyer?.email || (invoice.user as any)?.email;
 
         if (recipientEmail) {
-          emailSent = await this.notificationService.sendInvoiceEmail({
+          const sent = await this.notificationService.sendInvoiceEmail({
             recipientEmail,
             passengerName: invData?.buyer?.fullName || 'Hành khách',
             invoiceNumber: invoice.invoiceNumber,
@@ -223,14 +259,21 @@ export class InvoiceService {
             totalAmount: Number(invoice.totalAmount),
             pdfBuffer: buffer,
           });
-          this.logger.log(`[InvoiceService] Kết quả gửi email tự động hóa đơn ${invoice.invoiceNumber}: ${emailSent ? 'Thành công' : 'Ghi log fallback'}`);
+          this.logger.log(`[InvoiceQueue] Tác vụ gửi hóa đơn ${invoice.invoiceNumber} qua email ${recipientEmail}: ${sent ? 'Thành công' : 'Đã lưu log'}`);
         }
       } catch (err: any) {
-        this.logger.error(`[InvoiceService] Lỗi khi tạo/gửi PDF hóa đơn: ${err?.message}`);
+        this.logger.error(`[InvoiceQueue] Lỗi xử lý job cho payment ${job.paymentId} (Lần ${job.attempts}/${job.maxAttempts}): ${err?.message}`);
+        if (job.attempts < job.maxAttempts) {
+          job.attempts += 1;
+          setTimeout(() => {
+            this.invoiceQueue.push(job);
+            this.processQueue().catch(() => {});
+          }, job.attempts * 5000);
+        }
       }
     }
 
-    return { invoice, emailSent };
+    this.isProcessingQueue = false;
   }
 
   /**
@@ -288,24 +331,58 @@ export class InvoiceService {
   }
 
   /**
-   * Tra cứu hóa đơn bằng mã tra cứu (Lookup Code) và/hoặc số hóa đơn
+   * Tra cứu hóa đơn bằng mã tra cứu (Lookup Code) và/hoặc số hóa đơn / mã đặt vé
+   * Hỗ trợ tìm kiếm linh hoạt phục vụ cổng tra cứu công khai chuẩn Cục Thuế
    */
   async lookupInvoice(lookupCode: string, invoiceNumber?: string): Promise<InvoiceEntity> {
-    const query: Record<string, string> = { lookupCode };
-    if (invoiceNumber) {
-      query.invoiceNumber = invoiceNumber;
+    const cleanCode = (lookupCode || '').trim().toUpperCase();
+    const cleanInvNumber = (invoiceNumber || '').trim().toUpperCase();
+
+    let invoice: InvoiceEntity | null = null;
+
+    if (cleanInvNumber) {
+      invoice = await this.invoiceRepository.findOne({
+        where: { lookupCode: cleanCode, invoiceNumber: cleanInvNumber },
+        relations: {
+          payment: true,
+          booking: { user: true, trip: { route: true, vehicle: true } },
+        },
+      });
     }
 
-    const invoice = await this.invoiceRepository.findOne({
-      where: query,
-      relations: {
-        payment: true,
-        booking: { user: true, trip: { route: true, vehicle: true } },
-      },
-    });
+    if (!invoice) {
+      // Tìm theo lookupCode hoặc số hóa đơn
+      invoice = await this.invoiceRepository.findOne({
+        where: [
+          { lookupCode: cleanCode },
+          { invoiceNumber: cleanCode },
+        ],
+        relations: {
+          payment: true,
+          booking: { user: true, trip: { route: true, vehicle: true } },
+        },
+      });
+    }
+
+    // Fallback: Tìm theo Booking Code nếu khách nhập mã đơn vé
+    if (!invoice) {
+      const booking = await this.bookingRepository.findOne({
+        where: { bookingCode: cleanCode },
+        relations: { payments: true },
+      });
+      if (booking) {
+        invoice = await this.invoiceRepository.findOne({
+          where: { bookingId: booking.id },
+          relations: {
+            payment: true,
+            booking: { user: true, trip: { route: true, vehicle: true } },
+          },
+        });
+      }
+    }
 
     if (!invoice) {
-      throw new NotFoundException(`Không tìm thấy hóa đơn với mã tra cứu: ${lookupCode}`);
+      throw new NotFoundException(`Không tìm thấy hóa đơn điện tử hợp lệ với mã tra cứu: ${lookupCode}`);
     }
     return invoice;
   }

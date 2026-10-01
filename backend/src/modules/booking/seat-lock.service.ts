@@ -43,6 +43,8 @@ export class SeatLockService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private sweepInterval: NodeJS.Timeout | null = null;
+
   async onModuleInit() {
     if (this.redisClient) {
       try {
@@ -54,9 +56,18 @@ export class SeatLockService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn('Redis not available; falling back to in-memory seat lock storage.');
       }
     }
+
+    // Tự động quét và dọn dẹp các memory lock quá hạn mỗi 60 giây để tối ưu tài nguyên RAM
+    this.sweepInterval = setInterval(() => {
+      this.sweepExpiredMemoryLocks();
+    }, 60000);
   }
 
   async onModuleDestroy() {
+    if (this.sweepInterval) {
+      clearInterval(this.sweepInterval);
+      this.sweepInterval = null;
+    }
     if (this.redisClient && this.isRedisConnected) {
       try {
         await this.redisClient.quit();
@@ -64,6 +75,24 @@ export class SeatLockService implements OnModuleInit, OnModuleDestroy {
         // ignore
       }
     }
+  }
+
+  /**
+   * Tự động dọn dẹp các khóa giữ ghế đã hết hạn trong bộ nhớ
+   */
+  public sweepExpiredMemoryLocks(): number {
+    const now = Date.now();
+    let swept = 0;
+    for (const [key, lock] of this.memoryStore.entries()) {
+      if (lock.expiresAt <= now) {
+        this.memoryStore.delete(key);
+        swept++;
+      }
+    }
+    if (swept > 0) {
+      this.logger.debug(`[SeatLockService] Đã tự động dọn dẹp ${swept} khóa ghế hết hạn trong bộ nhớ`);
+    }
+    return swept;
   }
 
   private getKey(tripId: string, seatId: string): string {
