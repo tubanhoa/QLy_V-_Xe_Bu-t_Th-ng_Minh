@@ -7,11 +7,12 @@ export class CreateFeedbackDto {
   @IsString()
   tripId?: string;
 
-  @ApiProperty({ example: 5, description: 'Điểm đánh giá từ 1 đến 5 sao' })
+  @ApiPropertyOptional({ example: 5, description: 'Điểm đánh giá từ 1 đến 5 sao' })
+  @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(5)
-  ratingScore: number;
+  ratingScore?: number;
 
   @ApiProperty({ example: 'Xe chạy êm ái, tài xế thân thiện, xe buýt điện không có mùi xăng dầu.' })
   @IsString()

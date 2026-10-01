@@ -529,13 +529,31 @@ class TicketService {
    */
   async getRefundDetail(ticketId: string): Promise<UnifiedApiResponse<any>> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/payment/refunds/${ticketId}`,
+      let response = await fetch(
+        `${this.baseUrl}/booking/tickets/${ticketId}/refund`,
         {
           method: 'GET',
           headers: this.getAuthHeaders(),
         },
       )
+      if (!response.ok) {
+        response = await fetch(
+          `${this.baseUrl}/payment/refunds/ticket/${ticketId}`,
+          {
+            method: 'GET',
+            headers: this.getAuthHeaders(),
+          },
+        )
+      }
+      if (!response.ok) {
+        response = await fetch(
+          `${this.baseUrl}/payment/refunds/${ticketId}`,
+          {
+            method: 'GET',
+            headers: this.getAuthHeaders(),
+          },
+        )
+      }
       const resJson = await response.json().catch(() => null)
       if (response.ok && (resJson?.data || resJson)) {
         return { success: true, data: resJson.data || resJson }
@@ -570,6 +588,8 @@ class TicketService {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({
+          category: 'refund_support',
+          ratingScore: 1,
           type: 'refund_support',
           title: `[Khiếu nại hoàn tiền] Vé ${payload.ticketCode}`,
           content: `Hành khách yêu cầu hỗ trợ hoàn tiền vé ${payload.ticketCode}. SĐT: ${payload.contactPhone}, Email: ${payload.contactEmail}. ${payload.bankAccountNumber ? `Tài khoản nhận tiền: ${payload.bankAccountNumber} - ${payload.bankName} (${payload.accountHolderName})` : ''}. Mô tả: ${payload.description || 'Không có mô tả'}`,

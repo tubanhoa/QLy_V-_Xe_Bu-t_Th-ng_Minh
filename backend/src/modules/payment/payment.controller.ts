@@ -135,6 +135,18 @@ export class PaymentController {
     return this.paymentService.getRefundLogs(query);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Get(['refunds/ticket/:ticketId', 'tickets/:ticketId/refund'])
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết hoàn tiền của vé xe (Hành khách hoặc Quản trị viên)' })
+  async getRefundDetailByTicket(
+    @Param('ticketId') ticketId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole?: string,
+  ) {
+    return this.paymentService.getRefundDetailByTicketId(ticketId, userId, userRole);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER, 'ADMIN' as any, 'MANAGER' as any)
   @ApiBearerAuth('JWT')
