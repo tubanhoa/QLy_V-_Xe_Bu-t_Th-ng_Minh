@@ -691,3 +691,66 @@ div[class*="nextjs-toast"] {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ===================================================================
+   MOBILE-FIRST ERGONOMICS & SAFE-AREA UTILITIES (SMARTBUS ICTU)
+   =================================================================== */
+
+/* Loại bỏ vệt nháy xám mặc định của trình duyệt WebKit (iOS Safari / Android Chrome) */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hỗ trợ khoảng an toàn Safe Area Insets (Tai thỏ iPhone, Thanh Home Indicator) */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-pb-dock {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.85rem);
+}
+.safe-mb-dock {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hiệu ứng xúc giác chạm (Tactile Press) nén đàn hồi trên di động */
+.touch-press {
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.12s ease;
+  will-change: transform;
+}
+.touch-press:active {
+  transform: scale(0.965);
+  opacity: 0.92;
+}
+
+/* Cuộn quán tính mượt mà cho iOS Safari */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Khóa chống zoom cưỡng bức trên iOS khi kích hoạt bàn phím ảo */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Animation mở Bottom-Sheet chuẩn Native App */
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

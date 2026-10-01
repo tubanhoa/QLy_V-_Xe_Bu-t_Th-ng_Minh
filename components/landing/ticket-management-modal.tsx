@@ -25,6 +25,7 @@ import {
   Filter,
   CheckCircle2,
   AlertTriangle,
+  Copy,
   Download,
   Printer,
   Mail,
@@ -62,6 +63,7 @@ import { CancellationPolicyModal } from '@/components/portal/cancellation-policy
 import { FeedbackModal } from '@/components/portal/feedback-modal'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/utils/haptics'
 
 interface TicketManagementModalProps {
   open: boolean
@@ -126,6 +128,7 @@ export function TicketManagementModal({
   // --- E-Invoice Modal & PDF Download ---
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
   const [isDownloadingInvoicePdf, setIsDownloadingInvoicePdf] = useState(false)
+  const [copiedTicketCode, setCopiedTicketCode] = useState(false)
 
   const handleDownloadInvoicePdf = async () => {
     const code = ticketDetail?.bookingCode || ticketDetail?.ticketCode
@@ -469,7 +472,12 @@ export function TicketManagementModal({
         aria-label="Cửa sổ Vé Điện Tử & Mã QR Soát Vé"
         className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       >
-        <div className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-4xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform">
+        <div className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-4xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform safe-top safe-bottom animate-slideUp">
+          {/* Mobile Pull-down indicator */}
+          <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50 via-white to-teal-50">
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+          </div>
+
           {/* 1. MODAL HEADER CHUẨN NHẬN DIỆN ICTU (GIỐNG TRIP SEARCH MODAL) */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-50 via-white to-teal-50 shrink-0 no-print">
             <div className="flex items-center gap-2.5 sm:gap-3">
@@ -588,15 +596,18 @@ export function TicketManagementModal({
               </div>
 
               {/* Filter Tabs */}
-              <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pt-0.5">
+              <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar scroll-touch pt-0.5">
                 <div className="flex rounded-xl bg-slate-200/70 p-1 text-xs font-bold shrink-0">
                   {FILTER_TABS.map((tab) => (
                     <button
                       key={tab.key}
                       type="button"
-                      onClick={() => setFilter(tab.key)}
+                      onClick={() => {
+                        haptic.play('tap')
+                        setFilter(tab.key)
+                      }}
                       className={cn(
-                        'px-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs',
+                        'px-3.5 py-1.5 rounded-lg transition-all cursor-pointer text-xs whitespace-nowrap touch-press touch-manipulation',
                         filter === tab.key
                           ? 'bg-white text-[#005A36] shadow-xs font-black'
                           : 'text-slate-600 hover:text-slate-900',
@@ -615,7 +626,7 @@ export function TicketManagementModal({
           )}
 
           {/* 3. NỘI DUNG CHÍNH (DANH SÁCH THẺ VÉ HOẶC CHI TIẾT MÃ QR) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto scroll-touch p-4 sm:p-6 space-y-4 safe-pb-dock">
             {/* TRƯỜNG HỢP A: CHƯA ĐĂNG NHẬP */}
             {!isAuthenticated && (
               <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 text-center space-y-3.5 shadow-xs my-auto">
@@ -792,9 +803,26 @@ export function TicketManagementModal({
 
                       {/* Thông tin vé */}
                       <div className="space-y-1.5 max-w-md mx-auto">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-950 font-mono font-black text-sm border border-emerald-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              navigator.clipboard.writeText(ticketDetail.ticketCode).catch(() => {})
+                            }
+                            haptic.play('copy')
+                            setCopiedTicketCode(true)
+                            setTimeout(() => setCopiedTicketCode(false), 2000)
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-mono font-black text-sm border border-emerald-300 transition-all shadow-2xs active:scale-95 cursor-pointer touch-press touch-manipulation"
+                          title="Sao chép mã vé"
+                        >
                           <span>{ticketDetail.ticketCode}</span>
-                        </div>
+                          {copiedTicketCode ? (
+                            <Check size={13} className="text-emerald-700" />
+                          ) : (
+                            <Copy size={13} className="text-emerald-700" />
+                          )}
+                        </button>
 
                         <div className="text-sm sm:text-base font-extrabold text-slate-900">
                           {ticketDetail.routeName || 'Tuyến buýt ICTU Transit'}
@@ -1182,7 +1210,10 @@ export function TicketManagementModal({
                             <div className="pt-2 md:pt-0 flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setSelectedTicketId(t.ticketId)}
+                                onClick={() => {
+                                  haptic.play('tap')
+                                  setSelectedTicketId(t.ticketId)
+                                }}
                                 className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] hover:bg-[#004529] px-3.5 py-2.5 text-xs font-black text-white shadow-md transition-all active:scale-95 cursor-pointer"
                               >
                                 <QrCode size={15} />

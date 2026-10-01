@@ -55,7 +55,7 @@ export function FloatingSupportBot() {
   return (
     <>
       {/* Unified Single Floating Support Capsule in Bottom Right with Idle Levitation */}
-      <div className="fixed bottom-24 right-4 sm:bottom-24 sm:right-6 z-40 animate-bot-breathe">
+      <div className="fixed bottom-24 sm:bottom-24 right-4 sm:right-6 z-40 animate-bot-breathe safe-mb-dock touch-press">
         {/* Subtle proactive speech bubble prompt */}
         {!isOpen && showHint && (
           <div
@@ -124,7 +124,7 @@ export function FloatingSupportBot() {
 
       {/* Interactive Chat Popup Window */}
       {isOpen && (
-        <div className="fixed bottom-20 right-5 z-40 w-[90vw] max-w-sm rounded-3xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col h-[480px] animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div className="fixed bottom-4 sm:bottom-20 right-3 sm:right-5 left-3 sm:left-auto z-40 max-w-sm rounded-3xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col max-h-[82vh] h-[480px] animate-in fade-in slide-in-from-bottom-6 duration-200 safe-bottom">
           {/* Header */}
           <div className="bg-[#005A36] p-4 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">

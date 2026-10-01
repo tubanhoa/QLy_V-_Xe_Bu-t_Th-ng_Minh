@@ -110,15 +110,31 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
     }
   }, [rating, content, tripId, category, onClose])
 
+  const handleSelectRating = (star: number) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(12)
+      } catch {
+        // ignore
+      }
+    }
+    setRating(star)
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
       aria-label="Đánh giá chuyến xe"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
+      <div className="relative w-full max-w-md overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform animate-slideUp">
+        {/* Mobile Pull-down indicator */}
+        <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50 shrink-0">
           <div className="flex items-center gap-3">
@@ -135,7 +151,7 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -169,14 +185,14 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
                     <button
                       key={star}
                       type="button"
-                      onClick={() => setRating(star)}
+                      onClick={() => handleSelectRating(star)}
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(0)}
-                      className="p-1 transition-transform hover:scale-125 focus:outline-none"
+                      className="p-2 transition-transform hover:scale-125 active:scale-110 focus:outline-none touch-press touch-manipulation cursor-pointer"
                       id={`star-${star}`}
                     >
                       <Star
-                        size={28}
+                        size={30}
                         className={`transition-colors ${
                           star <= displayRating
                             ? 'text-amber-400 fill-amber-400'
@@ -199,7 +215,7 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
                       key={cat.key}
                       type="button"
                       onClick={() => setCategory(category === cat.key ? '' : cat.key)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer touch-press touch-manipulation active:scale-95 ${
                         category === cat.key
                           ? 'bg-[#005A36] text-white shadow-xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-[#005A36] border border-slate-200'
@@ -224,7 +240,7 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
                   onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
                   rows={3}
                   placeholder="Hãy chia sẻ trải nghiệm của bạn về tài xế, độ đúng giờ hoặc tình trạng xe buýt..."
-                  className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-800 outline-none focus:border-[#005A36] focus:bg-white focus:ring-1 focus:ring-[#005A36]/20 transition-all resize-none"
+                  className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-800 outline-none focus:border-[#005A36] focus:bg-white focus:ring-1 focus:ring-[#005A36]/20 transition-all resize-none touch-manipulation"
                 />
               </div>
 
@@ -237,19 +253,21 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
               )}
 
               {/* Submit Button */}
-              <button
-                type="button"
-                disabled={submitting || !rating || !content.trim()}
-                onClick={handleSubmit}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#005A36] hover:bg-[#004529] py-3 text-xs font-black text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
-              >
-                {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send size={15} />
-                )}
-                <span>{submitting ? 'Đang gửi phản hồi...' : 'Gửi Đánh Giá Ngay'}</span>
-              </button>
+              <div className="safe-pb-dock pt-1">
+                <button
+                  type="button"
+                  disabled={submitting || !rating || !content.trim()}
+                  onClick={handleSubmit}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#005A36] hover:bg-[#004529] py-3 text-xs font-black text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all touch-press touch-manipulation cursor-pointer"
+                >
+                  {submitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send size={15} />
+                  )}
+                  <span>{submitting ? 'Đang gửi phản hồi...' : 'Gửi Đánh Giá Ngay'}</span>
+                </button>
+              </div>
             </>
           )}
         </div>

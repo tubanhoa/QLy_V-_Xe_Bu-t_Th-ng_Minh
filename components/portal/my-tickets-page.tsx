@@ -87,7 +87,7 @@ function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) 
   return (
     <button
       onClick={onClick}
-      className="group w-full text-left rounded-2xl border border-slate-200/80 bg-white hover:border-[#005A36] hover:shadow-md p-4 transition-all shadow-2xs space-y-3 cursor-pointer"
+      className="group w-full text-left rounded-2xl border border-slate-200/80 bg-white hover:border-[#005A36] hover:shadow-md p-4 transition-all shadow-2xs space-y-3 cursor-pointer touch-press touch-manipulation select-none"
       id={`ticket-card-${ticket.ticketId}`}
     >
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
@@ -134,7 +134,7 @@ function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) 
                   e.stopPropagation()
                   onExchange?.()
                 }}
-                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200 transition-colors cursor-pointer touch-press touch-manipulation"
               >
                 Đổi chuyến
               </button>
@@ -144,7 +144,7 @@ function TicketCard({ ticket, onClick, onExchange, onCancel }: TicketCardProps) 
                   e.stopPropagation()
                   onCancel?.()
                 }}
-                className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] border border-rose-200 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] border border-rose-200 transition-colors cursor-pointer touch-press touch-manipulation"
               >
                 Hủy vé
               </button>
@@ -257,14 +257,14 @@ export function MyTicketsPage() {
           </div>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold shrink-0">
+        {/* Filter Pills Horizontal Scroll Touch */}
+        <div className="flex items-center overflow-x-auto no-scrollbar scroll-touch rounded-xl bg-slate-100 p-1 text-xs font-bold shrink-0 max-w-full">
           {FILTER_TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setFilter(tab.key)}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 touch-press touch-manipulation ${
                 filter === tab.key
                   ? 'bg-white text-[#005A36] shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'

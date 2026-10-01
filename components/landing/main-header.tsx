@@ -62,15 +62,15 @@ export function MainHeader({
           : 'bg-transparent border-b border-black/5',
       )}
     >
-      <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-16 sm:h-[72px] max-w-7xl items-center justify-between gap-3 sm:gap-4 px-3.5 sm:px-6 lg:px-8 safe-top">
         {/* Brand Logo - Forest Green */}
-        <Link href="/" className="flex items-center gap-3.5 group" aria-label="ICTU Transit - Trang chủ">
+        <Link href="/" className="flex items-center gap-2.5 sm:gap-3.5 group touch-press" aria-label="ICTU Transit - Trang chủ">
           <BrandMark size="md" />
           <div className="flex flex-col leading-none">
-            <span className="text-[20px] font-black tracking-tight text-[#005A36] group-hover:text-emerald-800 transition-colors drop-shadow-sm">
+            <span className="text-[17px] sm:text-[20px] font-black tracking-tight text-[#005A36] group-hover:text-emerald-800 transition-colors drop-shadow-sm">
               ICTU <span className="text-[#005A36]">TRANSIT</span>
             </span>
-            <span className="mt-1 text-[11px] font-bold text-slate-700">Hệ Thống Xe Buýt Thông Minh</span>
+            <span className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] font-bold text-slate-700">Hệ Thống Xe Buýt Thông Minh</span>
           </div>
         </Link>
 
@@ -300,7 +300,7 @@ export function MainHeader({
       >
         <div
           className={cn(
-            'fixed inset-y-0 right-0 w-full max-w-sm bg-white p-6 shadow-2xl transition-transform duration-300 ease-out',
+            'fixed inset-y-0 right-0 w-full max-w-[320px] sm:max-w-sm bg-white p-5 sm:p-6 shadow-2xl transition-transform duration-300 ease-out flex flex-col justify-between overflow-y-auto scroll-touch safe-top safe-bottom',
             open ? 'translate-x-0' : 'translate-x-full',
           )}
         >

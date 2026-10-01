@@ -121,13 +121,18 @@ export function CancellationPolicyModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label="Hủy vé và Hoàn tiền tự động"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-lg max-h-[92vh] overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
+      <div className="relative w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform animate-slideUp">
+        {/* Mobile Pull-down indicator */}
+        <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-rose-50/90 via-white to-slate-50">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-rose-50/90 via-white to-slate-50 shrink-0">
           <div className="flex items-center gap-3">
@@ -156,7 +161,7 @@ export function CancellationPolicyModal({
         </div>
 
         {/* Body content scrollable */}
-        <div className="p-5 overflow-y-auto space-y-4 text-slate-700 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto scroll-touch space-y-4 text-slate-700 text-xs">
           {loading ? (
             <div className="py-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 animate-spin text-rose-600 mx-auto" />
@@ -318,11 +323,11 @@ export function CancellationPolicyModal({
               )}
 
               {/* Nút hành động */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2 pt-3 border-t border-slate-100 safe-pb-dock">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer touch-press touch-manipulation active:scale-95"
                 >
                   Giữ lại vé
                 </button>
@@ -332,7 +337,7 @@ export function CancellationPolicyModal({
                     type="button"
                     disabled={cancelling}
                     onClick={handleConfirmCancel}
-                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all touch-press touch-manipulation active:scale-95"
                   >
                     {cancelling ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

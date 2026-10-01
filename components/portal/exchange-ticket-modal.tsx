@@ -237,13 +237,18 @@ export function ExchangeTicketModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label="Đổi vé xe buýt thông minh"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-xl max-h-[92vh] overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform">
+      <div className="relative w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform animate-slideUp">
+        {/* Mobile Pull-down indicator */}
+        <div className="sm:hidden w-full flex justify-center pt-2.5 pb-1 shrink-0 bg-gradient-to-r from-emerald-50/90 via-white to-slate-50">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-emerald-50/90 via-white to-slate-50 shrink-0">
           <div className="flex items-center gap-3">
@@ -305,7 +310,7 @@ export function ExchangeTicketModal({
         )}
 
         {/* Body content scrollable */}
-        <div className="p-5 overflow-y-auto space-y-4 text-slate-700 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto scroll-touch space-y-4 text-slate-700 text-xs">
           {/* Thông báo thành công */}
           {exchangeResult ? (
             <div className="py-8 text-center space-y-4">
@@ -562,7 +567,7 @@ export function ExchangeTicketModal({
               )}
 
               {/* Hàng nút bấm điều hướng */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2 pt-3 border-t border-slate-100 safe-pb-dock">
                 {step !== 'select-trip' && (
                   <button
                     type="button"
@@ -571,7 +576,7 @@ export function ExchangeTicketModal({
                       if (step === 'select-seat') setStep('select-trip')
                       if (step === 'confirm') setStep('select-seat')
                     }}
-                    className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer touch-press touch-manipulation active:scale-95"
                   >
                     <ArrowLeft size={14} />
                     <span>Quay lại</span>
@@ -590,7 +595,7 @@ export function ExchangeTicketModal({
                       setError('')
                       setStep('select-seat')
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs touch-press touch-manipulation active:scale-95"
                   >
                     <span>Tiếp tục chọn ghế mới</span>
                     <ArrowRight size={14} />
@@ -602,7 +607,7 @@ export function ExchangeTicketModal({
                     type="button"
                     disabled={!selectedSeat || holdingSeat}
                     onClick={handleHoldSeat}
-                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs touch-press touch-manipulation active:scale-95"
                   >
                     {holdingSeat ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -619,7 +624,7 @@ export function ExchangeTicketModal({
                     type="button"
                     disabled={submitting}
                     onClick={handleConfirmExchange}
-                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-black hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    className="flex-1 py-2.5 rounded-xl bg-[#005A36] text-white text-xs font-black hover:bg-[#00472b] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm touch-press touch-manipulation active:scale-95"
                   >
                     {submitting ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
