@@ -21,9 +21,13 @@ import {
   ArrowRight,
   Info,
   Calendar,
+  Copy,
+  Check,
+  Receipt,
 } from 'lucide-react'
 import { ticketService } from '@/lib/services/ticket.service'
 import type { CancellationPolicyResponse, CancelTicketResponse } from '@/lib/types/exchange'
+import { RefundDetailModal } from './refund-detail-modal'
 
 interface CancellationPolicyModalProps {
   ticketId: string | null
@@ -59,6 +63,19 @@ export function CancellationPolicyModal({
   const [cancelling, setCancelling] = useState(false)
   const [cancelResult, setCancelResult] = useState<CancelTicketResponse | null>(null)
   const [error, setError] = useState('')
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [copiedTxn, setCopiedTxn] = useState(false)
+
+  const copyTxn = (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {})
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(20)
+      }
+      setCopiedTxn(true)
+      setTimeout(() => setCopiedTxn(false), 2000)
+    }
+  }
 
   // 1. Tải chính sách hủy vé theo thời gian thực từ Backend
   useEffect(() => {
@@ -104,11 +121,10 @@ export function CancellationPolicyModal({
     setCancelling(false)
 
     if (res.success && res.data) {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([20, 40, 20])
+      }
       setCancelResult(res.data)
-      setTimeout(() => {
-        onSuccess?.(res.data)
-        onClose()
-      }, 2500)
     } else {
       setError(res.message || 'Không thể hủy vé. Vui lòng kiểm tra lại điều kiện.')
     }
@@ -170,32 +186,85 @@ export function CancellationPolicyModal({
               </p>
             </div>
           ) : cancelResult ? (
-            /* Trạng thái hủy thành công */
-            <div className="py-8 text-center space-y-4">
-              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 animate-bounce">
-                <CheckCircle2 size={36} />
-              </div>
-              <div>
-                <h4 className="text-lg font-black text-slate-900">Hủy Vé Thành Công!</h4>
-                <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+            /* Trạng thái hủy thành công với Digital Refund Receipt Card */
+            <div className="py-4 space-y-4">
+              <div className="text-center space-y-1.5">
+                <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shadow-xs">
+                  <CheckCircle2 size={32} />
+                </div>
+                <h4 className="text-base sm:text-lg font-black text-slate-900">
+                  Hủy Vé & Khởi Tạo Hoàn Tiền Thành Công!
+                </h4>
+                <p className="text-xs text-slate-600 max-w-sm mx-auto">
                   {cancelResult.message}
                 </p>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 max-w-sm mx-auto text-left space-y-2 text-xs text-emerald-950">
-                <div className="flex justify-between">
-                  <span>Số tiền hoàn lại:</span>
-                  <strong className="text-[#005A36] text-sm">{formatPrice(cancelResult.refundAmount || 0)}</strong>
+
+              {/* Digital Refund Receipt Card */}
+              <div className="rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 p-4 space-y-2.5 text-xs text-slate-800">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Mã vé đã hủy:</span>
+                  <strong className="font-mono text-slate-900">{cancelResult.ticketCode || ticketCode}</strong>
                 </div>
-                <div className="flex justify-between">
-                  <span>Giải phóng ghế trống:</span>
-                  <strong className="text-emerald-700">Đã cập nhật hệ thống</strong>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Giá vé ban đầu:</span>
+                  <span className="font-mono font-bold text-slate-800">{formatPrice(cancelResult.originalPrice || price)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Đối soát cổng thanh toán:</span>
-                  <strong className="text-emerald-700">Hoàn tiền tự động</strong>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Phí hủy vé theo quy định:</span>
+                  <span className="font-mono font-bold text-rose-600">-{formatPrice(cancelResult.cancellationFee || 0)}</span>
+                </div>
+                <div className="pt-2 border-t border-emerald-200 flex justify-between items-center text-sm">
+                  <span className="font-black text-slate-900">Số tiền hoàn lại:</span>
+                  <strong className="font-mono text-base font-black text-[#005A36]">
+                    {formatPrice(cancelResult.refundAmount || 0)}
+                  </strong>
+                </div>
+
+                {cancelResult.refundTransactionId && (
+                  <div className="pt-2 border-t border-emerald-200/80 flex justify-between items-center text-[11px]">
+                    <span className="text-slate-500">Mã GD hoàn tiền:</span>
+                    <div className="flex items-center gap-1 font-mono font-bold text-slate-800">
+                      <span>{cancelResult.refundTransactionId}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyTxn(cancelResult.refundTransactionId!)}
+                        className="p-1 text-slate-400 hover:text-emerald-700"
+                        title="Sao chép"
+                      >
+                        {copiedTxn ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                  <span>Thời gian tiền về:</span>
+                  <span className="font-bold text-slate-700">Ví MoMo/VNPay: Tức thì - 24h | Ngân hàng: 1-3 ngày</span>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400">Đang đóng cửa sổ và cập nhật lại danh sách vé...</p>
+
+              {/* Action buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDetailModal(true)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs inline-flex items-center justify-center gap-1.5"
+                >
+                  <Receipt size={14} className="text-[#005A36]" />
+                  <span>Xem biên lai chi tiết</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSuccess?.(cancelResult)
+                    onClose()
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#005A36] hover:bg-emerald-800 text-white font-black text-xs shadow-sm transition-all"
+                >
+                  Hoàn tất & Đóng
+                </button>
+              </div>
             </div>
           ) : policy ? (
             <>
@@ -360,6 +429,29 @@ export function CancellationPolicyModal({
           ) : null}
         </div>
       </div>
+
+      {/* Modal Chi tiết Hoàn tiền khi người dùng bấm xem biên lai */}
+      {showDetailModal && cancelResult && (
+        <RefundDetailModal
+          open={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          ticketId={ticketId || cancelResult.ticketId}
+          ticketCode={cancelResult.ticketCode || ticketCode}
+          passengerName={policy?.passengerName}
+          seatNumber={seatNumber}
+          refundInfo={{
+            refundAmount: cancelResult.refundAmount || 0,
+            originalPrice: cancelResult.originalPrice || price,
+            cancellationFee: cancelResult.cancellationFee || 0,
+            feePercent: policy?.cancellationFeePercent || 0,
+            refundMethod: cancelResult.refundMethod || 'vnpay',
+            status: 'SUCCESS',
+            refundTransactionId: cancelResult.refundTransactionId || undefined,
+            refundTime: new Date().toISOString(),
+            estimatedArrival: 'Ví điện tử: Tức thì - 24h | Ngân hàng: 1-3 ngày làm việc',
+          }}
+        />
+      )}
     </div>
   )
 }

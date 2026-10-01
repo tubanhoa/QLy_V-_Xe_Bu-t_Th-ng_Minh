@@ -48,6 +48,7 @@ import {
   Sparkles,
   Zap,
   FileText,
+  Receipt,
 } from 'lucide-react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
@@ -62,6 +63,7 @@ import { ExchangeTicketModal } from '@/components/portal/exchange-ticket-modal'
 import { CancellationPolicyModal } from '@/components/portal/cancellation-policy-modal'
 import { FeedbackModal } from '@/components/portal/feedback-modal'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
+import { RefundDetailModal } from '@/components/portal/refund-detail-modal'
 import { cn } from '@/lib/utils'
 import { haptic } from '@/lib/utils/haptics'
 
@@ -76,6 +78,7 @@ const FILTER_TABS: { key: TicketFilterStatus; label: string }[] = [
   { key: 'upcoming', label: 'Sắp đi (Hôm nay)' },
   { key: 'past', label: 'Đã đi' },
   { key: 'cancelled', label: 'Đã hủy' },
+  { key: 'refunded', label: 'Đã hoàn tiền' },
 ]
 
 export function TicketManagementModal({
@@ -126,6 +129,8 @@ export function TicketManagementModal({
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [showDetailRefundModal, setShowDetailRefundModal] = useState(false)
+  const [selectedRefundTicket, setSelectedRefundTicket] = useState<TicketSummary | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelSuccess, setCancelSuccess] = useState(false)
@@ -351,6 +356,8 @@ export function TicketManagementModal({
       )
     } else if (filter === 'cancelled') {
       list = list.filter((t) => t.status === 'CANCELLED' || t.status === 'EXPIRED')
+    } else if (filter === 'refunded') {
+      list = list.filter((t) => t.status === 'REFUNDED' || (t.status === 'CANCELLED' && (t as any).refundInfo != null))
     }
 
     if (searchKeyword.trim()) {
@@ -842,6 +849,17 @@ export function TicketManagementModal({
                             <span>Hủy vé</span>
                           </button>
                         )}
+
+                        {(ticketDetail.status === 'REFUNDED' || ticketDetail.status === 'CANCELLED' || (ticketDetail as any).refundInfo != null) && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDetailRefundModal(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <Receipt size={13} className="text-purple-600" />
+                            <span>Hoàn tiền</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1218,6 +1236,17 @@ export function TicketManagementModal({
                             <span>Hủy vé & Hoàn tiền</span>
                           </button>
                         )}
+
+                        {(ticketDetail.status === 'REFUNDED' || ticketDetail.status === 'CANCELLED' || (ticketDetail as any).refundInfo != null) && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDetailRefundModal(true)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-xs font-black text-purple-700 transition-all cursor-pointer"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Xem chi tiết hoàn tiền</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1368,6 +1397,20 @@ export function TicketManagementModal({
                                   </button>
                                 </>
                               )}
+
+                              {(t.status === 'REFUNDED' || t.status === 'CANCELLED' || (t as any).refundInfo != null) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedRefundTicket(t)
+                                  }}
+                                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-2 text-xs font-bold text-purple-700 transition-all cursor-pointer"
+                                >
+                                  <Receipt size={13} className="text-purple-600" />
+                                  <span>Hoàn Tiền</span>
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1517,6 +1560,35 @@ export function TicketManagementModal({
           tripId={ticketDetail.tripId || ticketDetail.ticketId}
           tripName={`${ticketDetail.origin} ➔ ${ticketDetail.destination}`}
           onClose={() => setShowFeedbackModal(false)}
+        />
+      )}
+
+      {/* Sub-modal: Chi tiết hoàn tiền */}
+      {showDetailRefundModal && ticketDetail && (
+        <RefundDetailModal
+          open={showDetailRefundModal}
+          ticketId={ticketDetail.ticketId}
+          ticketCode={ticketDetail.ticketCode}
+          passengerName={ticketDetail.passengerName}
+          routeName={ticketDetail.routeName}
+          seatNumber={ticketDetail.seatNumber}
+          refundInfo={ticketDetail.refundInfo}
+          initialTicketPrice={ticketDetail.price}
+          onClose={() => setShowDetailRefundModal(false)}
+        />
+      )}
+
+      {selectedRefundTicket && (
+        <RefundDetailModal
+          open={Boolean(selectedRefundTicket)}
+          ticketId={selectedRefundTicket.ticketId}
+          ticketCode={selectedRefundTicket.ticketCode}
+          passengerName={selectedRefundTicket.passengerName}
+          routeName={selectedRefundTicket.routeName}
+          seatNumber={selectedRefundTicket.seatNumber}
+          refundInfo={selectedRefundTicket.refundInfo}
+          initialTicketPrice={selectedRefundTicket.price}
+          onClose={() => setSelectedRefundTicket(null)}
         />
       )}
 
