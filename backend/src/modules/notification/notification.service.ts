@@ -149,69 +149,157 @@ export class NotificationService {
         ? params.departureTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
         : new Date(params.departureTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 
-    const htmlContent = `
+    // Chuẩn bị CID Inline Attachment cho các trình đọc email (Gmail, Outlook, Apple Mail...)
+    // Vì các dịch vụ như Gmail mặc định sẽ chặn/lọc các thẻ img chứa data:image/png;base64 trực tiếp
+    const attachments: EmailAttachment[] = [];
+    const qrCid = `ticket-qr-${params.ticketCode.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    let smtpQrSrc = params.qrDataUrl;
+
+    if (params.qrDataUrl && params.qrDataUrl.startsWith('data:image/')) {
+      const match = params.qrDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] || 'png';
+        const base64Data = match[2];
+        attachments.push({
+          filename: `ticket-${params.ticketCode}-qr.${ext}`,
+          content: Buffer.from(base64Data, 'base64'),
+          contentType: `image/${ext}`,
+          cid: qrCid,
+        } as any);
+        smtpQrSrc = `cid:${qrCid}`;
+      }
+    }
+
+    const renderHtml = (qrImgSrc: string) => `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-          .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 24px; text-align: center; }
-          .header h1 { margin: 0; font-size: 24px; letter-spacing: 0.5px; }
-          .header p { margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; }
-          .content { padding: 24px; }
-          .success-badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
-          .ticket-card { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
-          .ticket-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
-          .ticket-label { color: #64748b; }
-          .ticket-value { font-weight: 600; color: #0f172a; }
-          .qr-section { text-align: center; padding: 20px 0; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-          .qr-image { width: 220px; height: 220px; display: block; margin: 0 auto 12px auto; }
-          .qr-instruction { font-size: 13px; color: #64748b; max-width: 80%; margin: 0 auto; line-height: 1.5; }
-          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px 8px; color: #1e293b; -webkit-text-size-adjust: 100%; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #005A36 0%, #0d9488 100%); color: #ffffff; padding: 28px 20px; text-align: center; }
+          .header h1 { margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+          .header p { margin: 0; opacity: 0.92; font-size: 14px; font-weight: 500; }
+          .content { padding: 24px 20px; }
+          .badge-wrapper { text-align: center; margin-bottom: 20px; }
+          .success-badge { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 6px 18px; border-radius: 9999px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+          
+          /* Khối hiển thị mã vé xe nổi bật */
+          .ticket-code-banner { background: #f0fdf4; border: 2px dashed #059669; border-radius: 12px; padding: 16px 20px; text-align: center; margin-bottom: 24px; }
+          .ticket-code-label { font-size: 12px; font-weight: 700; color: #065f46; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+          .ticket-code-val { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 26px; font-weight: 900; color: #005A36; letter-spacing: 2px; margin: 4px 0; word-break: break-all; }
+          .ticket-code-sub { font-size: 12.5px; color: #047857; margin-top: 6px; }
+
+          /* Bảng thông tin vé */
+          .ticket-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+          .ticket-table { width: 100%; border-collapse: collapse; }
+          .ticket-table td { padding: 8px 0; font-size: 14px; vertical-align: top; }
+          .ticket-label { color: #64748b; width: 42%; }
+          .ticket-value { font-weight: 600; color: #0f172a; text-align: right; width: 58%; }
+          .ticket-divider { border-top: 1px dashed #cbd5e1; }
+
+          /* Khu vực QR Pass */
+          .qr-section { text-align: center; padding: 24px 16px; background: #ffffff; border-radius: 12px; border: 1.5px solid #10b981; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+          .qr-title { font-size: 13px; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+          .qr-img-box { display: inline-block; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; }
+          .qr-image { width: 210px; height: 210px; display: block; margin: 0 auto; }
+          .qr-code-display { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 18px; font-weight: 800; color: #005A36; letter-spacing: 1px; margin-top: 12px; }
+          .qr-instruction { font-size: 13px; color: #475569; max-width: 90%; margin: 12px auto 0 auto; line-height: 1.5; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border-left: 3px solid #059669; text-align: left; }
+          
+          .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
-            <p>Xác nhận thanh toán và phát hành Vé Điện Tử</p>
+            <p>Xác nhận thanh toán và Thẻ lên xe điện tử (E-Ticket Boarding Pass)</p>
           </div>
           <div class="content">
-            <div style="text-align: center;">
-              <span class="success-badge">THANH TOÁN THÀNH CÔNG</span>
+            <div class="badge-wrapper">
+              <span class="success-badge">✓ ĐÃ THANH TOÁN THÀNH CÔNG (PAID)</span>
             </div>
-            <p>Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
-            <p>Hệ thống đã nhận được thanh toán cho đơn đặt vé của quý khách. Dưới đây là thông tin vé điện tử chính thức:</p>
             
-            <div class="ticket-card">
-              <div class="ticket-row"><span class="ticket-label">Mã vé:</span><span class="ticket-value" style="color: #2563eb;">${params.ticketCode}</span></div>
-              <div class="ticket-row"><span class="ticket-label">Mã đơn đặt:</span><span class="ticket-value">${params.bookingCode}</span></div>
-              <div class="ticket-row"><span class="ticket-label">Tuyến xe:</span><span class="ticket-value">${params.routeName}</span></div>
-              ${params.origin && params.destination ? `<div class="ticket-row"><span class="ticket-label">Lộ trình:</span><span class="ticket-value">${params.origin} ➔ ${params.destination}</span></div>` : ''}
-              <div class="ticket-row"><span class="ticket-label">Thời gian khởi hành:</span><span class="ticket-value">${formattedDeparture}</span></div>
-              <div class="ticket-row"><span class="ticket-label">Số ghế:</span><span class="ticket-value" style="font-size: 16px; color: #0284c7;">${params.seatNumber}</span></div>
-              ${params.vehiclePlate ? `<div class="ticket-row"><span class="ticket-label">Biển số xe:</span><span class="ticket-value">${params.vehiclePlate}</span></div>` : ''}
-              <div class="ticket-row" style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;"><span class="ticket-label">Giá vé:</span><span class="ticket-value" style="color: #16a34a; font-size: 16px;">${formattedPrice} VND</span></div>
+            <p style="margin: 0 0 16px 0; font-size: 15px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; color: #475569;">Giao dịch thanh toán vé xe của quý khách đã hoàn tất. Quý khách vui lòng lưu lại thẻ vé điện tử dưới đây:</p>
+
+            <!-- Khối Mã Vé Nổi Bật Dành Cho Hành Khách -->
+            <div class="ticket-code-banner">
+              <div class="ticket-code-label">MÃ VÉ XE ĐIỆN TỬ (TICKET CODE)</div>
+              <div class="ticket-code-val">${params.ticketCode}</div>
+              <div class="ticket-code-sub">Mã đơn đặt: <strong>${params.bookingCode}</strong></div>
             </div>
 
+            <!-- Bảng Chi Tiết Thông Tin Chuyến Xe -->
+            <div class="ticket-card">
+              <table class="ticket-table">
+                <tr>
+                  <td class="ticket-label">Mã vé điện tử:</td>
+                  <td class="ticket-value" style="color: #005A36; font-family: monospace; font-size: 15px; font-weight: 700;">${params.ticketCode}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Mã đơn đặt vé:</td>
+                  <td class="ticket-value" style="font-family: monospace;">${params.bookingCode}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Tuyến xe:</td>
+                  <td class="ticket-value">${params.routeName}</td>
+                </tr>
+                ${params.origin && params.destination ? `
+                <tr>
+                  <td class="ticket-label">Lộ trình:</td>
+                  <td class="ticket-value">${params.origin} ➔ ${params.destination}</td>
+                </tr>` : ''}
+                <tr>
+                  <td class="ticket-label">Thời gian xuất bến:</td>
+                  <td class="ticket-value" style="color: #0f172a; font-weight: 700;">${formattedDeparture}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Số ghế:</td>
+                  <td class="ticket-value" style="font-size: 16px; color: #0284c7; font-weight: 700;">${params.seatNumber}</td>
+                </tr>
+                ${params.vehiclePlate ? `
+                <tr>
+                  <td class="ticket-label">Biển số xe:</td>
+                  <td class="ticket-value">${params.vehiclePlate}</td>
+                </tr>` : ''}
+                <tr class="ticket-divider">
+                  <td class="ticket-label" style="padding-top: 12px; font-weight: 700; color: #0f172a;">Giá vé đã thanh toán:</td>
+                  <td class="ticket-value" style="padding-top: 12px; color: #16a34a; font-size: 17px; font-weight: 800;">${formattedPrice} VND</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Khối Mã QR Soát Vé Khi Lên Xe -->
             <div class="qr-section">
-              <img class="qr-image" src="${params.qrDataUrl}" alt="Mã QR Vé Xe ${params.ticketCode}" />
+              <div class="qr-title">MÃ QR SOÁT VÉ TỰ ĐỘNG</div>
+              <div class="qr-img-box">
+                <img class="qr-image" src="${qrImgSrc}" alt="Mã QR Vé Xe ${params.ticketCode}" width="210" height="210" />
+              </div>
+              <div class="qr-code-display">
+                MÃ VÉ: <span>${params.ticketCode}</span>
+              </div>
               <div class="qr-instruction">
                 <strong>HƯỚNG DẪN LÊN XE:</strong><br/>
-                Vui lòng xuất trình mã QR này cho tài xế hoặc phụ xe khi lên xe để thực hiện quét mã soát vé tự động.
+                1. Xuất trình mã QR này trên điện thoại cho tài xế hoặc phụ xe khi bước lên xe để thực hiện quét mã tự động.<br/>
+                2. Nếu thiết bị không quét được mã QR, quý khách vui lòng đọc <strong>Mã vé: ${params.ticketCode}</strong> để nhân viên đối soát thủ công trên hệ thống.
               </div>
             </div>
           </div>
           <div class="footer">
-            <p>Email này được tạo tự động bởi Hệ Thống Quản Lý Vé Xe Buýt Thông Minh ICTU.</p>
-            <p>Tổng đài hỗ trợ hành khách: 1900 1234 | Website: smartbus.ictu.vn</p>
+            <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
+            Hệ Thống Quản Lý Vé Xe Buýt Thông Minh - SmartBus ICTU<br/>
+            Hotline hỗ trợ hành khách: 1900 1234 | Website: smartbus.ictu.edu.vn
           </div>
         </div>
       </body>
       </html>
     `;
+
+    const htmlContent = renderHtml(params.qrDataUrl); // Giữ base64 cho preview nội bộ / test
+    const emailHtml = renderHtml(smtpQrSrc); // Dùng CID inline attachment cho SMTP thực tế
 
     // Lưu vào hàng đợi thông báo đã gửi
     const record: SentNotificationRecord = {
@@ -237,9 +325,10 @@ export class NotificationService {
           from: fromAddress,
           to: params.recipientEmail,
           subject,
-          html: htmlContent,
+          html: emailHtml,
+          attachments,
         });
-        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${params.recipientEmail}`);
+        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${params.recipientEmail} kèm inline QR attachment`);
       } catch (err: any) {
         this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${params.recipientEmail}: ${err?.message}`);
         record.status = 'failed';
@@ -263,46 +352,92 @@ export class NotificationService {
       <html>
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-          .header { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); color: white; padding: 24px; text-align: center; }
-          .header h1 { margin: 0; font-size: 24px; }
-          .content { padding: 24px; }
-          .badge { display: inline-block; background: #fee2e2; color: #b91c1c; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
-          .card { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
-          .label { color: #64748b; }
-          .value { font-weight: 600; color: #0f172a; }
-          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px 8px; color: #1e293b; -webkit-text-size-adjust: 100%; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); color: white; padding: 28px 20px; text-align: center; }
+          .header h1 { margin: 0 0 6px 0; font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+          .header p { margin: 0; opacity: 0.92; font-size: 14px; }
+          .content { padding: 24px 20px; }
+          .badge-wrapper { text-align: center; margin-bottom: 20px; }
+          .badge { display: inline-block; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 6px 18px; border-radius: 9999px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+          
+          /* Khối mã vé đã hủy nổi bật */
+          .cancel-banner { background: #fef2f2; border: 2px dashed #dc2626; border-radius: 12px; padding: 16px 20px; text-align: center; margin-bottom: 24px; }
+          .cancel-label { font-size: 12px; font-weight: 700; color: #991b1b; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+          .cancel-val { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 26px; font-weight: 900; color: #dc2626; letter-spacing: 2px; margin: 4px 0; word-break: break-all; }
+          .cancel-sub { font-size: 12.5px; color: #991b1b; margin-top: 6px; }
+
+          /* Bảng chi tiết */
+          .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+          .table { width: 100%; border-collapse: collapse; }
+          .table td { padding: 8px 0; font-size: 14px; vertical-align: top; }
+          .label { color: #64748b; width: 45%; }
+          .value { font-weight: 600; color: #0f172a; text-align: right; width: 55%; }
+          .divider { border-top: 1px dashed #cbd5e1; }
+
+          .note-box { background: #eff6ff; border-left: 3px solid #3b82f6; padding: 12px 14px; border-radius: 6px; font-size: 13px; color: #1e40af; line-height: 1.5; margin-bottom: 20px; }
+          .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
-            <p>Xác nhận hủy vé xe buýt</p>
+            <p>Xác nhận hủy vé xe buýt điện tử</p>
           </div>
           <div class="content">
-            <div style="text-align: center;">
-              <span class="badge">ĐÃ HỦY VÉ THÀNH CÔNG</span>
+            <div class="badge-wrapper">
+              <span class="badge">✕ ĐÃ HỦY VÉ THÀNH CÔNG</span>
             </div>
-            <p>Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
-            <p>Yêu cầu hủy vé xe buýt của quý khách đã được hệ thống xử lý thành công. Dưới đây là thông tin chi tiết:</p>
+            
+            <p style="margin: 0 0 16px 0; font-size: 15px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; color: #475569;">Yêu cầu hủy vé xe buýt của quý khách đã được hệ thống xử lý hoàn tất. Thông tin hủy vé như sau:</p>
+
+            <div class="cancel-banner">
+              <div class="cancel-label">MÃ VÉ ĐÃ HỦY (CANCELLED TICKET)</div>
+              <div class="cancel-val">${params.ticketCode}</div>
+              <div class="cancel-sub">Mã đơn đặt vé: <strong>${params.bookingCode}</strong></div>
+            </div>
+
             <div class="card">
-              <div class="row"><span class="label">Mã vé đã hủy:</span><span class="value" style="color: #dc2626;">${params.ticketCode}</span></div>
-              <div class="row"><span class="label">Mã đơn đặt:</span><span class="value">${params.bookingCode}</span></div>
-              <div class="row"><span class="label">Tuyến xe:</span><span class="value">${params.routeName}</span></div>
-              <div class="row"><span class="label">Giá vé gốc:</span><span class="value">${formattedOriginal} VND</span></div>
-              <div class="row"><span class="label">Phí hủy vé:</span><span class="value" style="color: #b91c1c;">${formattedFee} VND</span></div>
-              <div class="row" style="border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 8px;">
-                <span class="label">Số tiền hoàn lại:</span><span class="value" style="color: #16a34a; font-size: 16px;">${formattedRefund} VND</span>
-              </div>
+              <table class="table">
+                <tr>
+                  <td class="label">Mã vé đã hủy:</td>
+                  <td class="value" style="color: #dc2626; font-family: monospace; font-size: 15px; font-weight: 700;">${params.ticketCode}</td>
+                </tr>
+                <tr>
+                  <td class="label">Mã đơn đặt:</td>
+                  <td class="value" style="font-family: monospace;">${params.bookingCode}</td>
+                </tr>
+                <tr>
+                  <td class="label">Tuyến xe:</td>
+                  <td class="value">${params.routeName}</td>
+                </tr>
+                <tr>
+                  <td class="label">Giá vé gốc:</td>
+                  <td class="value">${formattedOriginal} VND</td>
+                </tr>
+                <tr>
+                  <td class="label">Phí hủy vé theo quy định:</td>
+                  <td class="value" style="color: #b91c1c;">${formattedFee} VND</td>
+                </tr>
+                <tr class="divider">
+                  <td class="label" style="padding-top: 12px; font-weight: 700; color: #0f172a;">Số tiền thực hoàn:</td>
+                  <td class="value" style="padding-top: 12px; color: #16a34a; font-size: 17px; font-weight: 800;">${formattedRefund} VND</td>
+                </tr>
+              </table>
             </div>
-            <p style="font-size: 13px; color: #64748b;">Số tiền hoàn lại sẽ được tự động hoàn về tài khoản thanh toán ban đầu của quý khách theo quy định của ngân hàng/cổng thanh toán.</p>
+
+            <div class="note-box">
+              <strong>Lưu ý:</strong> Số tiền hoàn lại sẽ được tự động hoàn về ví điện tử / tài khoản ngân hàng ban đầu của quý khách theo quy định đối soát. Quý khách vui lòng lưu lại mã vé để liên hệ đối soát khi cần thiết.
+            </div>
           </div>
           <div class="footer">
-            <p>Hệ Thống Quản Lý Vé Xe Buýt Thông Minh ICTU - Tổng đài: 1900 1234</p>
+            <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
+            Hệ Thống Quản Lý Vé Xe Buýt Thông Minh - SmartBus ICTU<br/>
+            Hotline hỗ trợ hành khách: 1900 1234 | Website: smartbus.ictu.edu.vn
           </div>
         </div>
       </body>
@@ -499,7 +634,7 @@ export class NotificationService {
    * Gửi Email xác nhận ĐỔI VÉ thành công kèm vé điện tử mới
    */
   async sendTicketExchangeEmail(params: SendTicketExchangeEmailParams): Promise<boolean> {
-    const subject = `[SmartBus ICTU] Xác nhận ĐỔI VÉ XE thành công - Mã vé: ${params.ticketCode}`;
+    const subject = `[SmartBus ICTU] Xác nhận ĐỔI VÉ XE thành công - Mã vé mới: ${params.ticketCode}`;
     const formattedDeparture =
       params.newDepartureTime instanceof Date
         ? params.newDepartureTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
@@ -507,63 +642,160 @@ export class NotificationService {
     const formattedFee = Number(params.exchangeFee).toLocaleString('vi-VN');
     const formattedDiff = Number(params.priceDifference).toLocaleString('vi-VN');
 
-    const htmlContent = `
+    // Chuẩn bị CID Inline Attachment cho vé mới
+    const attachments: EmailAttachment[] = [];
+    const qrCid = `ticket-exchange-qr-${params.ticketCode.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    let smtpQrSrc = params.qrDataUrl;
+
+    if (params.qrDataUrl && params.qrDataUrl.startsWith('data:image/')) {
+      const match = params.qrDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] || 'png';
+        const base64Data = match[2];
+        attachments.push({
+          filename: `ticket-exchange-${params.ticketCode}-qr.${ext}`,
+          content: Buffer.from(base64Data, 'base64'),
+          contentType: `image/${ext}`,
+          cid: qrCid,
+        } as any);
+        smtpQrSrc = `cid:${qrCid}`;
+      }
+    }
+
+    const renderHtml = (qrImgSrc: string) => `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-          .header { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; padding: 24px; text-align: center; }
-          .header h1 { margin: 0; font-size: 24px; }
-          .content { padding: 24px; }
-          .badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
-          .card { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
-          .label { color: #64748b; }
-          .value { font-weight: 600; color: #0f172a; }
-          .qr-section { text-align: center; padding: 20px 0; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-          .qr-image { width: 220px; height: 220px; display: block; margin: 0 auto 12px auto; }
-          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px 8px; color: #1e293b; -webkit-text-size-adjust: 100%; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; padding: 28px 20px; text-align: center; }
+          .header h1 { margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+          .header p { margin: 0; opacity: 0.92; font-size: 14px; font-weight: 500; }
+          .content { padding: 24px 20px; }
+          .badge-wrapper { text-align: center; margin-bottom: 20px; }
+          .badge { display: inline-block; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 6px 18px; border-radius: 9999px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+          
+          /* Khối mã vé mới nổi bật */
+          .ticket-code-banner { background: #f0f9ff; border: 2px dashed #0284c7; border-radius: 12px; padding: 16px 20px; text-align: center; margin-bottom: 24px; }
+          .ticket-code-label { font-size: 12px; font-weight: 700; color: #0369a1; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+          .ticket-code-val { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 26px; font-weight: 900; color: #0284c7; letter-spacing: 2px; margin: 4px 0; word-break: break-all; }
+          .ticket-code-sub { font-size: 12.5px; color: #0369a1; margin-top: 6px; }
+
+          /* Bảng thông tin vé đổi */
+          .ticket-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+          .ticket-table { width: 100%; border-collapse: collapse; }
+          .ticket-table td { padding: 8px 0; font-size: 14px; vertical-align: top; }
+          .ticket-label { color: #64748b; width: 42%; }
+          .ticket-value { font-weight: 600; color: #0f172a; text-align: right; width: 58%; }
+          .ticket-divider { border-top: 1px dashed #cbd5e1; }
+
+          /* Khu vực QR Pass mới */
+          .qr-section { text-align: center; padding: 24px 16px; background: #ffffff; border-radius: 12px; border: 1.5px solid #0284c7; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+          .qr-title { font-size: 13px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+          .qr-img-box { display: inline-block; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; }
+          .qr-image { width: 210px; height: 210px; display: block; margin: 0 auto; }
+          .qr-code-display { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 18px; font-weight: 800; color: #0284c7; letter-spacing: 1px; margin-top: 12px; }
+          .qr-instruction { font-size: 13px; color: #475569; max-width: 90%; margin: 12px auto 0 auto; line-height: 1.5; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border-left: 3px solid #0284c7; text-align: left; }
+
+          .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
-            <p>Xác nhận Đổi Vé Xe Buýt Thành Công</p>
+            <p>Xác nhận Đổi Chuyến và Thẻ lên xe điện tử Mới</p>
           </div>
           <div class="content">
-            <div style="text-align: center;">
-              <span class="badge">ĐỔI VÉ THÀNH CÔNG</span>
+            <div class="badge-wrapper">
+              <span class="badge">✓ ĐÃ ĐỔI VÉ THÀNH CÔNG</span>
             </div>
-            <p>Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
-            <p>Yêu cầu đổi chuyến của quý khách đã hoàn tất. Thông tin chuyến xe mới của quý khách như sau:</p>
-            <div class="card">
-              <div class="row"><span class="label">Mã vé:</span><span class="value" style="color: #0284c7;">${params.ticketCode}</span></div>
-              <div class="row"><span class="label">Mã đơn đặt:</span><span class="value">${params.bookingCode}</span></div>
-              <div class="row"><span class="label">Tuyến xe mới:</span><span class="value">${params.newRouteName}</span></div>
-              ${params.newOrigin && params.newDestination ? `<div class="row"><span class="label">Lộ trình:</span><span class="value">${params.newOrigin} ➔ ${params.newDestination}</span></div>` : ''}
-              <div class="row"><span class="label">Thời gian xuất bến mới:</span><span class="value">${formattedDeparture}</span></div>
-              <div class="row"><span class="label">Số ghế mới:</span><span class="value" style="font-size: 16px; color: #0284c7;">${params.newSeatNumber}</span></div>
-              ${params.newVehiclePlate ? `<div class="row"><span class="label">Biển số xe:</span><span class="value">${params.newVehiclePlate}</span></div>` : ''}
-              <div class="row"><span class="label">Phí đổi vé:</span><span class="value">${formattedFee} VND</span></div>
-              <div class="row"><span class="label">Chênh lệch đã xử lý:</span><span class="value">${formattedDiff} VND</span></div>
+            
+            <p style="margin: 0 0 16px 0; font-size: 15px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; color: #475569;">Yêu cầu đổi chuyến của quý khách đã hoàn tất. Thông tin chuyến xe mới và vé xe điện tử mới của quý khách như sau:</p>
+
+            <!-- Khối Mã Vé Mới Nổi Bật -->
+            <div class="ticket-code-banner">
+              <div class="ticket-code-label">MÃ VÉ MỚI (NEW TICKET CODE)</div>
+              <div class="ticket-code-val">${params.ticketCode}</div>
+              <div class="ticket-code-sub">Mã đơn đặt: <strong>${params.bookingCode}</strong></div>
             </div>
 
+            <!-- Bảng Chi Tiết Chuyến Xe Mới -->
+            <div class="ticket-card">
+              <table class="ticket-table">
+                <tr>
+                  <td class="ticket-label">Mã vé mới:</td>
+                  <td class="ticket-value" style="color: #0284c7; font-family: monospace; font-size: 15px; font-weight: 700;">${params.ticketCode}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Mã đơn đặt vé:</td>
+                  <td class="ticket-value" style="font-family: monospace;">${params.bookingCode}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Tuyến xe mới:</td>
+                  <td class="ticket-value">${params.newRouteName}</td>
+                </tr>
+                ${params.newOrigin && params.newDestination ? `
+                <tr>
+                  <td class="ticket-label">Lộ trình mới:</td>
+                  <td class="ticket-value">${params.newOrigin} ➔ ${params.newDestination}</td>
+                </tr>` : ''}
+                <tr>
+                  <td class="ticket-label">Thời gian xuất bến mới:</td>
+                  <td class="ticket-value" style="color: #0f172a; font-weight: 700;">${formattedDeparture}</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Số ghế mới:</td>
+                  <td class="ticket-value" style="font-size: 16px; color: #0284c7; font-weight: 700;">${params.newSeatNumber}</td>
+                </tr>
+                ${params.newVehiclePlate ? `
+                <tr>
+                  <td class="ticket-label">Biển số xe:</td>
+                  <td class="ticket-value">${params.newVehiclePlate}</td>
+                </tr>` : ''}
+                <tr class="ticket-divider">
+                  <td class="ticket-label" style="padding-top: 10px;">Phí đổi chuyến:</td>
+                  <td class="ticket-value" style="padding-top: 10px;">${formattedFee} VND</td>
+                </tr>
+                <tr>
+                  <td class="ticket-label">Chênh lệch giá vé:</td>
+                  <td class="ticket-value">${formattedDiff} VND</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Khối Mã QR Soát Vé Mới -->
             <div class="qr-section">
-              <img class="qr-image" src="${params.qrDataUrl}" alt="Mã QR Vé Mới" />
-              <div style="font-size: 13px; color: #64748b;">Mã QR cũ đã vô hiệu. Vui lòng sử dụng mã QR mới này khi lên xe.</div>
+              <div class="qr-title">MÃ QR SOÁT VÉ MỚI</div>
+              <div class="qr-img-box">
+                <img class="qr-image" src="${qrImgSrc}" alt="Mã QR Vé Mới ${params.ticketCode}" width="210" height="210" />
+              </div>
+              <div class="qr-code-display">
+                MÃ VÉ MỚI: <span>${params.ticketCode}</span>
+              </div>
+              <div class="qr-instruction">
+                <strong>LƯU Ý QUAN TRỌNG:</strong><br/>
+                1. Mã vé và mã QR cũ đã bị hủy vô hiệu lực. Vui lòng chỉ xuất trình mã QR mới này khi lên xe.<br/>
+                2. Nếu không quét được mã, quý khách vui lòng đọc <strong>Mã vé mới: ${params.ticketCode}</strong> cho nhân viên soát vé.
+              </div>
             </div>
           </div>
           <div class="footer">
-            <p>Hệ Thống Quản Lý Vé Xe Buýt Thông Minh ICTU - Tổng đài: 1900 1234</p>
+            <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
+            Hệ Thống Quản Lý Vé Xe Buýt Thông Minh - SmartBus ICTU<br/>
+            Hotline hỗ trợ: 1900 1234 | Website: smartbus.ictu.edu.vn
           </div>
         </div>
       </body>
       </html>
     `;
+
+    const htmlContent = renderHtml(params.qrDataUrl);
+    const emailHtml = renderHtml(smtpQrSrc);
 
     const record: SentNotificationRecord = {
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -588,7 +820,8 @@ export class NotificationService {
           from: fromAddress,
           to: params.recipientEmail,
           subject,
-          html: htmlContent,
+          html: emailHtml,
+          attachments,
         });
       } catch (err: any) {
         this.logger.error(`[NotificationService] Lỗi gửi email đổi vé qua SMTP: ${err?.message}`);
