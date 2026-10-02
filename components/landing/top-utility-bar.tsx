@@ -6,13 +6,17 @@ import { PhoneCall, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACT } from '@/lib/landing-data'
 
+interface TopUtilityBarProps {
+  onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
+}
+
 const AUDIENCES = [
   { id: 'personal', label: 'Cá nhân (HSSV & Cán bộ)' },
   { id: 'business', label: 'Tổ chức & Doanh nghiệp' },
-  { id: 'priority', label: 'Khách hàng Ưu tiên' },
+  { id: 'priority', label: 'Hành khách Thân thiết & Thẻ SV' },
 ]
 
-export function TopUtilityBar() {
+export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
   const [audience, setAudience] = useState(AUDIENCES[0].id)
   const [lang, setLang] = useState<'VI' | 'EN'>('VI')
 
@@ -45,22 +49,30 @@ export function TopUtilityBar() {
         {/* Right: Quick Links with Animated Underline Effect on Hover */}
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
-            <a href="#about" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            <Link href="/thong-tin-dich-vu#about" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
               Về ICTU Transit
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#news" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            </Link>
+            <button
+              type="button"
+              onClick={() => onOpenModal?.('news')}
+              className="group relative py-1 text-slate-700 transition-colors hover:text-[#005A36] cursor-pointer"
+            >
               Tin tức
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#routes" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenModal?.('routes')}
+              className="group relative py-1 text-slate-700 transition-colors hover:text-[#005A36] cursor-pointer"
+            >
               Mạng lưới tuyến
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#careers" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
-              Tuyển dụng
+            </button>
+            <Link href="/thong-tin-dich-vu#faq" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+              Hỏi đáp & Hướng dẫn
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
+            </Link>
           </div>
 
           <span className="h-3 w-px bg-slate-300/80" aria-hidden="true" />

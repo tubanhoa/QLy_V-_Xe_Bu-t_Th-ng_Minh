@@ -160,7 +160,17 @@ export function LandingPage() {
 
       {/* 2-Tier Header with Transparent Background */}
       <div className="relative shrink-0 z-30">
-        <TopUtilityBar />
+        <TopUtilityBar
+          onOpenModal={(modal) => {
+            if (modal === 'lookup') {
+              setIsTicketModalOpen(true)
+            } else if (modal === 'student-pass') {
+              setIsMonthlyPassModalOpen(true)
+            } else {
+              setActiveModal(modal)
+            }
+          }}
+        />
         <MainHeader
           onOpenSeatPicker={() => setIsTripSearchOpen(true)}
           onOpenModal={(modal) => {
