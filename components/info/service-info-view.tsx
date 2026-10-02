@@ -45,6 +45,7 @@ import { BrandMark } from '@/components/brand-mark'
 import { CONTACT } from '@/lib/landing-data'
 import { cn } from '@/lib/utils'
 import { haptic } from '@/lib/utils/haptics'
+import { VrStationTourModal } from '@/components/modal/vr-station-tour-modal'
 
 // Bảng biểu phí hoàn hủy chuẩn theo quy định hệ thống ICTU Transit
 const REFUND_POLICIES = [
@@ -175,6 +176,10 @@ export function ServiceInfoView() {
   const [simRadius, setSimRadius] = useState<'300' | '500' | '1000'>('500')
   const [simDistance, setSimDistance] = useState<number>(450)
   const [isPlayingChime, setIsPlayingChime] = useState(false)
+
+  // Virtual Tour 360 State (thamquan.ictu.edu.vn)
+  const [isVrModalOpen, setIsVrModalOpen] = useState(false)
+  const [vrStationTarget, setVrStationTarget] = useState('Trạm Cổng Chính ĐH CNTT & TT Thái Nguyên (ICTU)')
 
   // Scrollspy & Reading Progress Tracker
   const [readingProgress, setReadingProgress] = useState(0)
@@ -784,12 +789,27 @@ export function ServiceInfoView() {
                             />
 
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-black text-slate-900">{st.name}</span>
                                 {st.hub && (
                                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">
                                     Trạm Hub
                                   </span>
+                                )}
+                                {st.name.includes('ICTU') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVrStationTarget(st.name)
+                                      setIsVrModalOpen(true)
+                                      haptic.play('tap')
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/80 bg-cyan-50 px-2 py-0.5 text-[10px] font-black text-cyan-800 hover:bg-cyan-100 transition-colors cursor-pointer"
+                                    title="Xem thực tế ảo 360 độ điểm chờ xe buýt cổng trường ICTU"
+                                  >
+                                    <Compass size={12} className="text-cyan-700 animate-spin-slow" />
+                                    <span>🕶️ Xem Trạm 360° VR</span>
+                                  </button>
                                 )}
                               </div>
                               <span className="text-xs text-slate-500">{st.type}</span>
@@ -800,6 +820,48 @@ export function ServiceInfoView() {
                             </span>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Interactive VR 360 Showcase Banner (Integrated from thamquan.ictu.edu.vn) */}
+                      <div className="mt-8 rounded-3xl border border-cyan-300/60 bg-gradient-to-r from-blue-950 via-slate-900 to-blue-900 p-6 sm:p-7 text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute -right-16 -bottom-16 size-64 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none" />
+                        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                          <div className="space-y-1.5 max-w-xl">
+                            <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/20 border border-cyan-400/40 px-3 py-1 text-[11px] font-black text-cyan-300">
+                              <Compass size={13} className="animate-spin-slow text-cyan-400" />
+                              <span>TÍCH HỢP TÀI NGUYÊN SỐ: THAMQUAN.ICTU.EDU.VN</span>
+                            </div>
+                            <h4 className="text-base sm:text-lg font-black text-white">
+                              Khám Phá Điểm Đón & Toàn Cảnh Khuôn Viên ICTU Qua Thực Tế Ảo 360°
+                            </h4>
+                            <p className="text-xs text-slate-300 leading-relaxed">
+                              Hành khách và tân sinh viên có thể tương tác xoay 360 độ xem trước vị trí bến đón xe buýt tại Cổng Chính, Quảng trường Đổi mới sáng tạo, bãi gửi xe và các khối nhà giảng đường trước khi xe cập bến.
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVrStationTarget('Trạm Cổng Chính & Khuôn Viên ĐH CNTT & TT Thái Nguyên')
+                                setIsVrModalOpen(true)
+                                haptic.play('tap')
+                              }}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black px-4 py-2.5 text-xs shadow-lg shadow-cyan-400/20 transition-all active:scale-95 cursor-pointer"
+                            >
+                              <Compass size={15} />
+                              <span>Mở Trải Nghiệm VR 360°</span>
+                            </button>
+                            <a
+                              href="https://thamquan.ictu.edu.vn/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold px-3.5 py-2.5 text-xs transition-colors"
+                            >
+                              <span>Cổng Gốc ↗</span>
+                            </a>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1276,6 +1338,13 @@ export function ServiceInfoView() {
           </main>
         </div>
       </div>
+
+      {/* Virtual Reality 360 Station Tour Modal (thamquan.ictu.edu.vn) */}
+      <VrStationTourModal
+        isOpen={isVrModalOpen}
+        onClose={() => setIsVrModalOpen(false)}
+        stationName={vrStationTarget}
+      />
     </div>
   )
 }

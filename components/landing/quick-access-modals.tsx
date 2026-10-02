@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Compass,
   CreditCard,
   FileText,
   GraduationCap,
@@ -39,6 +40,8 @@ import { BusRoute } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
 import { MonthlyPassPage } from '@/components/portal/monthly-pass-page'
 import { MyTicketsPage } from '@/components/portal/my-tickets-page'
+import { VrStationTourModal } from '@/components/modal/vr-station-tour-modal'
+import { haptic } from '@/lib/utils/haptics'
 
 interface QuickAccessModalsProps {
   activeModal: 'routes' | 'news' | 'student-pass' | 'lookup' | null
@@ -68,6 +71,8 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
   const [routesError, setRoutesError] = useState<string | null>(null)
   const [routeSearchKeyword, setRouteSearchKeyword] = useState('')
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null)
+  const [isVrModalOpen, setIsVrModalOpen] = useState(false)
+  const [vrStationTarget, setVrStationTarget] = useState('Trạm Cổng Chính ĐH CNTT & TT Thái Nguyên (ICTU)')
 
   useEffect(() => {
     if (activeModal === 'routes') {
@@ -299,12 +304,28 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
                                 <div key={rs.id || idx} className="relative flex items-start gap-2">
                                   <span className="size-2 rounded-full bg-[#005A36] ring-4 ring-emerald-100 mt-1 shrink-0 -ml-[17px]" />
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="font-bold text-slate-900">{rs.station?.name}</span>
                                       {rs.station?.isHub && (
                                         <span className="rounded bg-teal-100 px-1.5 py-0.2 text-[9px] font-bold text-teal-800">
                                           Trạm trung chuyển
                                         </span>
+                                      )}
+                                      {rs.station?.name?.includes('ICTU') && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setVrStationTarget(rs.station.name)
+                                            setIsVrModalOpen(true)
+                                            haptic.play('tap')
+                                          }}
+                                          className="inline-flex items-center gap-1 rounded-md border border-cyan-400 bg-cyan-50 px-1.5 py-0.2 text-[9px] font-black text-cyan-800 hover:bg-cyan-100 transition-colors cursor-pointer"
+                                          title="Xem thực tế ảo 360 độ trạm đón cổng trường ICTU"
+                                        >
+                                          <Compass size={11} className="text-cyan-700 animate-spin-slow" />
+                                          <span>VR 360°</span>
+                                        </button>
                                       )}
                                     </div>
                                     {rs.station?.address && (
@@ -580,6 +601,13 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
           </div>
         </div>
       )}
+
+      {/* VR Station 360 Modal */}
+      <VrStationTourModal
+        isOpen={isVrModalOpen}
+        onClose={() => setIsVrModalOpen(false)}
+        stationName={vrStationTarget}
+      />
     </div>
   )
 }
