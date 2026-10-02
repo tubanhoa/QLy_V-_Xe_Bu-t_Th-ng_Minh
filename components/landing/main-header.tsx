@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
+  Bell,
   ChevronDown,
   LayoutDashboard,
   LogIn,
@@ -21,12 +22,15 @@ import { BrandMark } from '@/components/brand-mark'
 import { useAuth } from '@/lib/auth-context'
 import { ROLE_META } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/utils/haptics'
 
 interface MainHeaderProps {
   onOpenSeatPicker?: () => void
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
   onOpenTicketModal?: () => void
   onOpenMonthlyPassModal?: () => void
+  onOpenNotificationCenter?: () => void
+  unreadCount?: number
 }
 
 export function MainHeader({
@@ -34,6 +38,8 @@ export function MainHeader({
   onOpenModal,
   onOpenTicketModal,
   onOpenMonthlyPassModal,
+  onOpenNotificationCenter,
+  unreadCount = 0,
 }: MainHeaderProps) {
   const { isAuthenticated, user, role, logout } = useAuth()
   const [scrolled, setScrolled] = useState(false)
@@ -223,7 +229,26 @@ export function MainHeader({
         </nav>
 
         {/* Right CTA - Dynamic auth state */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Smart Notification Bell */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic.play('tap')
+              onOpenNotificationCenter?.()
+            }}
+            aria-label="Xem thông báo chuyến xe"
+            className="relative inline-flex size-9 sm:size-10 items-center justify-center rounded-xl border border-slate-200/90 bg-white/90 text-slate-700 hover:text-[#005A36] hover:border-emerald-400 hover:bg-emerald-50 transition-all cursor-pointer shadow-xs group touch-press"
+            id="btn-header-notification-bell"
+          >
+            <Bell size={18} strokeWidth={2.2} className="group-hover:rotate-12 transition-transform text-slate-700 group-hover:text-[#005A36]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
           {isAuthenticated && user ? (
             <div className="flex items-center gap-2">
               {role === 'admin' || role === 'dispatcher' || role === 'driver' || role === 'manager' ? (
@@ -409,6 +434,25 @@ export function MainHeader({
             </button>
 
             <div className="mt-4 flex flex-col divide-y divide-slate-100 text-sm font-bold text-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  onOpenNotificationCenter?.()
+                }}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
+                id="mobile-nav-notifications"
+              >
+                <div className="flex items-center gap-2">
+                  <Bell size={16} className="text-[#005A36]" />
+                  <span>Thông báo & Cảnh báo xe</span>
+                </div>
+                {unreadCount > 0 && (
+                  <span className="rounded-full bg-rose-500 text-white text-[10px] font-black px-2 py-0.2">
+                    {unreadCount} mới
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => {

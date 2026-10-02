@@ -17,14 +17,20 @@ import { MonthlyPassModal } from './monthly-pass-modal'
 import { MobileBottomDock } from './mobile-bottom-dock'
 import { useAuth } from '@/lib/auth-context'
 import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
+import { useNotifications } from '@/hooks/use-notifications'
+import { NotificationCenter } from '@/components/notification/notification-center'
+import { FloatingGeofenceAlert } from '@/components/notification/floating-geofence-alert'
+import { PushPermissionModal } from '@/components/notification/push-permission-modal'
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth()
+  const notifController = useNotifications()
   const [isSeatPickerOpen, setIsSeatPickerOpen] = useState(false)
   const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
   const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
   const [pendingTrip, setPendingTrip] = useState<TripSearchResult | null>(null)
@@ -39,6 +45,7 @@ export function LandingPage() {
     isTicketModalOpen ||
     isMonthlyPassModalOpen ||
     isAuthPromptOpen ||
+    isNotificationCenterOpen ||
     activeModal !== null
 
   // Tự động mở Cửa Sổ Nổi Vé Điện Tử hoặc Vé Tháng khi có query param
@@ -167,6 +174,8 @@ export function LandingPage() {
           }}
           onOpenTicketModal={() => setIsTicketModalOpen(true)}
           onOpenMonthlyPassModal={() => setIsMonthlyPassModalOpen(true)}
+          onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
+          unreadCount={notifController.unreadCount}
         />
       </div>
 
@@ -289,6 +298,22 @@ export function LandingPage() {
           setIsTripSearchOpen(true)
         }}
       />
+
+      {/* Cảnh Báo Nổi In-App Geofence Alert (Xe buýt vào bán kính <= 500m) */}
+      <FloatingGeofenceAlert
+        alert={notifController.activeGeofenceAlert}
+        onDismiss={notifController.dismissGeofenceAlert}
+      />
+
+      {/* Trung Tâm Thông Báo (Notification Center Popover/Drawer) */}
+      <NotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        notificationController={notifController}
+      />
+
+      {/* Hộp Thoại Xin Quyền Web Push Notification */}
+      <PushPermissionModal />
 
       {/* Thanh Dock Điều Hướng Siêu Cấp Dành Cho Mobile Web */}
       <MobileBottomDock
