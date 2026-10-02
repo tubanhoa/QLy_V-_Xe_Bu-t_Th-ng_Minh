@@ -4,6 +4,38 @@
  * Branch: feature/SBTS-live-tracking-fe
  */
 
+export interface StationEtaItem {
+  stationId: string
+  stationName: string
+  stopOrder: number
+  latitude: number
+  longitude: number
+  distanceMeters: number
+  etaMinutes: number
+  estimatedArrivalIso: string
+  status: 'passed' | 'approaching' | 'upcoming'
+  isNextStop: boolean
+}
+
+export interface StationAlert {
+  stationId: string
+  stationName: string
+  distanceMeters: number
+  message: string
+}
+
+export interface SimulatorStatus {
+  isRunning: boolean
+  tripId: string
+  currentStep?: number
+  totalSteps?: number
+  speedMultiplier?: number
+  currentLat?: number
+  currentLng?: number
+  speedKmh?: number
+  message?: string
+}
+
 export interface LiveLocation {
   tripId: string
   latitude: number
@@ -13,6 +45,11 @@ export interface LiveLocation {
   batteryPercent: number
   lastUpdated: string
   isSimulated?: boolean
+  stationEtas?: StationEtaItem[]
+}
+
+export interface LiveTrackingResponse extends LiveLocation {
+  stationEtas: StationEtaItem[]
 }
 
 export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
@@ -51,3 +88,4 @@ export const INCIDENT_SEVERITY_LABEL: Record<IncidentSeverity, string> = {
   high: 'Cao',
   critical: 'Nghiêm trọng',
 }
+

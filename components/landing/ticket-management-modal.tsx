@@ -1196,7 +1196,7 @@ export function TicketManagementModal({
                     <div className="space-y-2 pt-1 no-print">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <Link
-                          href={`/tracking/${ticketDetail.tripId || ticketDetail.ticketId}`}
+                          href={`/tracking/${ticketDetail.tripId || ticketDetail.ticketId}?pickup=${encodeURIComponent(ticketDetail.origin || '')}`}
                           target="_blank"
                           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 text-xs font-black text-[#005A36] transition-all text-center"
                         >
@@ -1367,6 +1367,16 @@ export function TicketManagementModal({
                                 <QrCode size={15} />
                                 <span>Xem Vé & QR</span>
                               </button>
+
+                              <Link
+                                href={`/tracking/${t.tripId || t.ticketId}?pickup=${encodeURIComponent(t.origin || '')}`}
+                                target="_blank"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-2 text-xs font-black text-[#005A36] transition-all cursor-pointer shadow-2xs"
+                                title="Theo dõi vị trí xe buýt và thời gian đến trạm realtime"
+                              >
+                                <Radio size={13} className="text-[#005A36] animate-pulse" />
+                                <span>Theo Dõi Xe</span>
+                              </Link>
 
                               {(t.status === 'PAID' || t.status === 'RESERVED' || t.status === 'VALID') && (
                                 <>

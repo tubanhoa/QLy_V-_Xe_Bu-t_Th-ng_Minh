@@ -4,7 +4,7 @@
  * Provides delightful physical feedback for touches, seat toggles, and ticket wins.
  */
 
-type HapticSoundType = 'tap' | 'select' | 'pop' | 'success' | 'warning' | 'copy'
+type HapticSoundType = 'tap' | 'select' | 'pop' | 'success' | 'warning' | 'copy' | 'busArrival'
 
 class HapticManager {
   private ctx: AudioContext | null = null
@@ -43,6 +43,10 @@ class HapticManager {
             break
           case 'warning':
             navigator.vibrate([40, 40, 40])
+            break
+          case 'busArrival':
+            // Rung thông báo nhịp đôi dứt khoát: rung 150ms -> nghỉ 80ms -> rung 250ms
+            navigator.vibrate([150, 80, 250])
             break
           default:
             navigator.vibrate(12)
@@ -134,6 +138,25 @@ class HapticManager {
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16)
           osc.start(now)
           osc.stop(now + 0.16)
+          break
+        }
+        case 'busArrival': {
+          // Chuông thông báo xe cập bến 3 nốt cao du dương: F5 (698.46Hz) -> A5 (880Hz) -> C6 (1046.5Hz)
+          const chimeNotes = [698.46, 880.0, 1046.5]
+          chimeNotes.forEach((freq, idx) => {
+            const noteOsc = ctx.createOscillator()
+            const noteGain = ctx.createGain()
+            noteOsc.type = 'sine'
+            noteOsc.frequency.setValueAtTime(freq, now + idx * 0.12)
+            noteOsc.connect(noteGain)
+            noteGain.connect(ctx.destination)
+
+            noteGain.gain.setValueAtTime(0.08, now + idx * 0.12)
+            noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.32)
+
+            noteOsc.start(now + idx * 0.12)
+            noteOsc.stop(now + idx * 0.12 + 0.32)
+          })
           break
         }
       }
