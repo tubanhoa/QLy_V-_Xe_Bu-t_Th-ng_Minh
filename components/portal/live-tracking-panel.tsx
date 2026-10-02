@@ -189,17 +189,33 @@ export function LiveTrackingPanel({
       lastChimedStationRef.current = userPickupItem.stationId
       haptic.play('busArrival')
 
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification('SmartBus ICTU Transit', {
-            body: `🚌 Xe buýt 20B-012.34 đang tiến vào trạm ${userPickupItem.stationName} (${Math.round(dist)}m)! Quý khách vui lòng chuẩn bị ra điểm đón.`,
-          })
-        } catch {
-          // ignore
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('ictu:station-alert', {
+            detail: {
+              tripId,
+              stationId: userPickupItem.stationId,
+              stationName: userPickupItem.stationName,
+              distanceMeters: Math.round(dist),
+              etaMinutes: userPickupItem.etaMinutes,
+              type: 'pickup',
+              message: `Xe buýt đang tiến vào trạm ${userPickupItem.stationName} (còn ~${Math.round(dist)}m)! Quý khách vui lòng chuẩn bị ra điểm đón.`,
+            },
+          }),
+        )
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('SmartBus ICTU Transit', {
+              body: `🚌 Xe buýt 20B-012.34 đang tiến vào trạm ${userPickupItem.stationName} (${Math.round(dist)}m)! Quý khách vui lòng chuẩn bị ra điểm đón.`,
+            })
+          } catch {
+            // ignore
+          }
         }
       }
     }
-  }, [userPickupItem, chimeEnabled])
+  }, [userPickupItem, chimeEnabled, tripId])
 
   // CHIA SẺ CHUYẾN ĐI (LIVE TRIP SHARING)
   const handleShareTrip = async () => {
