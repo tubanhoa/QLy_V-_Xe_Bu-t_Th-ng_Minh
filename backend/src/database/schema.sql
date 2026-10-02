@@ -308,3 +308,55 @@ CREATE INDEX IF NOT EXISTS idx_refund_logs_gateway ON refund_logs(gateway);
 CREATE INDEX IF NOT EXISTS idx_refund_logs_status ON refund_logs(status);
 CREATE INDEX IF NOT EXISTS idx_refund_logs_created_at ON refund_logs(created_at DESC);
 
+-- 19. Device Tokens (FCM Push Notifications)
+CREATE TABLE IF NOT EXISTS device_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(500) UNIQUE NOT NULL,
+    platform VARCHAR(20) DEFAULT 'WEB',
+    device_model VARCHAR(150),
+    is_active BOOLEAN DEFAULT true,
+    last_used_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(is_active);
+
+-- 20. Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+    station_id UUID REFERENCES stations(id) ON DELETE SET NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    data JSONB,
+    is_read BOOLEAN DEFAULT false,
+    read_at TIMESTAMPTZ,
+    delivery_status VARCHAR(20) DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+
+-- 21. Notification Preferences
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    push_enabled BOOLEAN DEFAULT true,
+    sms_enabled BOOLEAN DEFAULT false,
+    email_enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notif_prefs_user ON notification_preferences(user_id);
+
+

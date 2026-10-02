@@ -6,6 +6,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   MessageEvent,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -24,6 +25,8 @@ import {
   LiveTrackingResponseDto,
 } from './dto/tracking.dto.js';
 import { IncidentSeverity } from '../../common/constants/status.constant.js';
+import { GpsFilterService } from './gps-filter.service.js';
+import { GeofencingService } from './geofencing.service.js';
 
 interface SimulatorState {
   interval: NodeJS.Timeout;
@@ -61,6 +64,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   // Broadcast callback to WebSocket Gateway
   private broadcastCallback: BroadcastCallback | null = null;
 
+  public readonly gpsFilter: GpsFilterService;
+  public readonly geofencing: GeofencingService;
+
   constructor(
     @InjectRepository(VehicleTrackingEntity)
     private readonly trackingRepository: Repository<VehicleTrackingEntity>,
@@ -70,7 +76,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     private readonly tripRepository: Repository<TripEntity>,
     @InjectRepository(RouteStationEntity)
     private readonly routeStationRepository: Repository<RouteStationEntity>,
+    @Optional() gpsFilterService?: GpsFilterService,
+    @Optional() geofencingService?: GeofencingService,
   ) {
+    this.gpsFilter = gpsFilterService || new GpsFilterService();
+    this.geofencing = geofencingService || new GeofencingService();
+
     const redisHost = process.env.REDIS_HOST || 'localhost';
     const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
     const redisPassword = process.env.REDIS_PASSWORD || undefined;
@@ -223,13 +234,20 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
   async recordLocation(dto: UpdateLocationDto | GpsPingDto) {
     const tripId = dto.tripId;
-    const currentLat = Number(dto.latitude);
-    const currentLng = Number(dto.longitude);
+    const rawLat = Number(dto.latitude);
+    const rawLng = Number(dto.longitude);
     const speedKmh = Number(dto.speedKmh) || 0;
     const headingDegrees = Number(dto.headingDegrees) || 0;
     const batteryPercent = Number(dto.batteryPercent) || 100;
     const isSimulated = (dto as UpdateLocationDto).isSimulated || false;
     const now = new Date();
+    const nowMs = now.getTime();
+
+    // 0. Lọc nhiễu GPS (Kalman / Speed Outlier Guard) & Giám sát tín hiệu
+    const filterRes = this.gpsFilter.filterGpsPoint(tripId, rawLat, rawLng, nowMs);
+    const currentLat = filterRes.isValid ? rawLat : filterRes.filteredLat;
+    const currentLng = filterRes.isValid ? rawLng : filterRes.filteredLng;
+    this.gpsFilter.checkGpsHeartbeat(tripId, nowMs);
 
     const locationSnapshot = {
       tripId,
@@ -261,7 +279,6 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // 4. Cơ chế Throttle / Debounce ghi PostgreSQL (VehicleTrackingEntity)
     // Chỉ ghi DB định kỳ mỗi 20s hoặc khi cập bến/vừa qua một trạm mới
     const lastSaved = this.lastDbSaveMap.get(tripId) || 0;
-    const nowMs = now.getTime();
     const shouldSaveDb =
       nowMs - lastSaved >= 20000 || newlyPassedStations.length > 0 || lastSaved === 0;
 
@@ -291,6 +308,13 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Error in broadcast callback: ${err.message}`);
       }
     }
+
+    // 6. Tự động kiểm tra Geofencing & phát Push Notification cho hành khách
+    this.geofencing
+      .evaluateTripGeofences(tripId, currentLat, currentLng, stationEtas)
+      .catch((err: any) => {
+        this.logger.warn(`Geofence evaluation error: ${err.message}`);
+      });
 
     return {
       tracking: savedTrackingEntity || locationSnapshot,
