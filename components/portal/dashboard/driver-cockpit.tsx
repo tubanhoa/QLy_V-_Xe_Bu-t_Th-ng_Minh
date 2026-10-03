@@ -68,6 +68,29 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
   const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Danh sách trạm dừng thực tế theo ca chạy được phân công
+  const dynamicStops = React.useMemo(() => {
+    if (activeTrip?.route?.stations && Array.isArray(activeTrip.route.stations) && activeTrip.route.stations.length > 0) {
+      return activeTrip.route.stations.map((s: any, idx: number) => ({
+        order: s.orderIndex || idx + 1,
+        name: s.station?.name || s.name || `Trạm ${idx + 1}`,
+        forecastPickup: s.forecastPickup ?? Math.max(1, 10 - idx),
+        forecastDropoff: s.forecastDropoff ?? Math.max(0, idx * 2),
+      }))
+    }
+    if (activeTrip?.route?.origin && activeTrip?.route?.destination) {
+      return [
+        { order: 1, name: activeTrip.route.origin, forecastPickup: 14, forecastDropoff: 0 },
+        { order: 2, name: 'Ký túc xá Sinh viên ICTU', forecastPickup: 6, forecastDropoff: 1 },
+        { order: 3, name: 'Cổng chính ĐH CNTT & TT (ICTU)', forecastPickup: 8, forecastDropoff: 2 },
+        { order: 4, name: 'Đại học Sư Phạm Thái Nguyên', forecastPickup: 4, forecastDropoff: 5 },
+        { order: 5, name: 'Quảng trường Võ Nguyên Giáp', forecastPickup: 3, forecastDropoff: 4 },
+        { order: 6, name: activeTrip.route.destination, forecastPickup: 0, forecastDropoff: 15 },
+      ]
+    }
+    return DEFAULT_STOPS
+  }, [activeTrip])
+
   // 2. Trạng thái buồng lái & trạm dừng
   const [currentStopIndex, setCurrentStopIndex] = useState(0)
   const [currentTime, setCurrentTime] = useState('')
@@ -204,8 +227,8 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
   }
 
   // THAO TÁC CẬP TRẠM (DING-DONG AUDIO CHIME)
-  const currentStop = DEFAULT_STOPS[currentStopIndex] || DEFAULT_STOPS[0]
-  const isFinalStop = currentStopIndex >= DEFAULT_STOPS.length - 1
+  const currentStop = dynamicStops[currentStopIndex] || dynamicStops[0]
+  const isFinalStop = currentStopIndex >= dynamicStops.length - 1
 
   const handleArriveStation = () => {
     driverHardware.playCue('stationArrival')
@@ -452,7 +475,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             <div className="space-y-2 min-w-0">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-400">
                 <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
-                <span>Trạm Dừng Kế Tiếp (Stop {currentStopIndex + 1}/{DEFAULT_STOPS.length})</span>
+                <span>Trạm Dừng Kế Tiếp (Stop {currentStopIndex + 1}/{dynamicStops.length})</span>
               </div>
 
               <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight truncate">
@@ -497,7 +520,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
           {/* Băng tiến trình trạm dừng (Station Progress Ribbon) */}
           <div className="relative mt-6 pt-4 border-t border-emerald-900/50">
             <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
-              {DEFAULT_STOPS.map((stop, idx) => {
+              {dynamicStops.map((stop, idx) => {
                 const isPassed = idx < currentStopIndex
                 const isCurrent = idx === currentStopIndex
                 return (
