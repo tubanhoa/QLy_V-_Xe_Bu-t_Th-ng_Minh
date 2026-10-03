@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { App } from 'antd'
@@ -36,6 +36,23 @@ function LoginFormContent() {
   const [remember, setRemember] = useState(false)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState<Role>('admin')
+
+  // Chống Chrome / Edge tự động điền tài khoản localhost đã lưu (ví dụ admin@jobportal.vn)
+  useEffect(() => {
+    const purgeAutofill = () => {
+      setIdentifier((prev) => (prev.includes('jobportal') || prev === 'admin@jobportal.vn' ? '' : prev))
+      setPassword((prev) => (prev && identifier.includes('jobportal') ? '' : prev))
+    }
+    purgeAutofill()
+    const t1 = setTimeout(purgeAutofill, 50)
+    const t2 = setTimeout(purgeAutofill, 200)
+    const t3 = setTimeout(purgeAutofill, 600)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
+  }, [identifier])
 
   // Demo role switcher is hidden by default in production unless explicitly enabled
   const showRoleDemo = process.env.NEXT_PUBLIC_SHOW_ROLE_DEMO === 'true'
@@ -115,8 +132,8 @@ function LoginFormContent() {
 
   return (
     <div className="w-full max-w-md rounded-3xl border border-slate-200/80 dark:border-emerald-500/20 bg-white/95 dark:bg-card/90 p-6 sm:p-8 shadow-2xl shadow-emerald-950/10 backdrop-blur-xl">
-      {/* Quick Navigation Back to Home */}
-      <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-border/60 pb-3">
+      {/* Quick Navigation Back to Home (Chỉ hiển thị trên Mobile, Desktop đã có nút riêng bên trái) */}
+      <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-border/60 pb-3 lg:hidden">
         <Link
           href="/"
           className="group inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#005A36] dark:text-slate-400 dark:hover:text-emerald-400 transition-colors"
@@ -216,7 +233,7 @@ function LoginFormContent() {
           </div>
 
           {activeTab === 'credentials' ? (
-            <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
+            <form onSubmit={handleSubmit} autoComplete="off" className="mt-5 flex flex-col gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
                   Mã sinh viên hoặc Email trường
@@ -227,11 +244,15 @@ function LoginFormContent() {
                   </div>
                   <input
                     type="text"
+                    name="ictu_login_identifier"
+                    id="ictu_login_identifier"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="Ví dụ: DTC... hoặc email@ictu.edu.vn"
                     required
-                    autoComplete="username"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:font-normal outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
                   />
                 </div>
@@ -247,11 +268,15 @@ function LoginFormContent() {
                   </div>
                   <input
                     type="password"
+                    name="ictu_login_secret"
+                    id="ictu_login_secret"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Nhập mật khẩu"
+                    placeholder="Nhập mật khẩu của bạn"
                     required
-                    autoComplete="current-password"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:font-normal outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
                   />
                 </div>
@@ -270,24 +295,6 @@ function LoginFormContent() {
                 <a href="#" className="font-bold text-slate-800 dark:text-slate-200 hover:text-[#005A36] hover:underline">
                   Quên mật khẩu?
                 </a>
-              </div>
-
-              {/* Quick Fill Demo Helper */}
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-2.5 text-[11px] text-slate-600 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-[#005A36]">Tài khoản mẫu: </span>
-                  <span className="font-mono text-slate-700">student.an@ictu.edu.vn</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('student.an@ictu.edu.vn')
-                    setPassword('Password@123')
-                  }}
-                  className="font-bold text-[#005A36] hover:underline cursor-pointer"
-                >
-                  Điền nhanh
-                </button>
               </div>
 
               <button
@@ -385,7 +392,7 @@ function LoginFormContent() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="mt-5 flex flex-col gap-4">
             <div>
               <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
                 Email công vụ / Mã nhân viên
@@ -396,11 +403,15 @@ function LoginFormContent() {
                 </div>
                 <input
                   type="text"
+                  name="ictu_staff_identifier"
+                  id="ictu_staff_identifier"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="Email công vụ hoặc Mã số CB/GV"
                   required
-                  autoComplete="username"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
                 />
               </div>
@@ -416,11 +427,15 @@ function LoginFormContent() {
                 </div>
                 <input
                   type="password"
+                  name="ictu_staff_secret"
+                  id="ictu_staff_secret"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mật khẩu nội bộ của bạn"
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
                 />
               </div>

@@ -36,12 +36,12 @@ export function LoginShowcase() {
         <Link
           href="/"
           className="group flex items-center gap-3 transition-opacity hover:opacity-90"
-          title="Về Trang chủ ICTU Transit"
+          title="ICTU Transit"
         >
           <BrandMark size="md" />
           <div className="leading-tight">
             <p className="text-sm font-bold tracking-wide">ICTU TRANSIT</p>
-            <p className="text-xs text-white/50 group-hover:text-emerald-300 transition-colors">← Về Trang chủ</p>
+            <p className="text-xs text-white/50">Smart Bus Ticketing System</p>
           </div>
         </Link>
       </div>
