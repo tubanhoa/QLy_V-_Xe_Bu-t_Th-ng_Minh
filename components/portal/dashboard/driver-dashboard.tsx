@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Armchair, Bus, MapPin, QrCode, Timer } from 'lucide-react'
+import { Armchair, Bus, MapPin, QrCode, Timer, Radio } from 'lucide-react'
 import { DRIVER_ROUTE_STOPS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
 interface DriverDashboardProps {
   onNavigate: (key: string) => void
+  onOpenCockpit?: () => void
 }
 
 function useCountdown(offsetMs: number) {
@@ -24,14 +25,26 @@ function useCountdown(offsetMs: number) {
   return `${minutes}:${seconds}`
 }
 
-export function DriverDashboard({ onNavigate }: DriverDashboardProps) {
+export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardProps) {
   const countdown = useCountdown(12 * 60 * 1000 + 30 * 1000)
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <div>
-        <p className="text-sm text-muted-foreground">Chào buổi sáng,</p>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Chuyến xe hôm nay của tôi</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Chào buổi sáng,</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Chuyến xe hôm nay của tôi</h1>
+        </div>
+        {onOpenCockpit && (
+          <button
+            type="button"
+            onClick={onOpenCockpit}
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:from-emerald-500 hover:to-teal-600 active:scale-95 transition-all cursor-pointer"
+          >
+            <Radio className="size-4 animate-pulse" />
+            <span>Vào Buồng Lái HUD</span>
+          </button>
+        )}
       </div>
 
       <article className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A131C] via-[#0B2226] to-[#04332B] p-5 text-white shadow-xl shadow-emerald-900/20 sm:p-6">
