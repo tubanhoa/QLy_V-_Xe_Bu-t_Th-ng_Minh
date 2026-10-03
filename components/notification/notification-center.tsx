@@ -3,7 +3,7 @@
 /**
  * Trung Tâm Thông Báo (Notification Center Popover & Drawer)
  * Domain: notifications & geofencing
- * Branch: feature/SBTS-frontend-geofencing-and-push-notification
+ * Chuẩn hóa logic: Phân biệt rõ ràng giữa Khách (chưa đăng nhập) và Người dùng đã xác thực
  */
 
 import React, { useState } from 'react'
@@ -23,7 +23,8 @@ import {
   Radio,
   ExternalLink,
   ChevronRight,
-  Filter,
+  Shield,
+  LogIn,
 } from 'lucide-react'
 import { haptic } from '@/lib/utils/haptics'
 import { NotificationPreferencesModal } from './notification-preferences-modal'
@@ -34,6 +35,8 @@ interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
   notificationController: UseNotificationsReturn
+  isAuthenticated?: boolean
+  onOpenAuth?: () => void
   onOpenPreferences?: () => void
 }
 
@@ -43,18 +46,16 @@ export function NotificationCenter({
   isOpen,
   onClose,
   notificationController,
+  isAuthenticated = false,
+  onOpenAuth,
 }: NotificationCenterProps) {
   const {
     notifications,
     unreadCount,
-    isLoading,
-    isRefreshing,
     preferences,
     markAsRead,
     markAllAsRead,
-    refreshNotifications,
     updatePreferences,
-    triggerMockGeofenceAlert,
   } = notificationController
 
   const [activeTab, setActiveTab] = useState<TabFilter>('all')
@@ -62,8 +63,15 @@ export function NotificationCenter({
 
   if (!isOpen) return null
 
-  // Lọc thông báo theo Tab
+  // Lọc thông báo theo Tab và theo quyền xác thực
   const filteredNotifications = notifications.filter((item) => {
+    // Khách chưa đăng nhập: Tuyệt đối không xem thông báo vé cá nhân hay cảnh báo đón xe cá nhân
+    if (!isAuthenticated) {
+      if (item.type !== 'PROMOTION' && item.type !== 'SYSTEM') {
+        return false
+      }
+    }
+
     if (activeTab === 'transit') {
       return (
         item.type === 'STATION_APPROACHING_PICKUP' ||
@@ -172,7 +180,7 @@ export function NotificationCenter({
             <div>
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
                 <span>Thông Báo</span>
-                {unreadCount > 0 && (
+                {unreadCount > 0 && isAuthenticated && (
                   <span className="rounded-full bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2">
                     {unreadCount}
                   </span>
@@ -182,8 +190,8 @@ export function NotificationCenter({
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Mark all as read button */}
-            {unreadCount > 0 && (
+            {/* Mark all as read button (chỉ hiện khi đã đăng nhập và có thông báo chưa đọc) */}
+            {unreadCount > 0 && isAuthenticated && (
               <button
                 type="button"
                 onClick={markAllAsRead}
@@ -223,6 +231,32 @@ export function NotificationCenter({
           </div>
         </div>
 
+        {/* Khách chưa đăng nhập: Banner hướng dẫn đăng nhập tài khoản */}
+        {!isAuthenticated && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 p-3.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Shield className="size-4" />
+              </div>
+              <div>
+                <div className="text-xs font-black text-blue-950">Bạn chưa đăng nhập tài khoản</div>
+                <div className="text-[11px] text-blue-700 font-medium">Đăng nhập để nhận thông báo về vé và chuyến đi</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose()
+                onOpenAuth?.()
+              }}
+              className="shrink-0 px-3 py-1.5 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all active:scale-95 shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <LogIn className="size-3" />
+              <span>Đăng nhập</span>
+            </button>
+          </div>
+        )}
+
         {/* Filter Tabs */}
         <div className="flex items-center gap-1 px-4 py-2 bg-slate-50/70 border-b border-slate-100 overflow-x-auto no-scrollbar text-xs">
           <button
@@ -237,7 +271,7 @@ export function NotificationCenter({
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            Tất cả ({notifications.length})
+            Tất cả ({filteredNotifications.length})
           </button>
 
           <button
@@ -288,13 +322,55 @@ export function NotificationCenter({
 
         {/* Notifications Scrollable List */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1 max-h-[52vh]">
-          {filteredNotifications.length === 0 ? (
+          {/* Logic Tab Transit khi chưa đăng nhập */}
+          {!isAuthenticated && activeTab === 'transit' ? (
+            <div className="py-10 px-6 flex flex-col items-center text-center">
+              <div className="size-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mb-3">
+                <Bus className="size-6" />
+              </div>
+              <h4 className="text-sm font-black text-slate-900">Cần đăng nhập để theo dõi chuyến đi</h4>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                Cảnh báo Geofencing khi xe buýt sắp đến trạm đón chỉ tự động kích hoạt khi bạn có chuyến đi hợp lệ trong tài khoản.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose()
+                  onOpenAuth?.()
+                }}
+                className="mt-4 px-4 py-2 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all cursor-pointer shadow-xs"
+              >
+                Đăng nhập tài khoản ICTU
+              </button>
+            </div>
+          ) : !isAuthenticated && activeTab === 'tickets' ? (
+            /* Logic Tab Tickets khi chưa đăng nhập */
+            <div className="py-10 px-6 flex flex-col items-center text-center">
+              <div className="size-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mb-3">
+                <Ticket className="size-6" />
+              </div>
+              <h4 className="text-sm font-black text-slate-900">Chưa có vé xe cá nhân</h4>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                Vui lòng đăng nhập tài khoản để quản lý vé điện tử, mã QR soát vé và nhận cập nhật lịch trình chuyến đi của bạn.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose()
+                  onOpenAuth?.()
+                }}
+                className="mt-4 px-4 py-2 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all cursor-pointer shadow-xs"
+              >
+                Đăng nhập tài khoản ICTU
+              </button>
+            </div>
+          ) : filteredNotifications.length === 0 ? (
             <div className="py-12 px-6 flex flex-col items-center text-center">
               <div className="size-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#005A36] mb-3">
                 <Check className="size-6" />
               </div>
               <h4 className="text-sm font-extrabold text-slate-800">Không có thông báo mới</h4>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs">
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
                 Mọi hành trình và vé xe của bạn đang được cập nhật liên tục theo thời gian thực.
               </p>
             </div>
@@ -376,20 +452,25 @@ export function NotificationCenter({
           )}
         </div>
 
-        {/* Footer with Demo Simulator Button (Perfect for Lecturer Demo) */}
-        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+        {/* Footer: Thông tin & Hỗ trợ dịch vụ minh bạch */}
+        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <Link
+            href="/thong-tin-dich-vu"
+            onClick={onClose}
+            className="hover:text-blue-700 font-bold flex items-center gap-1 transition-colors"
+          >
+            <span>Quy định dịch vụ & Geofencing</span>
+            <ExternalLink className="size-3" />
+          </Link>
+
           <button
             type="button"
             onClick={() => {
-              triggerMockGeofenceAlert()
-              haptic.play('busArrival')
+              setIsPreferencesOpen(true)
             }}
-            className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 active:scale-98 text-[#005A36] font-extrabold py-2 px-3 text-xs transition-all cursor-pointer"
-            id="btn-simulate-geofence-trigger"
-            title="Thử nghiệm thông báo khi xe buýt tiến vào bán kính <= 500m"
+            className="text-slate-400 hover:text-slate-700 font-medium cursor-pointer"
           >
-            <Radio className="size-3.5 text-[#005A36] animate-pulse" />
-            <span>Mô phỏng: Xe buýt vào vùng Geofence (&le; 500m)</span>
+            Cài đặt
           </button>
         </div>
       </div>

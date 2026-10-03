@@ -320,6 +320,11 @@ export function LandingPage() {
         isOpen={isNotificationCenterOpen}
         onClose={() => setIsNotificationCenterOpen(false)}
         notificationController={notifController}
+        isAuthenticated={isAuthenticated}
+        onOpenAuth={() => {
+          setIsNotificationCenterOpen(false)
+          setIsAuthPromptOpen(true)
+        }}
       />
 
       {/* Hộp Thoại Xin Quyền Web Push Notification */}
