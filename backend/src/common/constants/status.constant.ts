@@ -109,6 +109,7 @@ export enum IncidentType {
   BREAKDOWN = 'breakdown',
   ACCIDENT = 'accident',
   WEATHER = 'weather',
+  DELAY = 'delay',
   OTHER = 'other',
 }
 

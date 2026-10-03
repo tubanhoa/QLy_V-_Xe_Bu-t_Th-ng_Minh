@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, Min, Max } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEnum, Min, Max, IsUUID, IsInt } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IncidentType, IncidentSeverity } from '../../../common/constants/status.constant.js';
 
@@ -155,27 +155,37 @@ export class LiveTrackingResponseDto {
 }
 
 export class ReportIncidentDto {
-  @ApiProperty({ description: 'ID chuyến xe' })
-  @IsString()
-  @IsNotEmpty()
+  @ApiProperty({ description: 'ID chuyến xe (UUID)', example: '5f8d76d7-717b-4904-ac52-dd64b0a515c0' })
+  @IsUUID()
   tripId: string;
 
   @ApiProperty({ enum: IncidentType, example: IncidentType.TRAFFIC_JAM })
   @IsEnum(IncidentType)
   incidentType: IncidentType;
 
-  @ApiPropertyOptional({ enum: IncidentSeverity, example: IncidentSeverity.MEDIUM })
+  @ApiPropertyOptional({ enum: IncidentSeverity, example: IncidentSeverity.MEDIUM, default: IncidentSeverity.MEDIUM })
   @IsOptional()
   @IsEnum(IncidentSeverity)
   severity?: IncidentSeverity;
 
-  @ApiPropertyOptional({ example: 'Đang ùn tắc tại ngã ba đường Z115 và Quang Trung' })
-  @IsOptional()
+  @ApiProperty({ example: 'Đang ùn tắc tại ngã ba đường Z115 và Quang Trung', description: 'Mô tả chi tiết từ tài xế' })
   @IsString()
-  description?: string;
+  @IsNotEmpty()
+  description: string;
 
   @ApiPropertyOptional({ example: 15, description: 'Thời gian trễ dự kiến (phút)' })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
   delayMinutesEstimate?: number;
+}
+
+export class ResolveIncidentDto {
+  @ApiPropertyOptional({
+    example: 'Xe đã được khắc phục sự cố, tiếp tục hành trình bình thường',
+    description: 'Ghi chú xử lý khi khắc phục sự cố',
+  })
+  @IsOptional()
+  @IsString()
+  resolutionNotes?: string;
 }
