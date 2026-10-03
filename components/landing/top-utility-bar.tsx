@@ -6,6 +6,7 @@ import { Building2, GraduationCap, PhoneCall, ShieldCheck, UserCheck } from 'luc
 import { cn } from '@/lib/utils'
 import { CONTACT } from '@/lib/landing-data'
 import { haptic } from '@/lib/utils/haptics'
+import { useAuth } from '@/lib/auth-context'
 
 interface TopUtilityBarProps {
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner') => void
@@ -18,6 +19,9 @@ const AUDIENCES = [
 ]
 
 export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
+  const { isAuthenticated, role } = useAuth()
+  const isStaffOrAdmin = isAuthenticated && (role === 'admin' || role === 'dispatcher' || role === 'manager' || role === 'driver')
+
   const [audience, setAudience] = useState(AUDIENCES[0].id)
   const [lang, setLang] = useState<'VI' | 'EN'>('VI')
 
@@ -127,14 +131,21 @@ export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
             ))}
           </div>
 
-          {/* Admin Portal Shortcut with transparent outline */}
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3.5 py-1 text-xs font-extrabold text-[#005A36] shadow-xs transition-all hover:bg-[#005A36]/10 hover:border-[#005A36] active:scale-95"
-          >
-            <ShieldCheck size={13} strokeWidth={2.2} className="text-[#005A36]" aria-hidden="true" />
-            Cổng Điều Hành
-          </Link>
+          {/* Admin / Dispatcher Quick Return Button: ONLY VISIBLE when Admin/Staff is logged in */}
+          {isStaffOrAdmin && (
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#005A36] bg-[#005A36] px-3.5 py-1 text-xs font-black text-white shadow-xs transition-all hover:bg-[#00472b] hover:shadow-sm active:scale-95 animate-in fade-in duration-300"
+              title="Quay lại Bảng điều khiển quản trị"
+            >
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-200" />
+              </span>
+              <ShieldCheck size={13} strokeWidth={2.4} className="text-emerald-200" aria-hidden="true" />
+              <span>Về Cổng Điều Hành</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>

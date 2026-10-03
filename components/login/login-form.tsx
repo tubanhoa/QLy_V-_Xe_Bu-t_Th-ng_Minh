@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { App } from 'antd'
-import { ArrowRight, CheckCircle2, GraduationCap, Lock, ShieldCheck, User } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, GraduationCap, Home, Lock, ShieldCheck, User } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { ROLE_META, type Role } from '@/lib/rbac'
 import { RoleSwitcher } from './role-switcher'
@@ -115,6 +115,20 @@ function LoginFormContent() {
 
   return (
     <div className="w-full max-w-md rounded-3xl border border-slate-200/80 dark:border-emerald-500/20 bg-white/95 dark:bg-card/90 p-6 sm:p-8 shadow-2xl shadow-emerald-950/10 backdrop-blur-xl">
+      {/* Quick Navigation Back to Home */}
+      <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-border/60 pb-3">
+        <Link
+          href="/"
+          className="group inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#005A36] dark:text-slate-400 dark:hover:text-emerald-400 transition-colors"
+        >
+          <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 dark:bg-muted text-slate-600 dark:text-slate-300 group-hover:bg-[#005A36] group-hover:text-white transition-all">
+            <ArrowLeft size={13} strokeWidth={2.4} />
+          </span>
+          <span className="font-extrabold">Về Trang chủ</span>
+        </Link>
+        <span className="text-[11px] font-semibold text-slate-400">ICTU Smart Transit</span>
+      </div>
+
       {/* Active Session Notification (if previously logged in, gives user choice instead of force-redirecting) */}
       {isAuthenticated && user && (
         <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/30 p-3.5 text-xs text-foreground">
@@ -384,7 +398,7 @@ function LoginFormContent() {
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="admin@ictu.edu.vn"
+                  placeholder="Email công vụ hoặc Mã số CB/GV"
                   required
                   autoComplete="username"
                   className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
@@ -404,7 +418,7 @@ function LoginFormContent() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu"
+                  placeholder="Mật khẩu nội bộ của bạn"
                   required
                   autoComplete="current-password"
                   className="w-full rounded-2xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/40 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-[#005A36] focus:bg-white dark:focus:bg-card focus:ring-4 focus:ring-[#005A36]/15"
@@ -425,24 +439,6 @@ function LoginFormContent() {
               <a href="#" className="font-bold text-[#005A36] dark:text-emerald-400 hover:underline">
                 Quên mật khẩu?
               </a>
-            </div>
-
-            {/* Quick Fill Demo Helper for Staff */}
-            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-2.5 text-[11px] text-slate-600 flex items-center justify-between">
-              <div>
-                <span className="font-bold text-[#005A36]">Admin mẫu: </span>
-                <span className="font-mono text-slate-700">admin@smartbus.ictu.vn</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIdentifier('admin@smartbus.ictu.vn')
-                  setPassword('Password@123')
-                }}
-                className="font-bold text-[#005A36] hover:underline cursor-pointer"
-              >
-                Điền nhanh
-              </button>
             </div>
 
             <button
