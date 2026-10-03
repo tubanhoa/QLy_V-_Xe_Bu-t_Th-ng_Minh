@@ -3,20 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowRight,
-  Bus,
-  Clock,
-  Compass,
-  CreditCard,
   MapPin,
   Moon,
-  Navigation,
   Radio,
   Search,
   Sparkles,
   Sun,
-  Ticket,
   Wifi,
-  Zap,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
@@ -227,26 +220,6 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                 </button>
               </form>
 
-              {/* Gợi Ý 1-Chạm: Trạm Xe Gần Nhất Theo Định Vị Tọa Độ */}
-              <div className="flex items-center gap-2 mt-2 px-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic.play('select')
-                    setSearchQuery('Ký Túc Xá ICTU')
-                    onSearchRoute?.('Ký Túc Xá ICTU')
-                  }}
-                  className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white text-slate-800 border border-slate-200/90 shadow-2xs backdrop-blur-md transition-all text-xs font-bold active:scale-95 cursor-pointer touch-press touch-manipulation"
-                >
-                  <span className="flex size-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full size-2 bg-emerald-500" />
-                  </span>
-                  <span className="text-slate-500 font-medium">Trạm gần bạn nhất:</span>
-                  <strong className="text-[#005A36] group-hover:underline">KTX ICTU (120m)</strong>
-                  <ArrowRight size={12} className="text-slate-400 group-hover:text-[#005A36] transition-transform group-hover:translate-x-0.5" />
-                </button>
-              </div>
 
               {/* Instant Search Dropdown Popover */}
               {isSearchFocused && (
@@ -344,50 +317,6 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Popular Route Fast Exploration Pills */}
-            <div className="animate-hero-2 flex flex-wrap items-center gap-2 pt-0.5 text-xs">
-              <span className="text-slate-500 font-bold text-[11px]">Tuyến hot:</span>
-              <button
-                type="button"
-                onClick={() => onSearchRoute?.('CT-01')}
-                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-[#005A36] border border-emerald-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
-              >
-                <Zap size={11} className="text-[#005A36]" />
-                <span>CT-01 (ICTU ↔ Bến Xe)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSearchRoute?.('CT-02')}
-                className="rounded-full bg-white/80 hover:bg-white px-3 py-1 font-bold text-teal-800 border border-teal-300/80 shadow-2xs hover:shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
-              >
-                <Bus size={11} className="text-teal-700" />
-                <span>CT-02 (BX Nam ↔ KCN Sông Công)</span>
-              </button>
-            </div>
-
-            {/* Sub-actions: Transparent Outline seat picker + Live fleet text indicator */}
-            <div className="animate-hero-2 flex flex-col gap-2.5 pt-0.5">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onOpenSeatPicker}
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#005A36] bg-transparent px-4 py-2 text-xs sm:text-sm font-bold text-[#005A36] shadow-xs transition-all hover:bg-[#005A36]/10 hover:border-[#005A36] hover:scale-[1.02] active:scale-95"
-                >
-                  <Ticket size={16} strokeWidth={2.2} />
-                  <span>Đặt vé 28 chỗ trực quan</span>
-                </button>
-              </div>
-
-              <div className="flex w-fit items-center gap-2 rounded-full hero-glass-card px-3.5 py-1.5 text-xs font-bold text-slate-800 shadow-xs">
-                <span className="relative flex size-2.5 items-center justify-center">
-                  <span className="absolute inline-flex h-4 w-4 rounded-full bg-emerald-500/35 animate-ping" />
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#005A36] opacity-75 animate-live-indicator" />
-                  <span className="relative inline-flex size-2 rounded-full bg-[#005A36]" />
-                </span>
-                <span>12 xe buýt điện đang vận hành thời gian thực trên các tuyến</span>
-              </div>
             </div>
           </div>
 
