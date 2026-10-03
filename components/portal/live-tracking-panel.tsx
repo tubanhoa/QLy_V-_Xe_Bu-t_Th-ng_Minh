@@ -70,6 +70,9 @@ export function LiveTrackingPanel({
     stationEtas,
     stationAlert,
     incidents,
+    activePendingIncident,
+    resolvedNotice,
+    clearResolvedNotice,
     simulatorStatus,
     connectionMode,
     isConnected,
@@ -95,6 +98,22 @@ export function LiveTrackingPanel({
   const [chimeEnabled, setChimeEnabled] = useState<boolean>(true)
   const [isSharing, setIsSharing] = useState<boolean>(false)
   const [activeTab, setActiveTab] = useState<'timeline' | 'simulator' | 'incidents'>('timeline')
+  const [showResolvedBanner, setShowResolvedBanner] = useState(false)
+  const resolvedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (resolvedNotice) {
+      setShowResolvedBanner(true)
+      if (resolvedTimerRef.current) clearTimeout(resolvedTimerRef.current)
+      resolvedTimerRef.current = setTimeout(() => {
+        setShowResolvedBanner(false)
+        clearResolvedNotice()
+      }, 5000)
+    }
+    return () => {
+      if (resolvedTimerRef.current) clearTimeout(resolvedTimerRef.current)
+    }
+  }, [resolvedNotice, clearResolvedNotice])
 
   const lastChimedStationRef = useRef<string | null>(null)
 
@@ -290,7 +309,20 @@ export function LiveTrackingPanel({
     }
   }
 
-  const activeIncidents = incidents.filter((i) => !i.resolvedAt)
+  const currentPendingIncident =
+    activePendingIncident ||
+    incidents.find(
+      (i) =>
+        i.resolutionStatus === 'pending' ||
+        (!i.resolvedAt && i.resolutionStatus !== 'resolved'),
+    ) ||
+    null
+
+  const activeIncidents = incidents.filter(
+    (i) =>
+      i.resolutionStatus === 'pending' ||
+      (!i.resolvedAt && i.resolutionStatus !== 'resolved'),
+  )
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -308,6 +340,73 @@ export function LiveTrackingPanel({
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* CẢNH BÁO SỰ CỐ THỜI GIAN THỰC (HERO INCIDENT BANNER) */}
+      {currentPendingIncident && (
+        <div
+          id="hero-incident-banner"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl border-2 border-amber-500/70 bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/20 p-4 sm:p-5 backdrop-blur-xl shadow-lg shadow-amber-500/10 animate-in fade-in slide-in-from-top-2 text-amber-950"
+        >
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="size-11 sm:size-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-600 text-white flex items-center justify-center shrink-0 shadow-md animate-pulse">
+              <AlertTriangle size={24} className="stroke-[2.5]" />
+            </div>
+
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-xs">
+                  <span className="size-1.5 rounded-full bg-white animate-ping" />
+                  ⚠️ TRỄ CHUYẾN / SỰ CỐ
+                </span>
+
+                {currentPendingIncident.delayMinutesEstimate != null && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                    <Clock size={11} />
+                    Chậm ~{currentPendingIncident.delayMinutesEstimate} phút
+                  </span>
+                )}
+
+                <span className="text-[10px] text-slate-500 font-medium">
+                  Báo cáo: {formatTime(currentPendingIncident.reportedAt)}
+                </span>
+              </div>
+
+              <h3 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                ⚠️ Chuyến xe đang bị chậm {currentPendingIncident.delayMinutesEstimate ? `~${currentPendingIncident.delayMinutesEstimate} phút` : ''} do {INCIDENT_TYPE_LABEL[currentPendingIncident.incidentType || currentPendingIncident.type] || currentPendingIncident.type}
+              </h3>
+
+              {currentPendingIncident.description && (
+                <p className="text-xs text-slate-700 bg-white/80 rounded-xl p-2.5 border border-amber-200/70 font-medium leading-relaxed">
+                  &ldquo;{currentPendingIncident.description}&rdquo;
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER THÔNG BÁO GIẢI TỎA SỰ CỐ (TỰ TẮT SAU 5 GIÂY) */}
+      {showResolvedBanner && !currentPendingIncident && (
+        <div
+          id="hero-incident-resolved-banner"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-emerald-500/50 bg-emerald-500/10 p-4 sm:p-5 text-emerald-950 backdrop-blur-xl shadow-md animate-in fade-in slide-in-from-top-2 transition-opacity duration-700"
+        >
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="size-11 sm:size-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+              <CheckCircle2 size={24} className="stroke-[2.5]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm sm:text-base font-extrabold text-emerald-950">
+                ✅ Sự cố đã giải tỏa: Xe buýt đang tiếp tục lộ trình bình thường
+              </h3>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                {resolvedNotice?.resolutionNotes ||
+                  'Đoạn đường đã thông thoáng, chuyến xe tiếp tục đón trả khách bình thường.'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -345,6 +444,11 @@ export function LiveTrackingPanel({
                 <span className="text-[10px] font-mono text-slate-500 font-semibold">
                   Tuyến 01 TP. Thái Nguyên
                 </span>
+                {currentPendingIncident && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.2 rounded-md animate-pulse">
+                    TRỄ CHUYẾN / SỰ CỐ
+                  </span>
+                )}
               </div>
               <h4 className="font-extrabold text-sm sm:text-base text-slate-900 mt-1 truncate">
                 {userPickupItem?.stationName || selectedPickup}
@@ -584,33 +688,75 @@ export function LiveTrackingPanel({
         {/* Tab Content 3: Incidents & Traffic */}
         {activeTab === 'incidents' && (
           <div className="pt-1 space-y-2 animate-in fade-in duration-200">
-            {activeIncidents.length === 0 ? (
+            {incidents.length === 0 ? (
               <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-900 font-medium">
                 <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
                 <span>Lộ trình thông thoáng, xe buýt đang di chuyển đúng lịch trình dự kiến tại TP. Thái Nguyên.</span>
               </div>
             ) : (
               <div className="space-y-2">
-                {activeIncidents.map((incident) => {
-                  const sevColor = INCIDENT_SEVERITY_COLOR[incident.severity]
+                {incidents.map((incident) => {
+                  const sevColor = INCIDENT_SEVERITY_COLOR[incident.severity] || INCIDENT_SEVERITY_COLOR['medium']
+                  const isPending =
+                    incident.resolutionStatus === 'pending' ||
+                    (!incident.resolvedAt && incident.resolutionStatus !== 'resolved')
+
                   return (
                     <div
                       key={incident.id}
-                      className="rounded-xl border border-slate-200 bg-white p-3 space-y-1 text-xs shadow-2xs"
+                      className={`rounded-2xl border p-3.5 space-y-1.5 text-xs shadow-2xs transition-all ${
+                        isPending
+                          ? 'border-amber-300 bg-amber-50/40'
+                          : 'border-slate-200 bg-white opacity-85'
+                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900">
-                          {INCIDENT_TYPE_LABEL[incident.type] || incident.type}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${sevColor.bg} ${sevColor.text} ${sevColor.border}`}
-                        >
-                          Mức độ: {INCIDENT_SEVERITY_LABEL[incident.severity]}
-                        </span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-slate-900">
+                            {INCIDENT_TYPE_LABEL[incident.incidentType || incident.type] || incident.type}
+                          </span>
+                          {incident.delayMinutesEstimate != null && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              +~{incident.delayMinutesEstimate}p
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${sevColor.bg} ${sevColor.text} ${sevColor.border}`}
+                          >
+                            {INCIDENT_SEVERITY_LABEL[incident.severity] || incident.severity}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              isPending
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}
+                          >
+                            {isPending ? 'Đang diễn ra' : 'Đã giải tỏa'}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-slate-600 text-[11px]">{incident.description}</p>
-                      <div className="text-[10px] text-slate-400">
-                        Báo cáo lúc: {formatTime(incident.reportedAt)}
+
+                      <p className="text-slate-700 text-xs font-medium leading-relaxed">
+                        {incident.description}
+                      </p>
+
+                      {incident.resolutionNotes && (
+                        <div className="rounded-xl bg-emerald-50 border border-emerald-200/80 p-2 text-emerald-900 text-[11px]">
+                          <strong>Ghi chú giải tỏa:</strong> {incident.resolutionNotes}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                        <span>Báo cáo: {formatTime(incident.reportedAt)}</span>
+                        {incident.resolvedAt && (
+                          <span className="text-emerald-700 font-medium">
+                            Giải tỏa lúc: {formatTime(incident.resolvedAt)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )

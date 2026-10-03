@@ -1,66 +1,186 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Armchair, Bus, MapPin, QrCode, Timer } from 'lucide-react'
-import { DRIVER_ROUTE_STOPS } from '@/lib/mock-data'
+import { useEffect, useState, useCallback } from 'react'
+import { Armchair, Bus, MapPin, QrCode, Timer, Radio, RefreshCw, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { driverService, DriverTripItem } from '@/lib/services/driver.service'
 
 interface DriverDashboardProps {
   onNavigate: (key: string) => void
+  onOpenCockpit?: () => void
 }
 
-function useCountdown(offsetMs: number) {
-  const [target] = useState(() => Date.now() + offsetMs)
-  const [now, setNow] = useState(() => Date.now())
+interface StationItem {
+  name: string
+  time: string
+  state: 'done' | 'current' | 'upcoming'
+}
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
+export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardProps) {
+  const [trips, setTrips] = useState<DriverTripItem[]>([])
+  const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
+  const [manifestCount, setManifestCount] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [countdownText, setCountdownText] = useState('00:00')
+
+  // Tải danh sách ca chạy từ API Backend
+  const loadTrips = useCallback(async () => {
+    setIsLoading(true)
+    const res = await driverService.getTodayTrips()
+    if (res.success && res.data && res.data.length > 0) {
+      setTrips(res.data)
+      const current =
+        res.data.find((t) => t.status === 'in_progress' || t.status === 'delayed') ||
+        res.data.find((t) => t.status === 'scheduled') ||
+        res.data[0]
+      setActiveTrip(current)
+
+      // Tải số lượng hành khách đã đặt vé trong manifest
+      if (current?.id) {
+        const mRes = await driverService.getTripManifest(current.id)
+        if (mRes.success && mRes.data) {
+          setManifestCount(mRes.data.totalPassengers || mRes.data.manifest?.length || 0)
+        }
+      }
+    } else {
+      // Fallback ca chạy mẫu nếu tài xế chưa được phân công ca mới
+      const fallbackTrip: DriverTripItem = {
+        id: '03f4e044-8445-4a37-8841-5526da46b340',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        departureTime: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        status: 'in_progress',
+        route: {
+          id: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+          routeCode: 'CT-01',
+          name: 'ĐH CNTT & TT (ICTU) ↔ Bến Xe TT Thái Nguyên',
+          origin: 'ĐH CNTT & TT Thái Nguyên',
+          destination: 'Bến xe TT Thái Nguyên',
+          durationMinutes: 45,
+          distanceKm: 14.5,
+        },
+        vehicle: {
+          id: 'veh-01',
+          plateNumber: '20B-009.77',
+          model: 'VinFast Bus EV 28 chỗ',
+          capacity: 28,
+        },
+      }
+      setTrips([fallbackTrip])
+      setActiveTrip(fallbackTrip)
+      setManifestCount(14)
+    }
+    setIsLoading(false)
   }, [])
 
-  const remaining = Math.max(0, Math.floor((target - now) / 1000))
-  const minutes = String(Math.floor(remaining / 60)).padStart(2, '0')
-  const seconds = String(remaining % 60).padStart(2, '0')
-  return `${minutes}:${seconds}`
-}
+  useEffect(() => {
+    loadTrips()
+  }, [loadTrips])
 
-export function DriverDashboard({ onNavigate }: DriverDashboardProps) {
-  const countdown = useCountdown(12 * 60 * 1000 + 30 * 1000)
+  // Đếm ngược thời gian xuất bến dựa trên departureTime thực tế
+  useEffect(() => {
+    if (!activeTrip?.departureTime) return
+
+    const targetTime = new Date(activeTrip.departureTime).getTime()
+
+    const updateTimer = () => {
+      const diff = Math.max(0, Math.floor((targetTime - Date.now()) / 1000))
+      const minutes = String(Math.floor(diff / 60)).padStart(2, '0')
+      const seconds = String(diff % 60).padStart(2, '0')
+      setCountdownText(`${minutes}:${seconds}`)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [activeTrip])
+
+  // Tạo danh sách trạm dừng thực tế dựa trên tuyến đường của chuyến
+  const routeStops: StationItem[] = activeTrip?.route?.stations && activeTrip.route.stations.length > 0
+    ? activeTrip.route.stations.map((s: any, idx: number) => ({
+        name: s.station?.name || s.name || `Trạm ${idx + 1}`,
+        time: s.time || (s.departureTime ? new Date(s.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : `+${idx * 7}m`),
+        state: idx === 0 ? 'current' : idx < 0 ? 'done' : 'upcoming',
+      }))
+    : [
+        { name: activeTrip?.route?.origin || 'Điểm đầu Tuyến (ICTU)', time: '07:15', state: 'current' },
+        { name: 'Ký túc xá Sinh viên ICTU', time: '07:22', state: 'upcoming' },
+        { name: 'Ngã ba Điềm Thụy / Cầu Gia Bảy', time: '07:35', state: 'upcoming' },
+        { name: 'Đại học Sư Phạm Thái Nguyên', time: '07:42', state: 'upcoming' },
+        { name: 'Quảng trường Võ Nguyên Giáp', time: '07:50', state: 'upcoming' },
+        { name: activeTrip?.route?.destination || 'Bến xe TT Thái Nguyên', time: '08:00', state: 'upcoming' },
+      ]
+
+  const departureTimeString = activeTrip?.departureTime
+    ? new Date(activeTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : '07:15'
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <div>
-        <p className="text-sm text-muted-foreground">Chào buổi sáng,</p>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Chuyến xe hôm nay của tôi</h1>
+      {/* Tiêu đề & Chuyển đổi nhanh sang Buồng Lái Số HUD */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs sm:text-sm text-muted-foreground">Chào buổi sáng, Bác tài</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            Lịch Trình Vận Hành Hôm Nay
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadTrips}
+            title="Làm mới dữ liệu từ máy chủ"
+            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+          >
+            <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+          {onOpenCockpit && (
+            <button
+              type="button"
+              onClick={onOpenCockpit}
+              className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:from-emerald-500 hover:to-teal-600 active:scale-95 transition-all cursor-pointer"
+            >
+              <Radio className="size-4 animate-pulse" />
+              <span>Vào Buồng Lái HUD</span>
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Thẻ chuyến xe chính (Live Connected Card) */}
       <article className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A131C] via-[#0B2226] to-[#04332B] p-5 text-white shadow-xl shadow-emerald-900/20 sm:p-6">
         <div aria-hidden="true" className="absolute -right-16 -top-16 size-56 rounded-full bg-emerald-400/15 blur-3xl" />
         <div className="relative flex items-start justify-between gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-            <Bus size={14} strokeWidth={1.75} aria-hidden="true" />
-            20B-009.77
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+              <Bus size={14} strokeWidth={1.75} aria-hidden="true" />
+              {activeTrip?.vehicle?.plateNumber || '20B-009.77'}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-[11px] font-bold text-blue-300 uppercase tracking-wide">
+              {activeTrip?.status === 'in_progress' ? 'Đang chạy' : activeTrip?.status === 'delayed' ? 'Chậm chuyến' : 'Sắp xuất bến'}
+            </span>
+          </div>
+          <span className="font-mono text-xs text-white/50">
+            {activeTrip?.route?.routeCode || 'CT-01'}
           </span>
-          <span className="font-mono text-xs text-white/50">CT-01-0745</span>
         </div>
 
         <h2 className="relative mt-4 text-balance text-xl font-bold leading-snug sm:text-2xl">
-          Tuyến 01: ICTU → Bến xe Trung tâm
+          {activeTrip?.route?.name || `${activeTrip?.route?.origin || 'ICTU'} ↔ ${activeTrip?.route?.destination || 'Bến xe TT'}`}
         </h2>
 
         <div className="relative mt-5 flex items-end justify-between gap-4">
           <div>
             <p className="flex items-center gap-1.5 text-xs text-white/55">
               <Timer size={14} strokeWidth={1.75} aria-hidden="true" />
-              Xuất bến sau
+              {activeTrip?.status === 'in_progress' ? 'Thời gian ca chạy' : 'Xuất bến sau'}
             </p>
-            <p className="mt-1 font-mono text-5xl font-bold tabular-nums tracking-tight text-emerald-300" aria-live="off">
-              {countdown}
+            <p className="mt-1 font-mono text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-emerald-300">
+              {countdownText}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-white/55">Giờ xuất bến</p>
-            <p className="text-2xl font-bold">07:45</p>
+            <p className="text-2xl font-bold">{departureTimeString}</p>
           </div>
         </div>
 
@@ -68,51 +188,59 @@ export function DriverDashboard({ onNavigate }: DriverDashboardProps) {
           <button
             type="button"
             onClick={() => onNavigate('scanner')}
-            className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl py-3 text-sm sm:flex-row sm:gap-2 sm:text-base bg-emerald-500 px-4 font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-400 active:scale-[0.97]"
+            className="flex min-h-14 sm:min-h-16 flex-col items-center justify-center gap-1 rounded-2xl py-3 text-xs sm:flex-row sm:gap-2 sm:text-sm bg-emerald-500 px-4 font-bold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-400 active:scale-[0.97] cursor-pointer"
           >
-            <QrCode size={20} strokeWidth={1.75} aria-hidden="true" />
-            Mở Camera Quét Vé
+            <QrCode size={18} strokeWidth={1.75} aria-hidden="true" />
+            <span>Mở Camera Soát Vé</span>
           </button>
           <button
             type="button"
             onClick={() => onNavigate('manifest')}
-            className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl py-3 text-sm sm:flex-row sm:gap-2 sm:text-base border border-white/15 bg-white/[0.06] px-4 font-semibold text-white transition-all hover:bg-white/10 active:scale-[0.97]"
+            className="flex min-h-14 sm:min-h-16 flex-col items-center justify-center gap-1 rounded-2xl py-3 text-xs sm:flex-row sm:gap-2 sm:text-sm border border-white/15 bg-white/[0.06] px-4 font-bold text-white transition-all hover:bg-white/10 active:scale-[0.97] cursor-pointer"
           >
-            <Armchair size={20} strokeWidth={1.75} aria-hidden="true" />
-            Xem 28 Khách
+            <Armchair size={18} strokeWidth={1.75} aria-hidden="true" />
+            <span>Xem {manifestCount || activeTrip?.vehicle?.capacity || 28} Khách</span>
           </button>
         </div>
       </article>
 
+      {/* Lộ trình trạm đón (Live Route Progression) */}
       <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="stops-heading">
-        <h2 id="stops-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <MapPin size={18} strokeWidth={1.75} className="text-brand" aria-hidden="true" />
-          Lộ trình trạm đón
-        </h2>
-        <ol className="mt-4">
-          {DRIVER_ROUTE_STOPS.map((stop, index) => {
-            const isLast = index === DRIVER_ROUTE_STOPS.length - 1
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="stops-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <MapPin size={18} strokeWidth={1.75} className="text-emerald-500" aria-hidden="true" />
+            Lộ trình trạm đón thực tế
+          </h2>
+          <span className="text-xs text-muted-foreground font-mono">
+            {routeStops.length} trạm dừng
+          </span>
+        </div>
+        <ol className="mt-2">
+          {routeStops.map((stop, index) => {
+            const isLast = index === routeStops.length - 1
             const current = stop.state === 'current'
             return (
-              <li key={stop.name} className="relative flex gap-4 pb-5 last:pb-0">
+              <li key={`${stop.name}-${index}`} className="relative flex gap-4 pb-5 last:pb-0">
                 {!isLast && <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-0.5 bg-border" />}
                 <span
                   className={cn(
                     'relative mt-1 size-4 shrink-0 rounded-full border-2',
-                    current ? 'border-brand bg-brand' : 'border-border bg-card',
+                    current ? 'border-emerald-500 bg-emerald-500' : 'border-border bg-card',
                   )}
                 >
-                  {current && <span className="absolute inset-0 animate-ping rounded-full bg-brand/40" />}
+                  {current && <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/40" />}
                 </span>
                 <div className="flex flex-1 items-baseline justify-between gap-3">
-                  <p className={cn('text-sm', current ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                    {stop.name}
+                  <div className="flex flex-col">
+                    <p className={cn('text-sm', current ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                      {stop.name}
+                    </p>
                     {current && (
-                      <span className="mt-1 block w-fit rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground">
-                        Đang đón khách
+                      <span className="mt-1 w-fit rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                        Trạm hiện tại (Đang đón khách)
                       </span>
                     )}
-                  </p>
+                  </div>
                   <span className="font-mono text-xs text-muted-foreground">{stop.time}</span>
                 </div>
               </li>
