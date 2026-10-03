@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -11,6 +11,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Compass,
   Copy,
@@ -159,9 +161,9 @@ const NAV_ITEMS = [
   { id: 'insurance', label: 'Bảo Hiểm Hành Khách', icon: Shield },
   { id: 'geofencing', label: 'Geofencing Radar', icon: Radio },
   { id: 'routes', label: 'Tuyến Xe & VR 360°', icon: Bus },
-  { id: 'refund-policy', label: 'Biểu Phí & Hoàn Vé', icon: RotateCcw },
+  { id: 'refund-policy', label: 'Biểu Phí Hoàn Vé', icon: RotateCcw },
   { id: 'invoice', label: 'Hóa Đơn VAT 8%', icon: FileText },
-  { id: 'about', label: 'Đơn Vị Vận Hành', icon: GraduationCap },
+  { id: 'about', label: 'Đơn Vị Quản Lý', icon: GraduationCap },
   { id: 'faq', label: 'Câu Hỏi FAQ', icon: HelpCircle },
   { id: 'contact', label: 'Hỗ Trợ 24/7', icon: PhoneCall },
 ]
@@ -189,6 +191,18 @@ export function ServiceInfoView() {
   // Reading Progress Tracker
   const [readingProgress, setReadingProgress] = useState(0)
 
+  // Navigation track ref for desktop arrow scrolling
+  const navTrackRef = useRef<HTMLDivElement>(null)
+
+  // Scroll Nav Track Left / Right
+  const scrollNavTrack = (direction: 'left' | 'right') => {
+    if (navTrackRef.current) {
+      const scrollAmount = direction === 'left' ? -260 : 260
+      navTrackRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+      haptic.play('tap')
+    }
+  }
+
   // Scrollspy Tracker
   useEffect(() => {
     const handleScroll = () => {
@@ -198,13 +212,13 @@ export function ServiceInfoView() {
         setReadingProgress(Math.min(100, Math.round((currentScroll / totalScroll) * 100)))
       }
 
-      // Check active sections (offset ~ 200px for sticky top bar + pill nav)
+      // Check active sections (offset ~ 240px for sticky top bar + pill nav)
       const sections = ['safety', 'insurance', 'geofencing', 'routes', 'refund-policy', 'invoice', 'about', 'faq', 'contact']
       for (const sectionId of sections) {
         const el = document.getElementById(sectionId)
         if (el) {
           const rect = el.getBoundingClientRect()
-          if (rect.top <= 220 && rect.bottom >= 140) {
+          if (rect.top <= 250 && rect.bottom >= 150) {
             setActiveSection(sectionId)
             break
           }
@@ -216,12 +230,19 @@ export function ServiceInfoView() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Smooth scroll handler for nav pills
+  // Smooth scroll handler for nav pills with generous offset
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId)
     const el = document.getElementById(sectionId)
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const headerOffset = 150
+      const elementPosition = el.getBoundingClientRect().top
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth',
+      })
     }
     haptic.play('tap')
   }
@@ -267,32 +288,32 @@ export function ServiceInfoView() {
         aria-valuemax={100}
       />
 
-      {/* Sticky Global Top Bar with Back Button */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md transition-all shadow-xs">
+      {/* Sticky Global Top Bar */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md transition-all shadow-xs">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="group inline-flex items-center gap-2 rounded-xl border border-blue-200/80 bg-blue-50/70 px-3.5 py-1.5 text-xs font-black text-blue-800 transition-all hover:bg-blue-600 hover:text-white hover:shadow-md hover:shadow-blue-600/20 active:scale-95"
+              className="group inline-flex items-center gap-2 rounded-xl border border-blue-200/90 bg-blue-50/80 px-4 py-2 text-xs sm:text-sm font-black text-blue-800 transition-all hover:bg-blue-600 hover:text-white hover:shadow-md hover:shadow-blue-600/20 active:scale-95"
             >
               <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
               <span>Về Màn Hình Đặt Vé</span>
             </Link>
 
-            <span className="hidden sm:inline-block h-4 w-px bg-slate-200" aria-hidden="true" />
+            <span className="hidden sm:inline-block h-5 w-px bg-slate-200" aria-hidden="true" />
 
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2.5">
               <BrandMark size="sm" />
               <div className="flex flex-col">
-                <span className="text-xs font-black tracking-tight text-blue-900">ICTU TRANSIT PORTAL</span>
-                <span className="text-[10px] font-bold text-slate-500">Cổng Thông Tin & Tiêu Chuẩn Vận Tải</span>
+                <span className="text-xs sm:text-sm font-black tracking-tight text-blue-950">ICTU TRANSIT PORTAL</span>
+                <span className="text-[11px] font-bold text-slate-500">Cổng Thông Tin Dịch Vụ & Pháp Lý Vận Tải</span>
               </div>
             </div>
           </div>
 
           {/* Right Status Indicator & Quick Contact */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-800">
+            <div className="hidden md:flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1 text-xs font-bold text-emerald-800">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
                 <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
@@ -302,34 +323,34 @@ export function ServiceInfoView() {
 
             <a
               href={`tel:${CONTACT.hotline.replace(/\s/g, '')}`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-800 transition-colors hover:border-blue-500 hover:text-blue-700 shadow-xs"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs sm:text-sm font-black text-slate-800 transition-colors hover:border-blue-500 hover:text-blue-700 shadow-xs"
             >
-              <PhoneCall size={13} className="text-blue-600" />
+              <PhoneCall size={15} className="text-blue-600" />
               <span>{CONTACT.hotline}</span>
             </a>
           </div>
         </div>
       </header>
 
-      {/* Hero Section: Editorial & Prestigious Presentation */}
+      {/* Hero Section: Editorial & High-Impact Presentation */}
       <section className="relative overflow-hidden bg-gradient-to-b from-blue-950 via-slate-900 to-slate-900 py-16 text-white sm:py-24">
         {/* Ambient Glowing Orbs */}
         <div className="absolute top-0 -left-40 size-96 rounded-full bg-blue-500/15 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 -right-40 size-96 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none" />
 
-        <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           {/* Breadcrumb Trail */}
-          <nav aria-label="Breadcrumb" className="mb-6 flex items-center justify-center text-xs font-semibold text-slate-400">
+          <nav aria-label="Breadcrumb" className="mb-6 flex items-center justify-center text-xs sm:text-sm font-semibold text-slate-300">
             <Link href="/" className="hover:text-cyan-300 transition-colors">
               Trang Chủ
             </Link>
-            <span className="mx-2 text-slate-600">/</span>
+            <span className="mx-2.5 text-slate-500">/</span>
             <span className="text-cyan-400 font-bold">Cổng Thông Tin Dịch Vụ & Pháp Lý Vận Tải</span>
           </nav>
 
           <div className="flex flex-col items-center text-center space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-500/20 px-4 py-1.5 text-xs font-black text-cyan-300 backdrop-blur-md shadow-inner">
-              <Sparkles size={14} className="animate-spin-slow text-cyan-400" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-500/20 px-4 py-1.5 text-xs sm:text-sm font-black text-cyan-300 backdrop-blur-md shadow-inner">
+              <Sparkles size={15} className="animate-spin-slow text-cyan-400" />
               <span>HỆ THỐNG VẬN TẢI THÔNG MINH · TRƯỜNG ĐH CNTT & TT THÁI NGUYÊN</span>
             </div>
 
@@ -337,60 +358,77 @@ export function ServiceInfoView() {
               Thông Tin Dịch Vụ, An Toàn Vận Tải & Quy Định Hành Khách
             </h1>
 
-            <p className="max-w-3xl text-sm font-medium text-slate-300 sm:text-base leading-relaxed">
+            <p className="max-w-3xl text-sm font-medium text-slate-300 sm:text-base lg:text-lg leading-relaxed">
               Trang thông tin chính thống của ICTU Transit: An toàn thanh toán trực tuyến cấp ngân hàng, chính sách bảo hiểm hành khách toàn diện 100tr/vụ, biểu phí hoàn hủy vé minh bạch, lộ trình xe buýt thông minh và công nghệ cảnh báo Geofencing thời gian thực.
             </p>
 
             {/* Hero Trust Pillars (Prestigious Consumer Trust Badges) */}
-            <div className="pt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 w-full">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md text-left transition-all hover:bg-white/10">
-                <div className="flex items-center gap-2 text-cyan-400 mb-1.5">
-                  <ShieldCheck size={18} />
-                  <span className="text-xs font-bold text-slate-300">Bảo Mật Giao Dịch</span>
+            <div className="pt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-5 w-full">
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-md text-left transition-all hover:bg-white/10">
+                <div className="flex items-center gap-2 text-cyan-400 mb-2">
+                  <ShieldCheck size={20} />
+                  <span className="text-xs sm:text-sm font-bold text-slate-300">Bảo Mật Giao Dịch</span>
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">HMAC-SHA256</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">Mã QR động & Anti-Passback</div>
+                <div className="text-xs text-slate-400 mt-1">Mã QR động & Anti-Passback</div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md text-left transition-all hover:bg-white/10">
-                <div className="flex items-center gap-2 text-emerald-400 mb-1.5">
-                  <Shield size={18} />
-                  <span className="text-xs font-bold text-slate-300">Bảo Hiểm Tối Đa</span>
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-md text-left transition-all hover:bg-white/10">
+                <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                  <Shield size={20} />
+                  <span className="text-xs sm:text-sm font-bold text-slate-300">Bảo Hiểm Tối Đa</span>
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">100 Tr/Vụ</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">100% hành khách sở hữu vé</div>
+                <div className="text-xs text-slate-400 mt-1">100% hành khách có vé</div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md text-left transition-all hover:bg-white/10">
-                <div className="flex items-center gap-2 text-blue-400 mb-1.5">
-                  <Radio size={18} />
-                  <span className="text-xs font-bold text-slate-300">Geofencing RTK</span>
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-md text-left transition-all hover:bg-white/10">
+                <div className="flex items-center gap-2 text-blue-400 mb-2">
+                  <Radio size={20} />
+                  <span className="text-xs sm:text-sm font-bold text-slate-300">Geofencing RTK</span>
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">300m - 500m</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">Cảnh báo xe sắp cập bến</div>
+                <div className="text-xs text-slate-400 mt-1">Cảnh báo xe sắp cập bến</div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md text-left transition-all hover:bg-white/10">
-                <div className="flex items-center gap-2 text-amber-400 mb-1.5">
-                  <FileText size={18} />
-                  <span className="text-xs font-bold text-slate-300">Hóa Đơn Điện Tử</span>
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 sm:p-5 backdrop-blur-md text-left transition-all hover:bg-white/10">
+                <div className="flex items-center gap-2 text-amber-400 mb-2">
+                  <FileText size={20} />
+                  <span className="text-xs sm:text-sm font-bold text-slate-300">Hóa Đơn Điện Tử</span>
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">NĐ 123/2020</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">MST: 4600123456-001 (VAT 8%)</div>
+                <div className="text-xs text-slate-400 mt-1">MST: 4600123456-001 (8%)</div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Sticky Horizontal Pill Sub-Navigation Bar (Apple/VinBus Style) */}
+      {/* ===================================================================
+          STICKY HORIZONTAL PILL SUB-NAVIGATION BAR (REDESIGNED)
+          - Prevents button clipping with dedicated arrow scroll controls
+          - Clean separation for "Đặt Vé Ngay" button
+          =================================================================== */}
       <nav
         aria-label="Điều hướng các mục thông tin"
-        className="sticky top-16 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-xs transition-all"
+        className="sticky top-16 z-30 border-b border-slate-200/90 bg-white/95 backdrop-blur-xl shadow-xs transition-all"
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6 lg:px-8">
-          {/* Horizontal Pills Scrollable on Mobile without scrollbars */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-touch py-1 -mx-2 px-2 sm:mx-0 sm:px-0">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8 py-2.5">
+          {/* Scroll Left Button (for desktop mouse users) */}
+          <button
+            type="button"
+            onClick={() => scrollNavTrack('left')}
+            aria-label="Cuộn sang trái"
+            className="hidden sm:flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-blue-700 shadow-xs transition-colors cursor-pointer"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          {/* Horizontal Pills Track (Zero Clipping) */}
+          <div
+            ref={navTrackRef}
+            className="flex flex-1 items-center gap-2 overflow-x-auto no-scrollbar scroll-touch py-1 px-1 scroll-smooth"
+          >
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon
               const isActive = activeSection === item.id
@@ -400,24 +438,34 @@ export function ServiceInfoView() {
                   type="button"
                   onClick={() => scrollToSection(item.id)}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer select-none',
+                    'inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-black transition-all cursor-pointer select-none',
                     isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-[1.02]'
-                      : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200 hover:text-blue-900',
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-[1.02] ring-2 ring-blue-400/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-blue-900 border border-slate-200/60',
                   )}
                 >
-                  <Icon size={14} className={isActive ? 'text-white' : 'text-slate-500'} />
+                  <Icon size={15} className={isActive ? 'text-white' : 'text-slate-500'} />
                   <span>{item.label}</span>
                 </button>
               )
             })}
           </div>
 
-          {/* Quick Action Button on the Right */}
-          <div className="hidden lg:flex items-center shrink-0 pl-2">
+          {/* Scroll Right Button (for desktop mouse users) */}
+          <button
+            type="button"
+            onClick={() => scrollNavTrack('right')}
+            aria-label="Cuộn sang phải"
+            className="hidden sm:flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-blue-700 shadow-xs transition-colors cursor-pointer"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          {/* Dedicated Action Button on the Far Right with Divider (Never Overlaps) */}
+          <div className="hidden lg:flex items-center shrink-0 pl-3 border-l border-slate-200">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200/80 px-4 py-1.5 text-xs font-black text-blue-700 transition-all hover:bg-blue-600 hover:text-white hover:shadow-md hover:shadow-blue-600/20 active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-xs sm:text-sm font-black text-white shadow-md shadow-blue-600/25 transition-all hover:bg-blue-700 hover:shadow-lg active:scale-95"
             >
               <Ticket size={14} />
               <span>Đặt Vé Ngay</span>
@@ -427,29 +475,29 @@ export function ServiceInfoView() {
         </div>
       </nav>
 
-      {/* Main Single-Column Editorial Canvas (Open, Airy, Prestigious) */}
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24 space-y-24 sm:space-y-32">
+      {/* Main Single-Column Editorial Canvas (High Readability, Desktop-Calibrated Typography) */}
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24 space-y-28 sm:space-y-36">
         {/* ===================================================================
             SECTION 1: GIAO DỊCH AN TOÀN & BẢO MẬT THANH TOÁN
             =================================================================== */}
-        <article id="safety" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="safety" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 tracking-wide uppercase">
-                <ShieldCheck size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3.5 py-1 text-xs sm:text-sm font-black text-blue-800 tracking-wide uppercase">
+                <ShieldCheck size={16} />
                 <span>Phần 01 · Bảo Mật Giao Dịch & Thanh Toán</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Giao Dịch An Toàn & Bảo Mật Thanh Toán Trực Tuyến
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Hệ thống vận hành theo chuẩn an toàn bảo mật cấp ngân hàng, bảo vệ 100% dữ liệu hành khách và giao dịch vé xe buýt ICTU qua các cổng thanh toán quốc gia.
             </p>
           </div>
 
           {/* Flat Vector Illustration Banner */}
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-lg">
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-xl">
             <Image
               src="/images/info-payment-security.jpg"
               alt="Hệ thống bảo mật thanh toán vé xe buýt thông minh ICTU Transit"
@@ -458,54 +506,54 @@ export function ServiceInfoView() {
               className="w-full object-cover transition-transform duration-700 hover:scale-102"
               priority
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent flex items-end p-6 sm:p-8">
-              <div className="text-white space-y-1.5 max-w-2xl">
-                <span className="inline-block rounded-full bg-blue-600/90 backdrop-blur-md px-3 py-1 text-[11px] font-black tracking-wide text-white uppercase">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent flex items-end p-6 sm:p-10">
+              <div className="text-white space-y-2 max-w-2xl">
+                <span className="inline-block rounded-full bg-blue-600/90 backdrop-blur-md px-3.5 py-1 text-xs font-black tracking-wide text-white uppercase">
                   Kiến Trúc An Toàn ICTU Transit Security
                 </span>
-                <p className="text-xs sm:text-sm font-semibold text-slate-200 leading-relaxed">
+                <p className="text-sm sm:text-base font-semibold text-slate-200 leading-relaxed">
                   Mã hóa chuẩn SHA-256 đối với mã QR vé và HMAC-SHA512 đối với các giao dịch đối soát VietQR, MoMo và VNPay, đảm bảo tính toàn vẹn tuyệt đối.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* 3 Core Security Pillars Cards */}
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-blue-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 mb-4">
-                <ShieldCheck size={22} />
+          {/* 3 Core Security Pillars Cards (Calibrated for Desktop Monitors) */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all space-y-4">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
+                <ShieldCheck size={26} />
               </div>
-              <h3 className="text-base font-black text-slate-900">Mã QR Động Chống Quay Vòng</h3>
-              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
-                Mỗi vé xe có mã QR động tích hợp chữ ký số và cơ chế Anti-Passback. Ngay sau khi tài xế quét soát vé, mã tự động chuyển trạng thái <code className="text-blue-700 font-bold bg-blue-50 px-1 py-0.5 rounded">CHECKED_IN</code> và vô hiệu hóa lập tức để ngăn chặn chia sẻ vé trái phép.
+              <h3 className="text-lg sm:text-xl font-black text-slate-900">Mã QR Động Chống Quay Vòng</h3>
+              <p className="text-sm sm:text-base text-slate-700 leading-relaxed">
+                Mỗi vé xe có mã QR động tích hợp chữ ký số và cơ chế Anti-Passback. Ngay sau khi tài xế quét soát vé, mã tự động chuyển trạng thái <code className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md">CHECKED_IN</code> và vô hiệu hóa lập tức để ngăn chặn chia sẻ vé trái phép.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-cyan-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 mb-4">
-                <CreditCard size={22} />
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:shadow-lg hover:border-cyan-300 transition-all space-y-4">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600 shadow-inner">
+                <CreditCard size={26} />
               </div>
-              <h3 className="text-base font-black text-slate-900">Xác Thực Webhook IPN Chữ Ký Số</h3>
-              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900">Xác Thực Webhook IPN Chữ Ký Số</h3>
+              <p className="text-sm sm:text-base text-slate-700 leading-relaxed">
                 Mọi yêu cầu đối soát thanh toán đều sử dụng chữ ký điện tử HMAC-SHA512 để xác thực nguồn gốc từ cổng thanh toán đối tác, loại bỏ hoàn toàn nguy cơ giả mạo biên lai hoặc giao dịch ảo.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mb-4">
-                <Wifi size={22} />
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all space-y-4">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-inner">
+                <Wifi size={26} />
               </div>
-              <h3 className="text-base font-black text-slate-900">Bộ Nhớ Đệm Vé Ngoại Tuyến</h3>
-              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900">Bộ Nhớ Đệm Vé Ngoại Tuyến</h3>
+              <p className="text-sm sm:text-base text-slate-700 leading-relaxed">
                 Vé đã mua được lưu trữ mã hóa an toàn cục bộ trên thiết bị của bạn (IndexedDB). Khi đi qua các điểm sóng di động yếu hoặc mất kết nối mạng, mã QR vẫn hiển thị mượt mà để quét kiểm soát vé lên xe.
               </p>
             </div>
           </div>
 
           {/* Compliance Callout */}
-          <div className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 text-xs font-semibold text-blue-900">
-            <CheckCircle2 size={18} className="text-blue-600 shrink-0" />
+          <div className="flex items-center gap-3.5 rounded-2xl border border-blue-200 bg-blue-50/80 p-5 text-sm sm:text-base font-semibold text-blue-950 shadow-xs">
+            <CheckCircle2 size={22} className="text-blue-600 shrink-0" />
             <span>
               <strong>Cam kết an toàn dữ liệu:</strong> Toàn bộ dữ liệu thanh toán và thông tin sinh viên được mã hóa SSL/TLS 256-bit theo tiêu chuẩn ISO/IEC 27001 và không lưu trữ thông tin thẻ ngân hàng trên máy chủ cục bộ.
             </span>
@@ -515,24 +563,24 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 2: BẢO HIỂM HÀNH KHÁCH TOÀN DIỆN
             =================================================================== */}
-        <article id="insurance" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="insurance" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800 tracking-wide uppercase">
-                <Shield size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3.5 py-1 text-xs sm:text-sm font-black text-emerald-800 tracking-wide uppercase">
+                <Shield size={16} />
                 <span>Phần 02 · Quyền Lợi & Bảo Hiểm Hành Khách</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Bảo Hiểm Hành Khách & Tiêu Chuẩn An Toàn Vận Tải
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               100% hành khách sở hữu vé xe buýt hợp lệ đều được bảo hiểm trách nhiệm dân sự toàn diện với hạn mức tối đa lên tới 100.000.000 VNĐ / người / vụ.
             </p>
           </div>
 
           {/* Flat Vector Illustration Banner */}
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-lg">
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-xl">
             <Image
               src="/images/info-passenger-safety.jpg"
               alt="Chính sách bảo hiểm hành khách xe buýt điện thông minh ICTU Transit"
@@ -540,61 +588,61 @@ export function ServiceInfoView() {
               height={720}
               className="w-full object-cover transition-transform duration-700 hover:scale-102"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent flex items-end p-6 sm:p-8">
-              <div className="text-white space-y-1.5 max-w-2xl">
-                <span className="inline-block rounded-full bg-emerald-600/90 backdrop-blur-md px-3 py-1 text-[11px] font-black tracking-wide text-white uppercase">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent flex items-end p-6 sm:p-10">
+              <div className="text-white space-y-2 max-w-2xl">
+                <span className="inline-block rounded-full bg-emerald-600/90 backdrop-blur-md px-3.5 py-1 text-xs font-black tracking-wide text-white uppercase">
                   Hợp Đồng Bảo Hiểm Số: BH-ICTU-2026/PVI
                 </span>
-                <p className="text-xs sm:text-sm font-semibold text-slate-200 leading-relaxed">
+                <p className="text-sm sm:text-base font-semibold text-slate-200 leading-relaxed">
                   Đội xe buýt điện thông minh ICTU với mái vòm an toàn bảo hộ hành khách từ thời điểm bước lên xe cho đến khi rời trạm an toàn.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Insurance Scope Card */}
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-6 sm:p-8 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-                <CheckCircle2 size={20} />
+          {/* Insurance Scope Card (Calibrated for Desktop) */}
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-7 sm:p-10 space-y-6">
+            <div className="flex items-center gap-3.5">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
+                <CheckCircle2 size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-black text-emerald-950">
+                <h3 className="text-xl sm:text-2xl font-black text-emerald-950">
                   Quyền Lợi Bảo Hiểm Tự Động Đi Kèm Với Mỗi Vé Hợp Lệ
                 </h3>
-                <p className="text-xs text-emerald-800">
+                <p className="text-xs sm:text-sm text-emerald-800 font-semibold mt-0.5">
                   Áp dụng cho cả vé lượt điện tử và vé tháng sinh viên trong suốt hành trình
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-xs text-slate-700 pt-2">
-              <div className="space-y-3 rounded-2xl bg-white p-5 border border-emerald-100 shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <span className="size-2 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 text-sm sm:text-base text-slate-700 pt-2">
+              <div className="space-y-4 rounded-3xl bg-white p-6 sm:p-7 border border-emerald-100 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <span className="size-2 rounded-full bg-emerald-600 mt-2 shrink-0" />
                   <span>
                     <strong>Đối tượng thụ hưởng:</strong> Toàn bộ hành khách có vé xe buýt hợp lệ (đã check-in hoặc đang trong phiên hiệu lực của vé tháng).
                   </span>
                 </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="size-2 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
+                <div className="flex items-start gap-3">
+                  <span className="size-2 rounded-full bg-emerald-600 mt-2 shrink-0" />
                   <span>
-                    <strong>Hạn mức bồi thường:</strong> Tối đa lên đến <strong>100.000.000 VNĐ / vụ</strong> theo Luật Giao thông Đường bộ và Thông tư bảo hiểm trách nhiệm dân sự phương tiện vận tải công cộng.
+                    <strong>Hạn mức bồi thường:</strong> Tối đa lên đến <strong className="text-emerald-700">100.000.000 VNĐ / vụ</strong> theo Luật Giao thông Đường bộ và Thông tư bảo hiểm trách nhiệm dân sự.
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-3 rounded-2xl bg-white p-5 border border-emerald-100 shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <span className="size-2 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
+              <div className="space-y-4 rounded-3xl bg-white p-6 sm:p-7 border border-emerald-100 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <span className="size-2 rounded-full bg-emerald-600 mt-2 shrink-0" />
                   <span>
                     <strong>Phạm vi bảo hiểm:</strong> Xuyên suốt từ lúc hành khách đặt chân lên cửa xe, trong suốt thời gian xe lăn bánh trên tuyến cho đến khi bước xuống trạm dừng an toàn.
                   </span>
                 </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="size-2 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
+                <div className="flex items-start gap-3">
+                  <span className="size-2 rounded-full bg-emerald-600 mt-2 shrink-0" />
                   <span>
-                    <strong>Hotline giám định & bồi thường:</strong> Đường dây nóng tiếp nhận hồ sơ y tế khẩn cấp: <strong>1900 8899</strong> (Phục vụ 24/7).
+                    <strong>Hotline giám định & bồi thường:</strong> Đường dây nóng tiếp nhận hồ sơ y tế khẩn cấp: <strong className="text-blue-700">1900 8899</strong> (Phục vụ 24/7).
                   </span>
                 </div>
               </div>
@@ -605,24 +653,24 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 3: CÔNG NGHỆ GEOFENCING RADAR & TRẠM DỪNG
             =================================================================== */}
-        <article id="geofencing" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="geofencing" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-800 tracking-wide uppercase">
-                <Radio size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-100 px-3.5 py-1 text-xs sm:text-sm font-black text-cyan-800 tracking-wide uppercase">
+                <Radio size={16} />
                 <span>Phần 03 · Công Nghệ Geofencing Radar</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Mạng Lưới Trạm Dừng & Công Nghệ Geofencing Radar
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Hàng rào địa lý thông minh tự động kích hoạt cảnh báo đẩy (Push Notification) kèm chuông báo du dương 3 nốt trên điện thoại hành khách khi xe chuẩn bị cập bến.
             </p>
           </div>
 
           {/* Flat Vector Illustration Banner */}
-          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-lg">
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 shadow-xl">
             <Image
               src="/images/info-geofence-radar.jpg"
               alt="Bản đồ IoT Geofencing cảnh báo trạm dừng thời gian thực tại Thái Nguyên"
@@ -630,12 +678,12 @@ export function ServiceInfoView() {
               height={720}
               className="w-full object-cover transition-transform duration-700 hover:scale-102"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent flex items-end p-6 sm:p-8">
-              <div className="text-white space-y-1.5 max-w-2xl">
-                <span className="inline-block rounded-full bg-cyan-600/90 backdrop-blur-md px-3 py-1 text-[11px] font-black tracking-wide text-white uppercase">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent flex items-end p-6 sm:p-10">
+              <div className="text-white space-y-2 max-w-2xl">
+                <span className="inline-block rounded-full bg-cyan-600/90 backdrop-blur-md px-3.5 py-1 text-xs font-black tracking-wide text-white uppercase">
                   Thai Nguyen Transit Telemetry & Geofence Rings
                 </span>
-                <p className="text-xs sm:text-sm font-semibold text-slate-200 leading-relaxed">
+                <p className="text-sm sm:text-base font-semibold text-slate-200 leading-relaxed">
                   Mô phỏng 3 lớp bán kính Geofencing bảo đảm độ trễ cảnh báo dưới 1 giây qua công nghệ Web Push và âm thanh Melodic Transit Chime.
                 </p>
               </div>
@@ -643,20 +691,20 @@ export function ServiceInfoView() {
           </div>
 
           {/* Interactive Live Geofencing Radar Simulator Widget */}
-          <div className="rounded-3xl border-2 border-cyan-500/30 bg-gradient-to-b from-slate-900 via-slate-900 to-blue-950 p-6 sm:p-8 text-white shadow-xl space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/10 pb-5">
+          <div className="rounded-3xl border-2 border-cyan-500/40 bg-gradient-to-b from-slate-900 via-slate-900 to-blue-950 p-7 sm:p-10 text-white shadow-2xl space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 border-b border-white/10 pb-6">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="flex size-3 rounded-full bg-cyan-400 animate-ping" />
-                  <h3 className="text-lg font-black text-white">Mô Phỏng Trực Tiếp Vùng Bán Kính Geofencing</h3>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-3.5 rounded-full bg-cyan-400 animate-ping" />
+                  <h3 className="text-xl sm:text-2xl font-black text-white">Mô Phỏng Trực Tiếp Vùng Bán Kính Geofencing</h3>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs sm:text-sm text-slate-300 mt-1.5">
                   Kéo thanh trượt khoảng cách để xem hệ thống kích hoạt cảnh báo thông minh và âm báo đến điện thoại.
                 </p>
               </div>
 
               {/* Radius Preset Buttons */}
-              <div className="flex items-center gap-2 bg-white/10 rounded-xl p-1 backdrop-blur-md">
+              <div className="flex items-center gap-2 bg-white/10 rounded-2xl p-1.5 backdrop-blur-md">
                 {[
                   { val: '300', label: '300m (Nội thành ICTU)' },
                   { val: '500', label: '500m (Tiêu chuẩn)' },
@@ -670,9 +718,9 @@ export function ServiceInfoView() {
                       haptic.play('tap')
                     }}
                     className={cn(
-                      'rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer',
+                      'rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-black transition-all cursor-pointer',
                       simRadius === btn.val
-                        ? 'bg-blue-600 text-white shadow-xs'
+                        ? 'bg-blue-600 text-white shadow-md'
                         : 'text-slate-300 hover:text-white',
                     )}
                   >
@@ -683,10 +731,10 @@ export function ServiceInfoView() {
             </div>
 
             {/* Distance Slider & Telemetry Display */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs font-bold">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between text-sm sm:text-base font-bold">
                 <span className="text-slate-300">Khoảng cách xe tới trạm đón bạn:</span>
-                <span className="text-cyan-400 font-mono text-base font-black">
+                <span className="text-cyan-400 font-mono text-xl sm:text-2xl font-black">
                   {simDistance} mét ({Math.max(1, Math.round(simDistance / 100))} phút ETA)
                 </span>
               </div>
@@ -704,10 +752,10 @@ export function ServiceInfoView() {
                     haptic.play('tap')
                   }
                 }}
-                className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+                className="w-full accent-cyan-400 cursor-pointer h-3 bg-slate-800 rounded-lg appearance-none"
               />
 
-              <div className="flex justify-between text-[11px] text-slate-500 font-mono">
+              <div className="flex justify-between text-xs sm:text-sm text-slate-400 font-mono">
                 <span>50m (Cập bến)</span>
                 <span className="text-cyan-400 font-bold">Ngưỡng cảnh báo trạm: {simRadius}m</span>
                 <span>1500m (Đang di chuyển xa)</span>
@@ -717,35 +765,35 @@ export function ServiceInfoView() {
             {/* Simulated Notification Box with Pulse */}
             <div
               className={cn(
-                'rounded-2xl p-4 sm:p-5 border transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
+                'rounded-3xl p-6 sm:p-7 border transition-all duration-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5',
                 simDistance <= Number(simRadius)
-                  ? 'border-emerald-500/80 bg-emerald-950/40 text-emerald-200 shadow-lg shadow-emerald-950/50'
-                  : 'border-slate-800 bg-slate-900/60 text-slate-400',
+                  ? 'border-emerald-500/80 bg-emerald-950/50 text-emerald-200 shadow-xl shadow-emerald-950/60'
+                  : 'border-slate-800 bg-slate-900/70 text-slate-400',
               )}
             >
-              <div className="flex items-center gap-3.5">
+              <div className="flex items-center gap-4">
                 <div
                   className={cn(
-                    'flex size-11 items-center justify-center rounded-xl transition-colors shrink-0',
+                    'flex size-14 items-center justify-center rounded-2xl transition-colors shrink-0',
                     simDistance <= Number(simRadius)
                       ? 'bg-emerald-500 text-white animate-bounce'
                       : 'bg-slate-800 text-slate-500',
                   )}
                 >
-                  <Bell size={20} />
+                  <Bell size={26} />
                 </div>
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-wider">
+                  <div className="text-xs sm:text-sm font-black uppercase tracking-wider">
                     {simDistance <= Number(simRadius) ? (
-                      <span className="text-emerald-400 flex items-center gap-1.5">
-                        <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-emerald-400 flex items-center gap-2">
+                        <span className="size-2.5 rounded-full bg-emerald-400 animate-ping" />
                         Đã Kích Hoạt Cảnh Báo Xe Vào Trạm ({simDistance}m ≤ {simRadius}m)
                       </span>
                     ) : (
                       <span className="text-slate-400">Trạng thái: Xe ngoài bán kính ({simDistance}m &gt; {simRadius}m)</span>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-white mt-0.5">
+                  <p className="text-sm sm:text-base font-semibold text-white mt-1">
                     {simDistance <= Number(simRadius)
                       ? `Xe buýt CT-01 đang cách trạm ${simDistance}m (~${Math.max(1, Math.round(simDistance / 100))} phút). Quý khách vui lòng chuẩn bị ra điểm đón!`
                       : `Xe buýt đang di chuyển trên lộ trình bình thường. Cảnh báo sẽ tự động phát khi xe cách dưới ${simRadius}m.`}
@@ -758,9 +806,9 @@ export function ServiceInfoView() {
                 type="button"
                 onClick={handleTestChime}
                 disabled={isPlayingChime}
-                className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white px-4 py-2.5 text-xs font-black shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="shrink-0 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 text-sm font-black shadow-lg shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
               >
-                <Volume2 size={16} className={isPlayingChime ? 'animate-pulse text-cyan-300' : ''} />
+                <Volume2 size={18} className={isPlayingChime ? 'animate-pulse text-cyan-300' : ''} />
                 <span>Phát Chuông 3 Nốt</span>
               </button>
             </div>
@@ -770,24 +818,24 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 4: MẠNG LƯỚI TUYẾN & TRẢI NGHIỆM 360° VR
             =================================================================== */}
-        <article id="routes" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="routes" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-black text-indigo-800 tracking-wide uppercase">
-                <Bus size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3.5 py-1 text-xs sm:text-sm font-black text-indigo-800 tracking-wide uppercase">
+                <Bus size={16} />
                 <span>Phần 04 · Mạng Lưới Tuyến Xe & Khám Phá 360°</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Mạng Lưới Tuyến Xe Buýt Thông Minh ICTU Transit
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Lộ trình kết nối Đại học Công nghệ Thông tin & Truyền thông với trung tâm TP. Thái Nguyên và các khu công nghiệp trọng điểm.
             </p>
           </div>
 
           {/* Route Tabs Switcher */}
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
             {ROUTES_INFO.map((r, idx) => (
               <button
                 key={r.code}
@@ -797,9 +845,9 @@ export function ServiceInfoView() {
                   haptic.play('tap')
                 }}
                 className={cn(
-                  'rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black transition-all cursor-pointer',
+                  'rounded-2xl px-5 py-3 text-sm sm:text-base font-black transition-all cursor-pointer',
                   selectedRouteIdx === idx
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 ring-2 ring-blue-400/30'
                     : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100',
                 )}
               >
@@ -812,23 +860,25 @@ export function ServiceInfoView() {
           {(() => {
             const route = ROUTES_INFO[selectedRouteIdx]
             return (
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-6">
+              <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-10 shadow-sm space-y-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 border-b border-slate-100 pb-6">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-lg bg-blue-600 text-white text-xs font-black px-2.5 py-1">
+                    <div className="flex items-center gap-2.5">
+                      <span className="rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-black px-3 py-1.5 shadow-xs">
                         {route.code}
                       </span>
-                      <h3 className="text-lg font-black text-slate-900">{route.endpoints}</h3>
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900">{route.endpoints}</h3>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">Chiều dài lộ trình: {route.distance} · Giãn cách {route.frequency} · Hoạt động {route.operatingTime}</p>
+                    <p className="text-sm text-slate-500 font-medium mt-1.5">
+                      Chiều dài: {route.distance} · Giãn cách: {route.frequency} · Giờ hoạt động: {route.operatingTime}
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <div className="text-left sm:text-right">
-                      <div className="text-[11px] font-bold text-slate-400">Vé Thường / Vé Sinh Viên</div>
-                      <div className="text-base font-black text-blue-700">
-                        {route.standardFare.toLocaleString('vi-VN')}đ <span className="text-xs text-slate-400 font-medium">/</span>{' '}
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vé Thường / Vé Sinh Viên</div>
+                      <div className="text-lg sm:text-xl font-black text-blue-700">
+                        {route.standardFare.toLocaleString('vi-VN')}đ <span className="text-sm text-slate-400 font-medium">/</span>{' '}
                         <span className="text-emerald-600">{route.studentFare.toLocaleString('vi-VN')}đ</span>
                       </div>
                     </div>
@@ -836,27 +886,27 @@ export function ServiceInfoView() {
                 </div>
 
                 {/* Station Timeline View with animated bus */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                <div className="space-y-5">
+                  <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-400">
                     Danh sách trạm dừng & Trạm trung chuyển chính
                   </h4>
 
-                  <div className="relative pl-6 sm:pl-8 space-y-6 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-blue-200">
+                  <div className="relative pl-8 sm:pl-10 space-y-7 before:absolute before:left-3.5 before:top-3 before:bottom-3 before:w-1 before:bg-blue-200">
                     {route.stations.map((st) => (
-                      <div key={st.name} className="relative flex items-start justify-between gap-4 group">
+                      <div key={st.name} className="relative flex items-start justify-between gap-5 group">
                         {/* Dot Marker */}
                         <span
                           className={cn(
-                            'absolute -left-6 sm:-left-8 top-1.5 flex size-4 items-center justify-center rounded-full ring-4 ring-white',
+                            'absolute -left-8 sm:-left-10 top-1.5 flex size-5 items-center justify-center rounded-full ring-4 ring-white',
                             st.hub ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-400',
                           )}
                         />
 
                         <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-black text-slate-900">{st.name}</span>
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-base sm:text-lg font-black text-slate-900">{st.name}</span>
                             {st.hub && (
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">
+                              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-extrabold text-blue-700">
                                 Trạm Hub
                               </span>
                             )}
@@ -868,18 +918,18 @@ export function ServiceInfoView() {
                                   setIsVrModalOpen(true)
                                   haptic.play('tap')
                                 }}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/80 bg-cyan-50 px-2.5 py-0.5 text-[10px] font-black text-cyan-800 hover:bg-cyan-100 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/80 bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-800 hover:bg-cyan-100 transition-colors cursor-pointer shadow-xs"
                                 title="Xem thực tế ảo 360 độ điểm chờ xe buýt cổng trường ICTU"
                               >
-                                <Compass size={12} className="text-cyan-700 animate-spin-slow" />
+                                <Compass size={14} className="text-cyan-700 animate-spin-slow" />
                                 <span>🕶️ Xem Trạm 360° VR</span>
                               </button>
                             )}
                           </div>
-                          <span className="text-xs text-slate-500">{st.type}</span>
+                          <span className="text-xs sm:text-sm text-slate-500 font-medium">{st.type}</span>
                         </div>
 
-                        <span className="font-mono text-xs font-bold text-slate-400 shrink-0">
+                        <span className="font-mono text-xs sm:text-sm font-bold text-slate-500 shrink-0">
                           Lượt đầu: {st.time}
                         </span>
                       </div>
@@ -887,23 +937,23 @@ export function ServiceInfoView() {
                   </div>
 
                   {/* Interactive VR 360 Showcase Banner (Integrated from thamquan.ictu.edu.vn) */}
-                  <div className="mt-8 rounded-3xl border border-cyan-300/60 bg-gradient-to-r from-blue-950 via-slate-900 to-blue-900 p-6 sm:p-7 text-white shadow-xl relative overflow-hidden">
-                    <div className="absolute -right-16 -bottom-16 size-64 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none" />
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-                      <div className="space-y-1.5 max-w-xl">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/20 border border-cyan-400/40 px-3 py-1 text-[11px] font-black text-cyan-300">
-                          <Compass size={13} className="animate-spin-slow text-cyan-400" />
+                  <div className="mt-10 rounded-3xl border border-cyan-300/60 bg-gradient-to-r from-blue-950 via-slate-900 to-blue-900 p-7 sm:p-10 text-white shadow-2xl relative overflow-hidden">
+                    <div className="absolute -right-16 -bottom-16 size-72 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none" />
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                      <div className="space-y-2 max-w-2xl">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/20 border border-cyan-400/40 px-3.5 py-1 text-xs font-black text-cyan-300">
+                          <Compass size={14} className="animate-spin-slow text-cyan-400" />
                           <span>TÍCH HỢP TÀI NGUYÊN SỐ: THAMQUAN.ICTU.EDU.VN</span>
                         </div>
-                        <h4 className="text-base sm:text-lg font-black text-white">
+                        <h4 className="text-lg sm:text-2xl font-black text-white">
                           Khám Phá Điểm Đón & Toàn Cảnh Khuôn Viên ICTU Qua Thực Tế Ảo 360°
                         </h4>
-                        <p className="text-xs text-slate-300 leading-relaxed">
+                        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                           Hành khách và tân sinh viên có thể tương tác xoay 360 độ xem trước vị trí bến đón xe buýt tại Cổng Chính, Quảng trường Đổi mới sáng tạo, bãi gửi xe và các khối nhà giảng đường trước khi xe cập bến.
                         </p>
                       </div>
 
-                      <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                         <button
                           type="button"
                           onClick={() => {
@@ -911,16 +961,16 @@ export function ServiceInfoView() {
                             setIsVrModalOpen(true)
                             haptic.play('tap')
                           }}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black px-4 py-2.5 text-xs shadow-lg shadow-cyan-400/20 transition-all active:scale-95 cursor-pointer"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black px-5 py-3 text-sm shadow-xl shadow-cyan-400/25 transition-all active:scale-95 cursor-pointer"
                         >
-                          <Compass size={15} />
+                          <Compass size={17} />
                           <span>Mở Trải Nghiệm VR 360°</span>
                         </button>
                         <a
                           href="https://thamquan.ictu.edu.vn/"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold px-3.5 py-2.5 text-xs transition-colors"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-3 text-sm transition-colors"
                         >
                           <span>Cổng Gốc ↗</span>
                         </a>
@@ -936,44 +986,44 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 5: CHÍNH SÁCH VÉ & BẢNG TÍNH HOÀN HỦY TỰ ĐỘNG
             =================================================================== */}
-        <article id="refund-policy" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="refund-policy" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800 tracking-wide uppercase">
-                <RotateCcw size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3.5 py-1 text-xs sm:text-sm font-black text-amber-800 tracking-wide uppercase">
+                <RotateCcw size={16} />
                 <span>Phần 05 · Chính Sách Vé & Hoàn Tiền Minh Bạch</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Chính Sách Vé, Vé Tháng & Quy Định Hoàn Hủy
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Bảng biểu phí hoàn hủy vé minh bạch theo thời gian biểu điều độ của Bộ GTVT, tự động giải ngân về tài khoản trong 24 giờ.
             </p>
           </div>
 
-          {/* Policy Table Matrix */}
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
+          {/* Policy Table Matrix (Clear Typography for Desktop) */}
+          <div className="overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-sm">
+            <table className="w-full text-left text-sm sm:text-base">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-5 py-4 sm:px-6">Khung Thời Gian Yêu Cầu Hủy</th>
+                  <th className="px-6 py-4 sm:px-8">Khung Thời Gian Yêu Cầu Hủy</th>
                   <th className="px-4 py-4 text-center">Tỷ Lệ Hoàn Lại</th>
                   <th className="px-4 py-4 text-center">Phí Vận Hành</th>
-                  <th className="hidden px-5 py-4 sm:table-cell">Ghi Chú Điều Khoản</th>
+                  <th className="hidden px-6 py-4 sm:table-cell">Ghi Chú Điều Khoản</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {REFUND_POLICIES.map((p) => (
                   <tr key={p.timeframe} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-4 sm:px-6 font-bold text-slate-900">
+                    <td className="px-6 py-5 sm:px-8 font-bold text-slate-900">
                       {p.timeframe}
-                      <div className="sm:hidden text-[11px] font-normal text-slate-500 mt-1">{p.desc}</div>
+                      <div className="sm:hidden text-xs font-normal text-slate-500 mt-1">{p.desc}</div>
                     </td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-4 py-5 text-center">
                       <span
                         className={cn(
-                          'inline-block rounded-full px-2.5 py-1 text-xs font-black',
+                          'inline-block rounded-full px-3 py-1 text-xs sm:text-sm font-black',
                           p.refundPercent === 100
                             ? 'bg-emerald-100 text-emerald-800'
                             : p.refundPercent > 0
@@ -984,10 +1034,10 @@ export function ServiceInfoView() {
                         {p.refundPercent}%
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-center font-bold text-slate-700">
+                    <td className="px-4 py-5 text-center font-bold text-slate-700">
                       {p.feePercent}%
                     </td>
-                    <td className="hidden px-5 py-4 text-xs text-slate-500 sm:table-cell">
+                    <td className="hidden px-6 py-5 text-sm text-slate-600 sm:table-cell leading-relaxed">
                       {p.desc}
                     </td>
                   </tr>
@@ -997,25 +1047,25 @@ export function ServiceInfoView() {
           </div>
 
           {/* Interactive Live Refund Calculator Widget */}
-          <div className="rounded-3xl border-2 border-blue-600/30 bg-white p-6 sm:p-8 shadow-lg space-y-6">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
-                <RotateCcw size={20} />
+          <div className="rounded-3xl border-2 border-blue-600/30 bg-white p-7 sm:p-10 shadow-xl space-y-8">
+            <div className="flex items-center gap-3.5 border-b border-slate-100 pb-5">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-600/25">
+                <RotateCcw size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-900">Công Cụ Tính Tiền Hoàn Vé Tự Động Trực Quan</h3>
-                <p className="text-xs text-slate-500">Nhập giá vé và chọn khung giờ hủy để xem kết quả tính toán chi tiết tức thì</p>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">Công Cụ Tính Tiền Hoàn Vé Tự Động Trực Quan</h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Nhập giá vé và chọn khung giờ hủy để xem kết quả tính toán chi tiết tức thì</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               {/* Left inputs */}
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                  <label className="block text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500 mb-3">
                     1. Chọn Mức Giá Vé Của Bạn (VND)
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     {[5000, 10000, 15000].map((fare) => (
                       <button
                         key={fare}
@@ -1025,9 +1075,9 @@ export function ServiceInfoView() {
                           haptic.play('tap')
                         }}
                         className={cn(
-                          'rounded-xl border py-2.5 text-xs font-black transition-all cursor-pointer',
+                          'rounded-2xl border py-3.5 text-sm sm:text-base font-black transition-all cursor-pointer',
                           calcFare === fare
-                            ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-600/20'
+                            ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-600/20 shadow-xs'
                             : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
                         )}
                       >
@@ -1038,10 +1088,10 @@ export function ServiceInfoView() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                  <label className="block text-xs sm:text-sm font-black uppercase tracking-wider text-slate-500 mb-3">
                     2. Chọn Thời Điểm Bạn Gửi Yêu Cầu Hủy Vé
                   </label>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {REFUND_POLICIES.map((pol, idx) => (
                       <button
                         key={pol.timeframe}
@@ -1051,16 +1101,16 @@ export function ServiceInfoView() {
                           haptic.play('tap')
                         }}
                         className={cn(
-                          'flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all cursor-pointer',
+                          'flex w-full items-center justify-between rounded-2xl border p-4 text-left transition-all cursor-pointer',
                           calcPolicyIdx === idx
-                            ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/20'
+                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-600/20 shadow-xs'
                             : 'border-slate-200 bg-white hover:bg-slate-50',
                         )}
                       >
-                        <span className="text-xs font-bold text-slate-800">{pol.timeframe}</span>
+                        <span className="text-sm sm:text-base font-bold text-slate-800">{pol.timeframe}</span>
                         <span
                           className={cn(
-                            'rounded-full px-2 py-0.5 text-[11px] font-black',
+                            'rounded-full px-3 py-1 text-xs sm:text-sm font-black',
                             pol.refundPercent === 100
                               ? 'bg-emerald-100 text-emerald-800'
                               : pol.refundPercent > 0
@@ -1077,41 +1127,41 @@ export function ServiceInfoView() {
               </div>
 
               {/* Right result card */}
-              <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/80 p-6 space-y-4">
+              <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-slate-50/80 p-7 sm:p-8 space-y-6">
                 <div>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kết Quả Ước Tính Chi Tiết</span>
-                  <div className="mt-3 space-y-3 text-xs">
-                    <div className="flex justify-between py-1.5 border-b border-slate-200">
+                  <span className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">Kết Quả Ước Tính Chi Tiết</span>
+                  <div className="mt-4 space-y-3.5 text-sm sm:text-base">
+                    <div className="flex justify-between py-2 border-b border-slate-200">
                       <span className="text-slate-600">Giá vé ban đầu:</span>
                       <span className="font-bold text-slate-900">{calcFare.toLocaleString('vi-VN')} VNĐ</span>
                     </div>
-                    <div className="flex justify-between py-1.5 border-b border-slate-200">
+                    <div className="flex justify-between py-2 border-b border-slate-200">
                       <span className="text-slate-600">Phí hủy khấu trừ ({currentPolicy.feePercent}%):</span>
                       <span className="font-bold text-rose-600">-{feeAmount.toLocaleString('vi-VN')} VNĐ</span>
                     </div>
-                    <div className="flex justify-between py-1.5 border-b border-slate-200">
+                    <div className="flex justify-between py-2 border-b border-slate-200">
                       <span className="text-slate-600">Thời gian nhận tiền:</span>
                       <span className="font-bold text-blue-700">Trong vòng 12 - 24 giờ làm việc</span>
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-2xl bg-white p-4 border border-slate-200 shadow-xs text-center">
-                    <span className="text-xs font-bold text-slate-500">Số Tiền Thực Tế Bạn Nhận Lại</span>
+                  <div className="mt-8 rounded-3xl bg-white p-6 border border-slate-200 shadow-sm text-center">
+                    <span className="text-xs sm:text-sm font-bold text-slate-500">Số Tiền Thực Tế Bạn Nhận Lại</span>
                     <div
                       className={cn(
-                        'text-3xl font-black mt-1 font-mono',
+                        'text-4xl sm:text-5xl font-black mt-2 font-mono',
                         refundAmount > 0 ? 'text-emerald-600' : 'text-slate-400',
                       )}
                     >
                       {refundAmount.toLocaleString('vi-VN')} VNĐ
                     </div>
-                    <span className="inline-block mt-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">
+                    <span className="inline-block mt-3 rounded-full bg-slate-100 px-4 py-1.5 text-xs sm:text-sm font-bold text-slate-700">
                       {currentPolicy.badge}
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-slate-500 italic">
+                <p className="text-xs text-slate-500 italic">
                   * Lưu ý: Tiền sẽ được hoàn tự động về đúng tài khoản ngân hàng hoặc ví điện tử hành khách đã dùng để thanh toán vé.
                 </p>
               </div>
@@ -1122,53 +1172,53 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 6: HÓA ĐƠN ĐIỆN TỬ CHUẨN NGHỊ ĐỊNH 123/2020
             =================================================================== */}
-        <article id="invoice" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="invoice" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1 text-xs font-black text-purple-800 tracking-wide uppercase">
-                <FileText size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-3.5 py-1 text-xs sm:text-sm font-black text-purple-800 tracking-wide uppercase">
+                <FileText size={16} />
                 <span>Phần 06 · Hóa Đơn Điện Tử Hợp Pháp</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Hóa Đơn Điện Tử Hợp Pháp (Nghị Định 123/2020/NĐ-CP)
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Phát hành tự động bởi Trường Đại học Công nghệ Thông tin & Truyền thông - ĐH Thái Nguyên phục vụ quyết toán công tác phí và chi phí vận chuyển.
             </p>
           </div>
 
-          {/* Invoice Specs Box */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-4">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <FileCheck2 size={18} className="text-blue-600" />
+          {/* Invoice Specs Box (Calibrated for High Legibility) */}
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-10 shadow-sm space-y-8">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="space-y-5">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
+                  <FileCheck2 size={22} className="text-blue-600" />
                   Thông Tin Đơn Vị Phát Hành Hóa Đơn
                 </h3>
-                <div className="space-y-3 text-xs text-slate-700">
+                <div className="space-y-3.5 text-sm sm:text-base text-slate-700">
                   <div>
                     <span className="font-bold text-slate-900">Tên đơn vị bán hàng:</span>
-                    <p className="text-slate-600 mt-0.5">Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên</p>
+                    <p className="text-slate-600 mt-1 font-medium">Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className="font-bold text-slate-900">Mã số thuế (MST):</span>
-                    <code className="rounded bg-slate-100 px-2 py-0.5 font-mono font-bold text-blue-700">
+                    <code className="rounded-lg bg-slate-100 px-3 py-1 font-mono font-bold text-blue-700 text-base">
                       4600123456-001
                     </code>
                     <button
                       type="button"
                       onClick={handleCopyTaxId}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-blue-600 hover:underline cursor-pointer"
                     >
                       {copiedCode ? (
                         <>
-                          <Check size={12} className="text-emerald-600" />
+                          <Check size={14} className="text-emerald-600" />
                           <span className="text-emerald-600">Đã sao chép!</span>
                         </>
                       ) : (
                         <>
-                          <Copy size={12} />
+                          <Copy size={14} />
                           <span>Sao chép</span>
                         </>
                       )}
@@ -1176,40 +1226,40 @@ export function ServiceInfoView() {
                   </div>
                   <div>
                     <span className="font-bold text-slate-900">Địa chỉ trụ sở:</span>
-                    <p className="text-slate-600 mt-0.5">Đường Z115, Xã Quyết Thắng, Thành phố Thái Nguyên, Tỉnh Thái Nguyên</p>
+                    <p className="text-slate-600 mt-1 font-medium">Đường Z115, Xã Quyết Thắng, Thành phố Thái Nguyên, Tỉnh Thái Nguyên</p>
                   </div>
                   <div>
                     <span className="font-bold text-slate-900">Thuế suất GTGT (VAT):</span>
-                    <span className="ml-1 inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-black text-emerald-800">
+                    <span className="ml-2 inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs sm:text-sm font-black text-emerald-800">
                       8% (Theo quy định kích cầu dịch vụ vận tải)
                     </span>
                   </div>
                   <div>
                     <span className="font-bold text-slate-900">Ký hiệu mẫu số hóa đơn:</span>
-                    <span className="ml-1 font-mono text-slate-600">1/001 - Ký hiệu: C26TCT</span>
+                    <span className="ml-2 font-mono font-bold text-slate-700">1/001 - Ký hiệu: C26TCT</span>
                   </div>
                 </div>
               </div>
 
               {/* Direct Action Link to Lookup Page */}
-              <div className="flex flex-col justify-between rounded-2xl border border-blue-200 bg-blue-50/70 p-6 space-y-4">
+              <div className="flex flex-col justify-between rounded-3xl border border-blue-200 bg-blue-50/80 p-7 sm:p-8 space-y-6">
                 <div>
-                  <div className="flex items-center gap-2 text-blue-900 font-black text-sm">
-                    <Search size={18} />
+                  <div className="flex items-center gap-2.5 text-blue-950 font-black text-base sm:text-lg">
+                    <Search size={22} className="text-blue-700" />
                     Tra Cứu Hóa Đơn Trực Tuyến Nhanh Chóng
                   </div>
-                  <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                  <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
                     Bạn đã đặt vé và cần tải file hóa đơn điện tử định dạng XML và bản thể hiện PDF có chữ ký số Viettel-CA để nộp quyết toán công tác phí hoặc thanh toán cơ quan?
                   </p>
                 </div>
 
                 <Link
                   href="/tra-cuu-hoa-don"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-black text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95"
+                  className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl bg-blue-600 py-4 text-sm sm:text-base font-black text-white shadow-lg shadow-blue-600/25 transition-all hover:bg-blue-700 active:scale-95"
                 >
-                  <Receipt size={16} />
+                  <Receipt size={18} />
                   <span>Đến Trang Tra Cứu Hóa Đơn Điện Tử</span>
-                  <ExternalLink size={14} />
+                  <ExternalLink size={16} />
                 </Link>
               </div>
             </div>
@@ -1219,47 +1269,47 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 7: ĐƠN VỊ VẬN HÀNH & GIẤY PHÉP PHÁP LÝ
             =================================================================== */}
-        <article id="about" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="about" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-200 px-3 py-1 text-xs font-black text-slate-800 tracking-wide uppercase">
-                <GraduationCap size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-200 px-3.5 py-1 text-xs sm:text-sm font-black text-slate-800 tracking-wide uppercase">
+                <GraduationCap size={16} />
                 <span>Phần 07 · Đơn Vị Quản Lý & Vận Hành</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Đơn Vị Quản Lý & Điều Độ Hệ Thống
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Hệ thống vận hành chính thức dưới sự chỉ đạo của Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-5 border-b border-slate-100 pb-6">
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-10 shadow-sm space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-6 border-b border-slate-100 pb-7">
               <BrandMark size="lg" />
               <div>
-                <h3 className="text-lg font-black text-slate-900">
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">
                   Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-sm sm:text-base text-slate-500 font-medium mt-1">
                   Hệ Thống Quản Lý & Điều Độ Xe Buýt Thông Minh (ICTU Smart Transit Solution)
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 text-xs">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <span className="font-bold text-slate-500 block mb-1">Giấy phép kinh doanh vận tải:</span>
-                <span className="font-mono font-black text-slate-900">{CONTACT.license}</span>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 text-sm sm:text-base">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Giấy phép kinh doanh vận tải:</span>
+                <span className="font-mono font-black text-slate-900 text-base">{CONTACT.license}</span>
               </div>
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <span className="font-bold text-slate-500 block mb-1">Cơ quan phê duyệt:</span>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Cơ quan phê duyệt:</span>
                 <span className="font-bold text-slate-900">Sở Giao thông Vận tải Thái Nguyên</span>
               </div>
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <span className="font-bold text-slate-500 block mb-1">Mã định danh đơn vị:</span>
-                <span className="font-mono font-black text-blue-700">ICTU-TRANSIT-TN</span>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Mã định danh đơn vị:</span>
+                <span className="font-mono font-black text-blue-700 text-base">ICTU-TRANSIT-TN</span>
               </div>
             </div>
           </div>
@@ -1268,36 +1318,36 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 8: CÂU HỎI THƯỜNG GẶP (FAQ) VỚI BỘ LỌC TỨC THÌ
             =================================================================== */}
-        <article id="faq" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="faq" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800 tracking-wide uppercase">
-                <HelpCircle size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3.5 py-1 text-xs sm:text-sm font-black text-blue-800 tracking-wide uppercase">
+                <HelpCircle size={16} />
                 <span>Phần 08 · Giải Đáp Thắc Mắc (FAQ)</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Giải Đáp Câu Hỏi Thường Gặp (FAQ)
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Những thắc mắc phổ biến nhất của sinh viên và hành khách khi sử dụng hệ thống xe buýt thông minh ICTU.
             </p>
           </div>
 
           {/* Instant Search Bar */}
           <div className="relative">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={22} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Tìm kiếm câu hỏi: 'hoàn vé', 'vé tháng', 'hóa đơn', 'geofencing'..."
               value={faqSearch}
               onChange={(e) => setFaqSearch(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden focus:ring-4 focus:ring-blue-500/10 shadow-xs"
+              className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-14 pr-5 text-sm sm:text-base font-semibold text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden focus:ring-4 focus:ring-blue-500/10 shadow-xs"
             />
           </div>
 
-          {/* FAQ Accordion List */}
-          <div className="space-y-3">
+          {/* FAQ Accordion List (Generous Padding & Readable Fonts) */}
+          <div className="space-y-4">
             {filteredFaqs.length > 0 ? (
               filteredFaqs.map((faq, idx) => {
                 const isOpen = expandedFaq === idx
@@ -1305,8 +1355,8 @@ export function ServiceInfoView() {
                   <div
                     key={faq.q}
                     className={cn(
-                      'rounded-2xl border transition-all duration-200 overflow-hidden',
-                      isOpen ? 'border-blue-300 bg-blue-50/30 shadow-xs' : 'border-slate-200 bg-white',
+                      'rounded-3xl border transition-all duration-200 overflow-hidden',
+                      isOpen ? 'border-blue-300 bg-blue-50/40 shadow-sm' : 'border-slate-200 bg-white shadow-xs',
                     )}
                   >
                     <button
@@ -1315,22 +1365,22 @@ export function ServiceInfoView() {
                         setExpandedFaq(isOpen ? null : idx)
                         haptic.play('tap')
                       }}
-                      className="flex w-full items-center justify-between p-5 text-left transition-colors cursor-pointer"
+                      className="flex w-full items-center justify-between p-6 sm:p-7 text-left transition-colors cursor-pointer"
                     >
-                      <div className="flex items-center gap-3 pr-4">
-                        <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-700 shrink-0">
+                      <div className="flex items-center gap-3.5 pr-4">
+                        <span className="rounded-lg bg-blue-100 px-2.5 py-1 text-xs font-black text-blue-700 shrink-0">
                           {faq.category}
                         </span>
-                        <span className="text-xs sm:text-sm font-black text-slate-900">{faq.q}</span>
+                        <span className="text-base sm:text-lg font-black text-slate-900">{faq.q}</span>
                       </div>
                       <ChevronDown
-                        size={18}
+                        size={20}
                         className={cn('text-slate-400 transition-transform duration-200 shrink-0', isOpen && 'rotate-180 text-blue-600')}
                       />
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-slate-100 px-5 pb-5 pt-3 text-xs sm:text-sm text-slate-600 leading-relaxed animate-fadeIn">
+                      <div className="border-t border-slate-100 px-6 sm:px-7 pb-6 pt-3 text-sm sm:text-base text-slate-700 leading-relaxed animate-fadeIn">
                         {faq.a}
                       </div>
                     )}
@@ -1338,7 +1388,7 @@ export function ServiceInfoView() {
                 )
               })
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+              <div className="rounded-3xl border border-dashed border-slate-300 p-10 text-center text-sm sm:text-base text-slate-500">
                 Không tìm thấy câu hỏi phù hợp với từ khóa &ldquo;{faqSearch}&rdquo;. Bạn vui lòng liên hệ tổng đài 1900 8899 để được hỗ trợ trực tiếp.
               </div>
             )}
@@ -1348,58 +1398,58 @@ export function ServiceInfoView() {
         {/* ===================================================================
             SECTION 9: KÊNH HỖ TRỢ 24/7 & LIÊN HỆ
             =================================================================== */}
-        <article id="contact" className="scroll-mt-32 space-y-8">
-          <div className="space-y-3 border-b border-slate-200 pb-5">
+        <article id="contact" className="scroll-mt-48 sm:scroll-mt-52 space-y-8">
+          <div className="space-y-3 border-b border-slate-200 pb-6 pt-4">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-800 tracking-wide uppercase">
-                <PhoneCall size={14} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3.5 py-1 text-xs sm:text-sm font-black text-rose-800 tracking-wide uppercase">
+                <PhoneCall size={16} />
                 <span>Phần 09 · Tiếp Nhận Phản Hồi 24/7</span>
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-950">
               Kênh Hỗ Trợ & Tiếp Nhận Phản Hồi 24/7
             </h2>
-            <p className="text-sm sm:text-base font-normal text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-base lg:text-lg font-medium text-slate-600 leading-relaxed max-w-4xl">
               Đội ngũ điều hành trung tâm ICTU Transit luôn sẵn sàng hỗ trợ bạn trên mọi nẻo đường di chuyển.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-blue-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 mb-3">
-                <PhoneCall size={22} />
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:border-blue-300 hover:shadow-lg transition-all space-y-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 mb-4">
+                <PhoneCall size={24} />
               </div>
-              <h3 className="text-sm font-black text-slate-900">Tổng Đài Khẩn Cấp</h3>
-              <p className="mt-1 text-xs text-slate-500">Giải đáp lộ trình, xử lý bỏ quên hành lý trên xe buýt</p>
+              <h3 className="text-base sm:text-lg font-black text-slate-900">Tổng Đài Khẩn Cấp</h3>
+              <p className="text-xs sm:text-sm text-slate-500">Giải đáp lộ trình, xử lý bỏ quên hành lý trên xe buýt</p>
               <a
                 href={`tel:${CONTACT.hotline.replace(/\s/g, '')}`}
-                className="mt-3 inline-block font-mono text-base font-black text-blue-700 hover:underline"
+                className="mt-2 inline-block font-mono text-xl sm:text-2xl font-black text-blue-700 hover:underline"
               >
                 {CONTACT.hotline}
               </a>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-cyan-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 mb-3">
-                <Receipt size={22} />
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:border-cyan-300 hover:shadow-lg transition-all space-y-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600 mb-4">
+                <Receipt size={24} />
               </div>
-              <h3 className="text-sm font-black text-slate-900">Email Hỗ Trợ Kỹ Thuật</h3>
-              <p className="mt-1 text-xs text-slate-500">Tiếp nhận phản hồi vé tháng, xuất hóa đơn VAT</p>
+              <h3 className="text-base sm:text-lg font-black text-slate-900">Email Hỗ Trợ Kỹ Thuật</h3>
+              <p className="text-xs sm:text-sm text-slate-500">Tiếp nhận phản hồi vé tháng, xuất hóa đơn VAT</p>
               <a
                 href={`mailto:${CONTACT.email}`}
-                className="mt-3 inline-block text-xs font-bold text-blue-700 hover:underline break-all"
+                className="mt-2 inline-block text-sm sm:text-base font-bold text-blue-700 hover:underline break-all"
               >
                 {CONTACT.email}
               </a>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mb-3">
-                <MapPin size={22} />
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 sm:p-8 shadow-sm hover:border-emerald-300 hover:shadow-lg transition-all space-y-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 mb-4">
+                <MapPin size={24} />
               </div>
-              <h3 className="text-sm font-black text-slate-900">Văn Phòng Điều Độ</h3>
-              <p className="mt-1 text-xs text-slate-500">Phòng Công tác Học sinh - Sinh viên, Nhà C1, ICTU</p>
-              <span className="mt-3 inline-block text-xs font-bold text-slate-700">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">Văn Phòng Điều Độ</h3>
+              <p className="text-xs sm:text-sm text-slate-500">Phòng Công tác Học sinh - Sinh viên, Nhà C1, ICTU</p>
+              <span className="mt-2 inline-block text-xs sm:text-sm font-bold text-slate-700">
                 Giờ làm việc: 07:30 - 17:30 (Thứ 2 - Thứ 7)
               </span>
             </div>
@@ -1407,27 +1457,27 @@ export function ServiceInfoView() {
         </article>
 
         {/* Bottom Return CTA Banner */}
-        <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-8 sm:p-10 text-white shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-          <div className="space-y-1.5 max-w-xl">
-            <h3 className="text-xl sm:text-2xl font-black text-white">Sẵn Sàng Cho Chuyến Đi An Toàn Cùng ICTU Transit?</h3>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+        <div className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 p-8 sm:p-12 text-white shadow-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div className="space-y-2 max-w-xl">
+            <h3 className="text-2xl sm:text-3xl font-black text-white">Sẵn Sàng Cho Chuyến Đi An Toàn Cùng ICTU Transit?</h3>
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Đặt vé xe buýt điện ngay hôm nay để trải nghiệm dịch vụ tiện nghi, hiện đại và thân thiện với môi trường!
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 shrink-0">
             <Link
               href="/"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-xs font-black text-blue-900 shadow-md transition-all hover:bg-slate-100 active:scale-95"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm sm:text-base font-black text-blue-950 shadow-lg transition-all hover:bg-slate-100 active:scale-95"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={18} />
               <span>Về Màn Hình Đặt Vé</span>
             </Link>
             <Link
               href="/tra-cuu-hoa-don"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-3 text-xs font-bold text-white transition-all hover:bg-white/20 active:scale-95"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 py-4 text-sm sm:text-base font-bold text-white transition-all hover:bg-white/20 active:scale-95"
             >
-              <FileText size={16} />
+              <FileText size={18} />
               <span>Tra Cứu Hóa Đơn</span>
             </Link>
           </div>
