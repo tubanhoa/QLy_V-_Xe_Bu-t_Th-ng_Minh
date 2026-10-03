@@ -754,3 +754,12 @@ div[class*="nextjs-toast"] {
   animation: sheet-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Ẩn thanh cuộn mặc định cho thanh điều hướng ngang */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
