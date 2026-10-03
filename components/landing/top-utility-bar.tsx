@@ -2,49 +2,55 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { PhoneCall, ShieldCheck } from 'lucide-react'
+import { Clock, PhoneCall, ShieldCheck, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACT } from '@/lib/landing-data'
+import { haptic } from '@/lib/utils/haptics'
 
 interface TopUtilityBarProps {
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
 }
 
-const AUDIENCES = [
-  { id: 'personal', label: 'Cá nhân (HSSV & Cán bộ)' },
-  { id: 'business', label: 'Tổ chức & Doanh nghiệp' },
-  { id: 'priority', label: 'Hành khách Thân thiết & Thẻ SV' },
-]
-
 export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
-  const [audience, setAudience] = useState(AUDIENCES[0].id)
   const [lang, setLang] = useState<'VI' | 'EN'>('VI')
 
   return (
     <div className="hidden border-b border-black/5 bg-transparent text-[13px] text-slate-800 lg:block">
       <div className="mx-auto flex h-10 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Left: Tab Switcher with floating white pill active state */}
-        <nav aria-label="Phân loại hành khách" className="flex items-center gap-1 py-1">
-          {AUDIENCES.map((a) => {
-            const active = a.id === audience
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setAudience(a.id)}
-                aria-pressed={active}
-                className={cn(
-                  'rounded-full px-4 py-1 text-xs transition-all duration-200',
-                  active
-                    ? 'bg-white/90 backdrop-blur-md font-extrabold text-[#005A36] shadow-sm ring-1 ring-black/10'
-                    : 'font-bold text-slate-700 hover:text-[#005A36]',
-                )}
-              >
-                {a.label}
-              </button>
-            )
-          })}
-        </nav>
+        {/* Left: Live Transit Operations Status Ticker */}
+        <div className="flex items-center gap-2.5 py-1">
+          {/* Signal 1: Live Electric Bus Fleet Status */}
+          <div className="flex items-center gap-2 rounded-full bg-white/85 backdrop-blur-md border border-emerald-300/70 px-3 py-0.5 text-xs shadow-2xs">
+            <span className="relative flex size-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full size-2 bg-emerald-500" />
+            </span>
+            <span className="text-slate-600 font-medium text-[11.5px]">Trực tuyến:</span>
+            <strong className="text-[#005A36] font-black text-[11.5px]">12/12 xe buýt điện sẵn sàng</strong>
+          </div>
+
+          {/* Signal 2: Peak Frequency Schedule */}
+          <div className="hidden xl:flex items-center gap-1.5 rounded-full bg-white/60 backdrop-blur-xs px-2.5 py-0.5 text-xs border border-slate-200/60 shadow-2xs">
+            <Clock size={12} className="text-[#005A36]" />
+            <span className="text-slate-600 font-medium text-[11.5px]">Tần suất:</span>
+            <strong className="text-slate-900 font-extrabold text-[11.5px]">10 - 15p/chuyến</strong>
+          </div>
+
+          {/* Signal 3: Interactive Student Pass Campaign Ticker */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic.play('tap')
+              onOpenModal?.('student-pass')
+            }}
+            className="group flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-200/80 px-2.5 py-0.5 text-xs font-bold text-amber-900 transition-all cursor-pointer active:scale-95 shadow-2xs"
+            title="Bấm để đăng ký vé tháng HSSV"
+          >
+            <Sparkles size={11} className="text-amber-600 animate-pulse" />
+            <span className="text-[11.5px]">Vé tháng SV:</span>
+            <strong className="text-amber-700 font-black text-[11.5px] group-hover:underline">Trợ giá 50%</strong>
+          </button>
+        </div>
 
         {/* Right: Quick Links with Animated Underline Effect on Hover */}
         <div className="flex items-center gap-5">
