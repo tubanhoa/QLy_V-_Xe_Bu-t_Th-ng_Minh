@@ -3,3 +3,5 @@ allowBuilds:
   bcrypt: true
   esbuild: true
   sqlite3: true
+  '@firebase/util': true
+  protobufjs: true

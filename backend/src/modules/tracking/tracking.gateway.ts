@@ -52,6 +52,30 @@ export class TrackingGateway
         }
       }
     });
+
+    // Kết nối emitter sự cố
+    this.trackingService.setIncidentGatewayEmitter({
+      emitAlert: (tripId: string, payload: any) => this.emitIncidentAlert(tripId, payload),
+      emitResolved: (tripId: string, payload: any) => this.emitIncidentResolved(tripId, payload),
+    });
+  }
+
+  /**
+   * Phát sóng sự kiện cảnh báo sự cố (passenger:incident-alert)
+   */
+  emitIncidentAlert(tripId: string, payload: any) {
+    if (this.server) {
+      this.server.to(`trip:${tripId}`).emit('passenger:incident-alert', payload);
+    }
+  }
+
+  /**
+   * Phát sóng sự kiện giải tỏa sự cố (passenger:incident-resolved)
+   */
+  emitIncidentResolved(tripId: string, payload: any) {
+    if (this.server) {
+      this.server.to(`trip:${tripId}`).emit('passenger:incident-resolved', payload);
+    }
   }
 
   handleConnection(client: Socket) {

@@ -7,9 +7,11 @@ import {
   OnModuleDestroy,
   MessageEvent,
   Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Redis } from 'ioredis';
 import { Observable, interval, from, switchMap, startWith, map } from 'rxjs';
 
@@ -17,16 +19,29 @@ import { VehicleTrackingEntity } from '../../database/entities/vehicle-tracking.
 import { TripIncidentEntity } from '../../database/entities/trip-incident.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
 import { RouteStationEntity } from '../../database/entities/route-station.entity.js';
+import { BookingEntity } from '../../database/entities/booking.entity.js';
 import {
   UpdateLocationDto,
   GpsPingDto,
   ReportIncidentDto,
+  ResolveIncidentDto,
   StationEtaItem,
   LiveTrackingResponseDto,
 } from './dto/tracking.dto.js';
-import { IncidentSeverity } from '../../common/constants/status.constant.js';
+import {
+  IncidentSeverity,
+  TripStatus,
+  BookingStatus,
+} from '../../common/constants/status.constant.js';
 import { GpsFilterService } from './gps-filter.service.js';
 import { GeofencingService } from './geofencing.service.js';
+import { NotificationCenterService } from '../notification/notification-center.service.js';
+import { FcmService } from '../notification/fcm.service.js';
+
+export interface IncidentGatewayEmitter {
+  emitAlert: (tripId: string, payload: any) => void;
+  emitResolved: (tripId: string, payload: any) => void;
+}
 
 interface SimulatorState {
   interval: NodeJS.Timeout;
@@ -63,6 +78,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
   // Broadcast callback to WebSocket Gateway
   private broadcastCallback: BroadcastCallback | null = null;
+  private incidentGatewayEmitter: IncidentGatewayEmitter | null = null;
 
   public readonly gpsFilter: GpsFilterService;
   public readonly geofencing: GeofencingService;
@@ -76,8 +92,14 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     private readonly tripRepository: Repository<TripEntity>,
     @InjectRepository(RouteStationEntity)
     private readonly routeStationRepository: Repository<RouteStationEntity>,
+    @InjectRepository(BookingEntity)
+    private readonly bookingRepository: Repository<BookingEntity>,
     @Optional() gpsFilterService?: GpsFilterService,
     @Optional() geofencingService?: GeofencingService,
+    @Optional()
+    private readonly notificationCenterService?: NotificationCenterService,
+    @Optional()
+    private readonly fcmService?: FcmService,
   ) {
     this.gpsFilter = gpsFilterService || new GpsFilterService();
     this.geofencing = geofencingService || new GeofencingService();
@@ -141,6 +163,39 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    */
   public setBroadcastCallback(cb: BroadcastCallback) {
     this.broadcastCallback = cb;
+  }
+
+  /**
+   * Register WebSocket Gateway incident emitter
+   */
+  public setIncidentGatewayEmitter(emitter: IncidentGatewayEmitter) {
+    this.incidentGatewayEmitter = emitter;
+  }
+
+  /**
+   * Emit incident alert to WebSocket Gateway
+   */
+  public emitIncidentAlertToGateway(tripId: string, payload: any) {
+    if (this.incidentGatewayEmitter) {
+      try {
+        this.incidentGatewayEmitter.emitAlert(tripId, payload);
+      } catch (err: any) {
+        this.logger.warn(`Could not emit incident alert via callback: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Emit incident resolved to WebSocket Gateway
+   */
+  public emitIncidentResolvedToGateway(tripId: string, payload: any) {
+    if (this.incidentGatewayEmitter) {
+      try {
+        this.incidentGatewayEmitter.emitResolved(tripId, payload);
+      } catch (err: any) {
+        this.logger.warn(`Could not emit incident resolved via callback: ${err.message}`);
+      }
+    }
   }
 
   // ==========================================
@@ -791,15 +846,17 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ==========================================
-  // INCIDENT REPORTING
+  // INCIDENT REPORTING & RESOLUTION
   // ==========================================
 
   async reportIncident(dto: ReportIncidentDto, reportedBy: string) {
+    // 1. Kiểm tra tồn tại của chuyến xe trong CSDL Supabase
     const trip = await this.tripRepository.findOne({ where: { id: dto.tripId } });
     if (!trip) {
       throw new NotFoundException('Không tìm thấy chuyến xe');
     }
 
+    // 2. Tạo và lưu bản ghi TripIncidentEntity vào Supabase DB
     const incident = this.incidentRepository.create({
       tripId: dto.tripId,
       reportedBy,
@@ -808,11 +865,16 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       description: dto.description,
       delayMinutesEstimate: dto.delayMinutesEstimate,
       resolutionStatus: 'pending',
+      reportedAt: new Date(),
     });
 
-    const saved = await this.incidentRepository.save(incident);
+    const savedIncident = await this.incidentRepository.save(incident);
 
-    // Refresh ETA cache with new incident delay
+    // 3. Tự động chuyển đổi trạng thái chuyến xe sang 'delayed'
+    trip.status = TripStatus.DELAYED;
+    await this.tripRepository.save(trip);
+
+    // 4. Cập nhật cache thời gian trễ ETA cho các trạm tiếp theo
     try {
       const current = await this.cacheGet<any>(`tracking:trip:${dto.tripId}:current`);
       if (current) {
@@ -831,7 +893,203 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       // ignore
     }
 
-    return saved;
+    // 5. Lấy danh sách hành khách đã đặt vé/mua vé trên chuyến xe từ CSDL Supabase
+    const bookings = await this.bookingRepository.find({
+      where: {
+        tripId: dto.tripId,
+        status: In([BookingStatus.PAID, BookingStatus.CONFIRMED]),
+      },
+      select: { userId: true },
+    });
+    const passengerUserIds = Array.from(new Set(bookings.map((b) => b.userId).filter(Boolean)));
+
+    // 6. Phát sóng WebSocket tới phòng trip:${tripId} (passenger:incident-alert)
+    const alertPayload = {
+      tripId: dto.tripId,
+      incidentId: savedIncident.id,
+      incidentType: savedIncident.incidentType,
+      severity: savedIncident.severity,
+      delayMinutesEstimate: savedIncident.delayMinutesEstimate,
+      description: savedIncident.description,
+      tripStatus: trip.status,
+      reportedAt: savedIncident.reportedAt,
+    };
+    this.emitIncidentAlertToGateway(dto.tripId, alertPayload);
+
+    // 7. Lưu Notification Center & Bắn Firebase FCM Push Notification
+    const incidentTypeLabels: Record<string, string> = {
+      traffic_jam: 'kẹt xe',
+      breakdown: 'hỏng xe',
+      accident: 'tai nạn giao thông',
+      weather: 'thời tiết cực đoan',
+      delay: 'trễ chuyến xe',
+      other: 'sự cố kỹ thuật',
+    };
+    const typeLabel = incidentTypeLabels[savedIncident.incidentType] || savedIncident.incidentType;
+    const title = `⚠️ Cảnh báo: Chuyến xe gặp sự cố ${typeLabel}`;
+    const delayText = savedIncident.delayMinutesEstimate
+      ? ` Dự kiến trễ ${savedIncident.delayMinutesEstimate} phút.`
+      : '';
+    const body = `Chuyến xe của bạn bị ${typeLabel}.${delayText} Vui lòng theo dõi lộ trình xe trực tiếp.`;
+    const deepLink = `/trips/${dto.tripId}/live`;
+
+    for (const userId of passengerUserIds) {
+      if (this.notificationCenterService) {
+        try {
+          await this.notificationCenterService.saveNotification({
+            userId,
+            tripId: dto.tripId,
+            type: 'INCIDENT_ALERT',
+            title,
+            body,
+            deepLink,
+            data: {
+              tripId: dto.tripId,
+              incidentId: savedIncident.id,
+              incidentType: savedIncident.incidentType,
+              severity: savedIncident.severity,
+              delayMinutesEstimate: savedIncident.delayMinutesEstimate,
+              tripStatus: trip.status,
+            },
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not save incident alert notification for user ${userId}: ${err.message}`);
+        }
+      }
+
+      if (this.fcmService) {
+        try {
+          await this.fcmService.sendPushToUser(userId, title, body, {
+            tripId: dto.tripId,
+            incidentId: savedIncident.id,
+            type: 'INCIDENT_ALERT',
+            deepLink,
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not dispatch FCM alert for user ${userId}: ${err.message}`);
+        }
+      }
+    }
+
+    return savedIncident;
+  }
+
+  async resolveIncident(incidentId: string, resolvedBy: string, dto?: ResolveIncidentDto) {
+    // 1. Tìm sự cố trong Supabase trip_incidents theo ID
+    const incident = await this.incidentRepository.findOne({ where: { id: incidentId } });
+    if (!incident) {
+      throw new NotFoundException(`Không tìm thấy sự cố với ID: ${incidentId}`);
+    }
+
+    // 2. Cập nhật trạng thái sự cố đã giải quyết
+    incident.resolutionStatus = 'resolved';
+    incident.resolvedBy = resolvedBy;
+    incident.resolvedAt = new Date();
+    if (dto?.resolutionNotes) {
+      incident.description = incident.description
+        ? `${incident.description} [Đã khắc phục: ${dto.resolutionNotes}]`
+        : dto.resolutionNotes;
+    }
+
+    const savedIncident = await this.incidentRepository.save(incident);
+
+    // 3. Đếm số sự cố còn pending trên chuyến xe
+    const activePending = await this.incidentRepository.count({
+      where: { tripId: incident.tripId, resolutionStatus: 'pending' },
+    });
+
+    // 4. Nếu không còn sự cố nào pending -> Khôi phục trạng thái chuyến xe về 'in_progress'
+    const trip = await this.tripRepository.findOne({ where: { id: incident.tripId } });
+    let currentTripStatus: TripStatus = TripStatus.IN_PROGRESS;
+    if (activePending === 0 && trip) {
+      trip.status = TripStatus.IN_PROGRESS;
+      await this.tripRepository.save(trip);
+      currentTripStatus = trip.status;
+    } else if (trip) {
+      currentTripStatus = trip.status;
+    }
+
+    // 5. Phát sóng WebSocket tới phòng trip:${tripId} (passenger:incident-resolved)
+    const resolvedPayload = {
+      incidentId: savedIncident.id,
+      tripId: incident.tripId,
+      tripStatus: currentTripStatus,
+      resolutionNotes: dto?.resolutionNotes || null,
+      resolvedAt: savedIncident.resolvedAt,
+    };
+    this.emitIncidentResolvedToGateway(incident.tripId, resolvedPayload);
+
+    // 6. Lấy danh sách hành khách đã đặt vé/mua vé và gửi Push Notification
+    const bookings = await this.bookingRepository.find({
+      where: {
+        tripId: incident.tripId,
+        status: In([BookingStatus.PAID, BookingStatus.CONFIRMED]),
+      },
+      select: { userId: true },
+    });
+    const passengerUserIds = Array.from(new Set(bookings.map((b) => b.userId).filter(Boolean)));
+
+    const resolvedTitle = '✅ Sự cố đã giải tỏa: Xe buýt đang tiếp tục lộ trình bình thường';
+    const resolvedBody = dto?.resolutionNotes
+      ? `Sự cố trên chuyến xe đã được khắc phục (${dto.resolutionNotes}). Xe đang tiếp tục hành trình.`
+      : 'Sự cố trên chuyến xe đã giải tỏa: Xe buýt đang tiếp tục lộ trình bình thường.';
+    const deepLink = `/trips/${incident.tripId}/live`;
+
+    for (const userId of passengerUserIds) {
+      if (this.notificationCenterService) {
+        try {
+          await this.notificationCenterService.saveNotification({
+            userId,
+            tripId: incident.tripId,
+            type: 'INCIDENT_RESOLVED',
+            title: resolvedTitle,
+            body: resolvedBody,
+            deepLink,
+            data: {
+              tripId: incident.tripId,
+              incidentId: savedIncident.id,
+              tripStatus: currentTripStatus,
+            },
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not save incident resolved notification for user ${userId}: ${err.message}`);
+        }
+      }
+
+      if (this.fcmService) {
+        try {
+          await this.fcmService.sendPushToUser(userId, resolvedTitle, resolvedBody, {
+            tripId: incident.tripId,
+            incidentId: savedIncident.id,
+            type: 'INCIDENT_RESOLVED',
+            deepLink,
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not dispatch FCM resolved for user ${userId}: ${err.message}`);
+        }
+      }
+    }
+
+    // 7. Cập nhật lại cache thời gian trễ ETA
+    try {
+      const current = await this.cacheGet<any>(`tracking:trip:${incident.tripId}:current`);
+      if (current) {
+        const { stationEtas, alerts } = await this.calculateTripEta(
+          incident.tripId,
+          current.latitude,
+          current.longitude,
+          current.speedKmh,
+        );
+        await this.cacheSet(`tracking:trip:${incident.tripId}:eta`, stationEtas, 120);
+        if (this.broadcastCallback) {
+          this.broadcastCallback(incident.tripId, current, stationEtas, alerts);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return savedIncident;
   }
 
   async getTripIncidents(tripId: string) {

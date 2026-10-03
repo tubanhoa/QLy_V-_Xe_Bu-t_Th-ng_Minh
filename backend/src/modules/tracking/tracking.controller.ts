@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   UseGuards,
@@ -14,6 +15,7 @@ import { Observable } from 'rxjs';
 import { TrackingService } from './tracking.service.js';
 import {
   ReportIncidentDto,
+  ResolveIncidentDto,
   UpdateLocationDto,
   GpsPingDto,
   SimulatorControlDto,
@@ -111,6 +113,21 @@ export class TrackingController {
     @CurrentUser('id') reportedBy: string,
   ) {
     return this.trackingService.reportIncident(dto, reportedBy);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Patch('driver/incidents/:id/resolve')
+  @ApiOperation({
+    summary: 'Đóng/hủy sự cố khi chuyến xe trở lại bình thường và tự động khôi phục trạng thái chuyến xe về in_progress',
+  })
+  async resolveIncident(
+    @Param('id') incidentId: string,
+    @Body() dto: ResolveIncidentDto,
+    @CurrentUser('id') resolvedBy: string,
+  ) {
+    return this.trackingService.resolveIncident(incidentId, resolvedBy, dto);
   }
 
   @Public()
