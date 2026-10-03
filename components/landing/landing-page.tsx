@@ -129,8 +129,8 @@ export function LandingPage() {
         </div>
 
         {/* Left Quiet Zone: Soft pastel gradient fade creating high-focus tranquil area for greeting & search */}
-        <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/40 to-transparent lg:w-[48%]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-transparent to-white/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/65 via-white/35 to-transparent lg:w-[48%] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent pointer-events-none" />
 
         {/* Ambient Drifting Clouds in Sky - GPU Accelerated & Lightweight */}
         <div className="absolute top-2 left-0 w-[140%] h-36 opacity-20 blur-sm animate-cloud-1 pointer-events-none will-change-transform">

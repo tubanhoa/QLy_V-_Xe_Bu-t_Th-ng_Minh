@@ -255,6 +255,65 @@ div[class*="nextjs-toast"] {
   pointer-events: none;
 }
 
+/* Ultra-Clean Liquid Glassmorphism for Quick Access Dock (macOS & VisionOS Style) */
+.dock-glass-liquid {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(255, 255, 255, 0.60) 50%,
+    rgba(236, 253, 245, 0.75) 100%
+  );
+  backdrop-filter: blur(28px) saturate(200%) contrast(102%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) contrast(102%);
+  border-radius: 30px;
+  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 
+    0 24px 60px -12px rgba(0, 50, 30, 0.18),
+    0 12px 28px -6px rgba(0, 0, 0, 0.08),
+    inset 0 2px 2px 0 rgba(255, 255, 255, 1),
+    inset 0 -1.5px 2px 0 rgba(0, 90, 54, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.dock-glass-liquid::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 5%;
+  right: 5%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.95) 25%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(255, 255, 255, 0.95) 75%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* Individual Tile Glass within Quick Access Dock */
+.dock-tile-glass {
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 40, 20, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.dock-tile-glass:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(16, 185, 129, 0.6);
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 
+    0 16px 32px -6px rgba(0, 90, 54, 0.16),
+    0 6px 14px -2px rgba(0, 0, 0, 0.06),
+    inset 0 1.5px 0 rgba(255, 255, 255, 1);
+}
+
 /* Glassmorphism for Hero Overlays */
 .hero-glass-card {
   background: rgba(255, 255, 255, 0.78);
