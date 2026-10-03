@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowRight,
+  Building2,
   Bus,
   Calendar,
   Check,
@@ -13,12 +14,14 @@ import {
   Clock,
   Compass,
   CreditCard,
+  ExternalLink,
   FileText,
   GraduationCap,
   Loader2,
   LogIn,
   MapPin,
   Megaphone,
+  PhoneCall,
   QrCode,
   Radio,
   ReceiptText,
@@ -30,6 +33,7 @@ import {
   Ticket,
   Upload,
   User,
+  UserCheck,
   X,
   Zap,
 } from 'lucide-react'
@@ -44,7 +48,7 @@ import { VrStationTourModal } from '@/components/modal/vr-station-tour-modal'
 import { haptic } from '@/lib/utils/haptics'
 
 interface QuickAccessModalsProps {
-  activeModal: 'routes' | 'news' | 'student-pass' | 'lookup' | null
+  activeModal: 'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner' | null
   onClose: () => void
   onBookSeat?: (route?: BusRoute) => void
 }
@@ -122,7 +126,7 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
       <div
         className={cn(
           "relative w-full max-h-[88vh] overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 flex flex-col will-change-transform",
-          activeModal === 'lookup' || activeModal === 'student-pass' ? 'max-w-3xl' : 'max-w-xl'
+          activeModal === 'lookup' || activeModal === 'student-pass' || activeModal === 'staff' || activeModal === 'partner' ? 'max-w-3xl' : 'max-w-xl'
         )}
       >
         {/* Modal Header */}
@@ -133,6 +137,8 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
               {activeModal === 'news' && <Megaphone size={20} />}
               {activeModal === 'student-pass' && <GraduationCap size={20} />}
               {activeModal === 'lookup' && <Ticket size={20} />}
+              {activeModal === 'staff' && <UserCheck size={20} />}
+              {activeModal === 'partner' && <Building2 size={20} />}
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
@@ -140,6 +146,8 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
                 {activeModal === 'news' && 'Tin Tức & Lịch Xuất Bến Hôm Nay'}
                 {activeModal === 'student-pass' && 'Đăng Ký Vé Tháng HSSV Giảm 50%'}
                 {activeModal === 'lookup' && (isAuthenticated ? 'Ví Vé Của Tôi & Thẻ Sinh Viên' : 'Tra Cứu Vé & Ưu Đãi')}
+                {activeModal === 'staff' && 'Cổng Dịch Vụ Cán Bộ & Giảng Viên ICTU'}
+                {activeModal === 'partner' && 'Dịch Vụ Khách Tham Quan & Doanh Nghiệp Đối Tác'}
               </h3>
               <p className="text-[11px] sm:text-xs text-slate-500 font-medium">Hệ Thống Xe Buýt Thông Minh ICTU Transit</p>
             </div>
@@ -536,6 +544,204 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Modal 5: Cán Bộ & Giảng Viên ICTU */}
+          {activeModal === 'staff' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-emerald-50/70 border border-emerald-200/80 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-11 rounded-2xl bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <UserCheck size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-[#005A36]">Chế Độ Di Chuyển Ưu Đãi Cán Bộ & Giảng Viên</h4>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Trường ĐH Công nghệ Thông tin & Truyền thông tài trợ 100% chi phí xe buýt điện cho giảng viên và cán bộ nhân viên công tác.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dịch vụ 1: Tuyến Shuttle Giảng Viên */}
+              <div className="rounded-2xl border border-slate-200 p-4 space-y-3 hover:border-emerald-300 transition-all bg-white shadow-2xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-black text-xs shrink-0">
+                      CB-01
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 block">Tuyến Đưa Đón Giảng Viên & CB-CNV Cơ Hữu</span>
+                      <span className="text-[11px] text-slate-500 block">Lộ trình: TT Thành phố Thái Nguyên ↔ ĐH Thái Nguyên ↔ Trụ sở ICTU</span>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 shrink-0">
+                    Xe công vụ 28 chỗ
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-slate-500 font-medium block text-[11px]">Giờ xuất bến Buổi Sáng:</span>
+                    <strong className="text-slate-800 font-bold block mt-0.5">06:45 & 07:15 (Đúng giờ lên lớp)</strong>
+                  </div>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-slate-500 font-medium block text-[11px]">Giờ xuất bến Buổi Chiều:</span>
+                    <strong className="text-slate-800 font-bold block mt-0.5">16:45 & 17:30 (Tan ca làm việc)</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      onBookSeat?.()
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#004529] active:scale-95 transition-all shadow-xs cursor-pointer"
+                  >
+                    <Bus size={14} />
+                    <span>Xem sơ đồ ghế & Điểm đón</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Dịch vụ 2: Cấp & Đổi Thẻ Xe Buýt Cán Bộ */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 p-4 space-y-2 bg-white shadow-2xs">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <ShieldCheck size={16} className="text-[#005A36]" />
+                    <span>Tích Hợp Thẻ Cán Bộ Điện Tử</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Quẹt thẻ cán bộ hoặc mã QR định danh tại máy đọc vé trên xe buýt, không cần nạp tiền hay mua vé lượt.
+                  </p>
+                  <a
+                    href="tel:19006899"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#005A36] hover:underline pt-1"
+                  >
+                    <PhoneCall size={12} />
+                    <span>Hỗ trợ cấp lại thẻ: 1900 6899 (Phím 2)</span>
+                  </a>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4 space-y-2 bg-white shadow-2xs">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Clock size={16} className="text-[#005A36]" />
+                    <span>Đón Chuyên Gia & Đoàn Công Tác</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Đăng ký xe đón hội đồng chấm luận án, giảng viên thỉnh giảng từ sân bay Nội Bài hoặc bến xe trung tâm.
+                  </p>
+                  <a
+                    href="mailto:dieuphoi@ictu.edu.vn"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#005A36] hover:underline pt-1"
+                  >
+                    <span>Gửi yêu cầu tới Phòng Hành chính ➔</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 6: Khách & Doanh Nghiệp Đối Tác */}
+          {activeModal === 'partner' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-teal-50/70 border border-teal-200/80 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-11 rounded-2xl bg-teal-800 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Building2 size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-teal-900">Dịch Vụ Khách Tham Quan & Doanh Nghiệp Đối Tác</h4>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Kết nối trải nghiệm giao thông thông minh xanh, tham quan khuôn viên số ICTU và dịch vụ xe buýt hợp đồng sự kiện.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dịch vụ 1: Khám phá Campus & Tour 360 */}
+              <div className="rounded-2xl border border-slate-200 p-4 space-y-3 bg-white shadow-2xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-xl bg-emerald-100 text-[#005A36] flex items-center justify-center font-black text-xs shrink-0">
+                      360°
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-slate-900 block">Tham Quan Khuôn Viên & Trải Nghiệm Xe Buýt Điện</span>
+                      <span className="text-[11px] text-slate-500 block">Dành cho đoàn học sinh THPT, phụ huynh, cựu sinh viên & khách tham quan</span>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-[10px] font-black text-teal-800 shrink-0">
+                    Trải nghiệm mở
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600">
+                  Hành khách vãng lai và đoàn tham quan có thể mua vé lượt trực quan 28 chỗ hoặc trải nghiệm trước trạm dừng bằng công nghệ thực tế ảo 360 VR.
+                </p>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVrStationTarget('Trạm Cổng Chính ĐH CNTT & TT Thái Nguyên (ICTU)')
+                      setIsVrModalOpen(true)
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#005A36] text-[#005A36] text-xs font-bold hover:bg-[#005A36]/10 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Compass size={14} />
+                    <span>Mở Tour 360 VR Trạm Xe</span>
+                  </button>
+                  <a
+                    href="https://thamquan.ictu.edu.vn/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#005A36] text-white text-xs font-bold hover:bg-[#004529] active:scale-95 transition-all shadow-xs cursor-pointer"
+                  >
+                    <span>Cổng tham quan ICTU</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              </div>
+
+              {/* Dịch vụ 2: Hợp đồng thuê xe sự kiện & Tài trợ quảng cáo xanh */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 p-4 space-y-2 bg-white shadow-2xs">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Ticket size={16} className="text-[#005A36]" />
+                    <span>Thuê Xe Sự Kiện & Hội Thảo</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Đội xe buýt điện 28 chỗ đón trả đoàn khách tham gia hội nghị, ngày hội việc làm, gala giao lưu doanh nghiệp.
+                  </p>
+                  <a
+                    href="tel:19006899"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#005A36] hover:underline pt-1"
+                  >
+                    <PhoneCall size={12} />
+                    <span>Báo giá thuê chuyến: 1900 6899 (Phím 3)</span>
+                  </a>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4 space-y-2 bg-white shadow-2xs">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                    <Sparkles size={16} className="text-[#005A36]" />
+                    <span>Hợp Tác Truyền Thông & Quảng Cáo</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Quảng bá thương hiệu nhà tuyển dụng trên thân xe buýt điện và màn hình thông minh tiếp cận 15.000+ sinh viên.
+                  </p>
+                  <a
+                    href="mailto:hoptacdoanhnghiep@ictu.edu.vn"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#005A36] hover:underline pt-1"
+                  >
+                    <span>Gửi hồ sơ tài trợ ➔</span>
+                  </a>
+                </div>
+              </div>
             </div>
           )}
         </div>

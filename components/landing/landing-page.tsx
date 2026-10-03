@@ -31,7 +31,7 @@ export function LandingPage() {
   const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
-  const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
+  const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
   const [pendingTrip, setPendingTrip] = useState<TripSearchResult | null>(null)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
