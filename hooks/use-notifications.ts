@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { notificationService } from '@/lib/services/notification.service'
+import { authService } from '@/lib/services/auth.service'
 import { haptic } from '@/lib/utils/haptics'
 import type {
   NotificationItem,
@@ -45,6 +46,7 @@ export function useNotifications(): UseNotificationsReturn {
   const fetchNotifications = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true)
     try {
+      const user = authService.getUser()
       const [resList, prefs] = await Promise.all([
         notificationService.getNotifications(1, 20),
         notificationService.getPreferences(),
@@ -53,8 +55,17 @@ export function useNotifications(): UseNotificationsReturn {
       if (!isMounted.current) return
 
       if (resList.success && resList.data) {
-        setNotifications(resList.data.notifications)
-        setUnreadCount(resList.data.unreadCount)
+        // Nếu là khách (chưa đăng nhập), chỉ hiển thị thông báo chung và đặt unreadCount = 0
+        if (!user) {
+          const publicOnly = resList.data.notifications.filter(
+            (n) => n.type === 'PROMOTION' || n.type === 'SYSTEM',
+          )
+          setNotifications(publicOnly)
+          setUnreadCount(0)
+        } else {
+          setNotifications(resList.data.notifications)
+          setUnreadCount(resList.data.unreadCount)
+        }
       }
       setPreferences(prefs)
     } finally {
@@ -202,6 +213,11 @@ export function useNotifications(): UseNotificationsReturn {
 
     // Polling định kỳ mỗi 20s cập nhật unread count trong background
     const interval = setInterval(() => {
+      const user = authService.getUser()
+      if (!user) {
+        if (isMounted.current) setUnreadCount(0)
+        return
+      }
       notificationService.getUnreadCount().then((count) => {
         if (isMounted.current) {
           setUnreadCount(count)

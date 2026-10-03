@@ -105,12 +105,12 @@ export function MainHeader({
                   <p className="mt-1 text-xs font-medium text-slate-600">Lộ trình CT-01, CT-02 & các trạm đón theo thời gian thực</p>
                 </button>
                 <div className="border-t border-slate-100 my-1 pt-1">
-                  <a href="#routes" className="block rounded-xl p-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700">
+                  <Link href="/thong-tin-dich-vu#routes" className="block rounded-xl p-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700">
                     Tuyến CT-01 Nội Thành (KTX ICTU ➔ Bến xe)
-                  </a>
-                  <a href="#routes" className="block rounded-xl p-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700">
+                  </Link>
+                  <Link href="/thong-tin-dich-vu#routes" className="block rounded-xl p-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700">
                     Tuyến CT-02 Campus Loop (Liên trường ĐH)
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -201,31 +201,34 @@ export function MainHeader({
             </button>
             <div className="invisible absolute left-0 top-full pt-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100">
               <div className="w-80 rounded-2xl border border-white/80 bg-white/95 p-2.5 shadow-2xl shadow-slate-900/15 backdrop-blur-md">
-                <a href="#footer" className="block rounded-xl p-3 hover:bg-emerald-50 transition-colors">
+                <Link href="/thong-tin-dich-vu#contact" className="block rounded-xl p-3 hover:bg-emerald-50 transition-colors">
                   <span className="block text-sm font-black text-slate-900">Hotline hỗ trợ 24/7</span>
                   <p className="mt-1 text-xs font-medium text-slate-600">Giải đáp thắc mắc lộ trình, sự cố bỏ quên đồ</p>
-                </a>
-                <a href="#solutions" className="block rounded-xl p-3 hover:bg-emerald-50 transition-colors">
+                </Link>
+                <Link href="/thong-tin-dich-vu#geofencing" className="block rounded-xl p-3 hover:bg-emerald-50 transition-colors">
                   <span className="block text-sm font-black text-slate-900">Hệ thống trạm dừng</span>
                   <p className="mt-1 text-xs font-medium text-slate-600">Bản đồ điểm đón trả khách xung quanh trường</p>
-                </a>
+                </Link>
               </div>
             </div>
           </div>
 
           {/* Non-dropdown: Giao dịch an toàn */}
-          <a
-            href="#safety"
+          <Link
+            href="/thong-tin-dich-vu#safety"
             className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 visited:text-slate-900 transition-colors hover:text-[#005A36] hover:bg-white/40"
           >
             Giao dịch an toàn
-          </a>
+          </Link>
 
-          {/* Insurance / Certification - Transparent outline badge */}
-          <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3 py-1 text-xs font-bold text-[#005A36] transition-colors hover:bg-[#005A36]/10">
+          {/* Insurance / Certification - Transparent outline badge linking to policy */}
+          <Link
+            href="/thong-tin-dich-vu#insurance"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3 py-1 text-xs font-bold text-[#005A36] transition-colors hover:bg-[#005A36]/10"
+          >
             <ShieldCheck size={14} strokeWidth={2.2} className="text-[#005A36]" />
             Bảo hiểm hành khách
-          </span>
+          </Link>
         </nav>
 
         {/* Right CTA - Dynamic auth state */}
@@ -508,9 +511,9 @@ export function MainHeader({
               >
                 Tin tức & Lịch chạy hôm nay
               </button>
-              <a href="#footer" onClick={() => setOpen(false)} className="py-3">
+              <Link href="/thong-tin-dich-vu#contact" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
                 Liên hệ hỗ trợ 24/7
-              </a>
+              </Link>
             </div>
           </div>
         </div>

@@ -2,65 +2,90 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { PhoneCall, ShieldCheck } from 'lucide-react'
+import { Building2, GraduationCap, PhoneCall, ShieldCheck, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACT } from '@/lib/landing-data'
+import { haptic } from '@/lib/utils/haptics'
+import { useAuth } from '@/lib/auth-context'
+
+interface TopUtilityBarProps {
+  onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner') => void
+}
 
 const AUDIENCES = [
-  { id: 'personal', label: 'Cá nhân (HSSV & Cán bộ)' },
-  { id: 'business', label: 'Tổ chức & Doanh nghiệp' },
-  { id: 'priority', label: 'Khách hàng Ưu tiên' },
+  { id: 'student', label: 'Sinh viên (HSSV)', icon: GraduationCap, modal: 'student-pass' as const },
+  { id: 'staff', label: 'Cán bộ & Giảng viên', icon: UserCheck, modal: 'staff' as const },
+  { id: 'partner', label: 'Khách & Đối tác', icon: Building2, modal: 'partner' as const },
 ]
 
-export function TopUtilityBar() {
+export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
+  const { isAuthenticated, role } = useAuth()
+  const isStaffOrAdmin = isAuthenticated && (role === 'admin' || role === 'dispatcher' || role === 'manager' || role === 'driver')
+
   const [audience, setAudience] = useState(AUDIENCES[0].id)
   const [lang, setLang] = useState<'VI' | 'EN'>('VI')
 
   return (
     <div className="hidden border-b border-black/5 bg-transparent text-[13px] text-slate-800 lg:block">
       <div className="mx-auto flex h-10 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Left: Tab Switcher with floating white pill active state */}
+        {/* Left: Tab Switcher with Apple Segmented Pill Design */}
         <nav aria-label="Phân loại hành khách" className="flex items-center gap-1 py-1">
-          {AUDIENCES.map((a) => {
-            const active = a.id === audience
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setAudience(a.id)}
-                aria-pressed={active}
-                className={cn(
-                  'rounded-full px-4 py-1 text-xs transition-all duration-200',
-                  active
-                    ? 'bg-white/90 backdrop-blur-md font-extrabold text-[#005A36] shadow-sm ring-1 ring-black/10'
-                    : 'font-bold text-slate-700 hover:text-[#005A36]',
-                )}
-              >
-                {a.label}
-              </button>
-            )
-          })}
+          <div className="inline-flex items-center p-0.5 rounded-full bg-slate-200/50 backdrop-blur-md border border-slate-300/40 shadow-inner-xs">
+            {AUDIENCES.map((a) => {
+              const active = a.id === audience
+              const Icon = a.icon
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    setAudience(a.id)
+                    haptic.play('select')
+                    onOpenModal?.(a.modal)
+                  }}
+                  aria-pressed={active}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-all duration-200 whitespace-nowrap cursor-pointer touch-press touch-manipulation',
+                    active
+                      ? 'bg-white text-[#005A36] font-black shadow-xs ring-1 ring-black/5 scale-[1.02]'
+                      : 'font-bold text-slate-600 hover:text-slate-900 hover:bg-white/40',
+                  )}
+                >
+                  <Icon size={12} className={active ? 'text-[#005A36]' : 'text-slate-400'} />
+                  <span>{a.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </nav>
 
         {/* Right: Quick Links with Animated Underline Effect on Hover */}
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
-            <a href="#about" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            <Link href="/thong-tin-dich-vu#about" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
               Về ICTU Transit
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#news" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            </Link>
+            <button
+              type="button"
+              onClick={() => onOpenModal?.('news')}
+              className="group relative py-1 text-slate-700 transition-colors hover:text-[#005A36] cursor-pointer"
+            >
               Tin tức
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#routes" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenModal?.('routes')}
+              className="group relative py-1 text-slate-700 transition-colors hover:text-[#005A36] cursor-pointer"
+            >
               Mạng lưới tuyến
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
-            <a href="#careers" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
-              Tuyển dụng
+            </button>
+            <Link href="/thong-tin-dich-vu#faq" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
+              Hỏi đáp & Hướng dẫn
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />
-            </a>
+            </Link>
           </div>
 
           <span className="h-3 w-px bg-slate-300/80" aria-hidden="true" />
@@ -106,14 +131,21 @@ export function TopUtilityBar() {
             ))}
           </div>
 
-          {/* Admin Portal Shortcut with transparent outline */}
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3.5 py-1 text-xs font-extrabold text-[#005A36] shadow-xs transition-all hover:bg-[#005A36]/10 hover:border-[#005A36] active:scale-95"
-          >
-            <ShieldCheck size={13} strokeWidth={2.2} className="text-[#005A36]" aria-hidden="true" />
-            Cổng Điều Hành
-          </Link>
+          {/* Admin / Dispatcher Quick Return Button: ONLY VISIBLE when Admin/Staff is logged in */}
+          {isStaffOrAdmin && (
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#005A36] bg-[#005A36] px-3.5 py-1 text-xs font-black text-white shadow-xs transition-all hover:bg-[#00472b] hover:shadow-sm active:scale-95 animate-in fade-in duration-300"
+              title="Quay lại Bảng điều khiển quản trị"
+            >
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-200" />
+              </span>
+              <ShieldCheck size={13} strokeWidth={2.4} className="text-emerald-200" aria-hidden="true" />
+              <span>Về Cổng Điều Hành</span>
+            </Link>
+          )}
         </div>
       </div>
     </div>

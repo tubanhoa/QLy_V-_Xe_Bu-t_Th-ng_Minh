@@ -2,16 +2,16 @@
 
 import {
   CalendarCheck,
+  Compass,
   GraduationCap,
   Megaphone,
   QrCode,
-  Route,
   Search,
   Sparkles,
-  Star,
   Ticket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { haptic } from '@/lib/utils/haptics'
 
 interface QuickAccessBarProps {
   onOpenSeatPicker: () => void
@@ -23,37 +23,47 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
   const items = [
     {
       id: 'suggest',
-      icon: Star,
+      icon: Compass,
       label: 'Gợi ý tuyến xe',
-      badge: 'Gợi ý',
+      sublabel: 'Lộ trình tối ưu',
+      badge: 'Đề xuất',
+      badgeColor: 'bg-emerald-600 text-white',
       onClick: () => onOpenModal('routes'),
     },
     {
       id: 'news',
       icon: Megaphone,
       label: 'Tin tức & Lịch xe',
+      sublabel: 'Cập nhật thời gian thực',
       badge: null,
+      badgeColor: '',
       onClick: () => onOpenModal('news'),
     },
     {
       id: 'student-pass',
       icon: GraduationCap,
       label: 'Đăng ký vé tháng',
-      badge: 'Giảm 50%',
+      sublabel: 'Trợ giá sinh viên',
+      badge: '-50% HSSV',
+      badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/20',
       onClick: () => onOpenModal('student-pass'),
     },
     {
       id: 'buy-ticket',
       icon: Ticket,
       label: 'Mua vé lượt 28 chỗ',
+      sublabel: 'Sơ đồ trực quan',
       badge: 'Trực quan',
+      badgeColor: 'bg-[#005A36] text-white',
       onClick: onOpenSeatPicker,
     },
     {
       id: 'tracking',
-      icon: Search,
+      icon: QrCode,
       label: 'Tra cứu & Vé đã mua',
+      sublabel: 'Quản lý vé & QR Code',
       badge: null,
+      badgeColor: '',
       onClick: () => {
         if (onOpenTicketModal) {
           onOpenTicketModal()
@@ -65,36 +75,52 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
   ]
 
   return (
-    <section aria-label="Thanh truy cập nhanh" className="relative z-20 shrink-0 px-4 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none">
+    <section
+      aria-label="Thanh truy cập nhanh"
+      className="hidden md:block relative z-20 shrink-0 px-4 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none"
+    >
       <div className="mx-auto max-w-5xl">
-        {/* User's Exact Glassmorphism Specification Container */}
-        <div className="animate-hero-4 glass-card !w-auto !h-auto !rounded-[24px] sm:!rounded-[30px] p-2 sm:p-2.5 shadow-sm">
-          <div className="flex sm:grid sm:grid-cols-5 gap-1.5 sm:gap-3 items-center overflow-x-auto no-scrollbar scroll-touch snap-x py-0.5">
+        {/* Apple VisionOS & macOS Liquid Glassmorphism Dock */}
+        <div className="animate-hero-4 dock-glass-liquid p-2.5 sm:p-3 shadow-2xl">
+          <div className="grid grid-cols-5 gap-2.5 lg:gap-3.5 items-stretch">
             {items.map((item) => {
               const Icon = item.icon
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={item.onClick}
-                  className="group relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl py-2 px-1 text-center transition-all duration-200 hover:bg-white/30 hover:-translate-y-0.5 touch-press min-w-[68px] sm:min-w-0 flex-1 shrink-0 snap-center cursor-pointer"
+                  onClick={() => {
+                    haptic.play('tap')
+                    item.onClick()
+                  }}
+                  className="group relative flex flex-col items-center justify-between rounded-2xl py-2.5 px-2 text-center dock-tile-glass cursor-pointer touch-press touch-manipulation min-h-[96px]"
                 >
-                  {/* Standardized Floating Pill Badge with Micro-pulse */}
+                  {/* Floating Pill Badge with Micro Glow */}
                   {item.badge && (
-                    <span className="absolute -top-2 rounded-full bg-[#005A36] px-2 py-0.5 text-[8.5px] sm:text-[9px] font-black text-white shadow-xs ring-1 ring-white/90">
+                    <span
+                      className={cn(
+                        'absolute -top-2.5 z-10 rounded-full px-2.5 py-0.5 text-[9px] font-black tracking-tight shadow-md ring-1 ring-white/95 transition-transform duration-200 group-hover:scale-105',
+                        item.badgeColor,
+                      )}
+                    >
                       {item.badge}
                     </span>
                   )}
 
-                  {/* Standardized Icon Circle: 10% primary background + primary icon */}
-                  <div className="flex size-10 sm:size-12 items-center justify-center rounded-2xl bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 backdrop-blur-sm transition-all duration-300 group-hover:bg-[#005A36] group-hover:text-white group-hover:scale-105 group-hover:shadow-md shadow-xs">
-                    <Icon size={19} strokeWidth={2.2} />
+                  {/* Icon Staging Container: Subtle Gradient Frosted Pill */}
+                  <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-b from-white/90 to-emerald-50/70 text-[#005A36] border border-emerald-200/50 shadow-xs transition-all duration-300 group-hover:bg-[#005A36] group-hover:text-white group-hover:scale-110 group-hover:shadow-md group-hover:shadow-[#005A36]/25 mt-0.5">
+                    <Icon size={20} strokeWidth={2.3} className="transition-transform duration-300 group-hover:scale-105" />
                   </div>
 
-                  {/* High Contrast Crystal Clear Label with Line Clamp */}
-                  <span className="mt-1 sm:mt-1.5 text-[10.5px] sm:text-[13px] font-extrabold text-slate-900 group-hover:text-[#005A36] transition-colors line-clamp-2 max-w-full drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)] leading-tight">
-                    {item.label}
-                  </span>
+                  {/* Clean Typography Hierarchy: No blurry text shadows */}
+                  <div className="w-full mt-1.5 flex flex-col items-center">
+                    <span className="text-[12.5px] font-black text-slate-800 group-hover:text-[#005A36] transition-colors line-clamp-1 leading-tight tracking-tight">
+                      {item.label}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-700 mt-0.5 line-clamp-1 group-hover:text-slate-900 transition-colors">
+                      {item.sublabel}
+                    </span>
+                  </div>
                 </button>
               )
             })}
@@ -104,3 +130,4 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
     </section>
   )
 }
+

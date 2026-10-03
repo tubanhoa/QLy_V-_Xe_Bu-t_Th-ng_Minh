@@ -1,4 +1,5 @@
-import { QrCode, Radio, Zap, type LucideIcon } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Home, QrCode, Radio, Zap, type LucideIcon } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { TransitRoutesBackdrop } from './transit-routes-backdrop'
 
@@ -31,12 +32,18 @@ export function LoginShowcase() {
         className="pointer-events-none absolute -bottom-40 right-0 size-[32rem] rounded-full bg-teal-400/10 blur-3xl"
       />
 
-      <div className="relative flex items-center gap-3">
-        <BrandMark size="md" />
-        <div className="leading-tight">
-          <p className="text-sm font-bold tracking-wide">ICTU TRANSIT</p>
-          <p className="text-xs text-white/50">Smart Bus Ticketing System</p>
-        </div>
+      <div className="relative flex items-center justify-between">
+        <Link
+          href="/"
+          className="group flex items-center gap-3 transition-opacity hover:opacity-90"
+          title="ICTU Transit"
+        >
+          <BrandMark size="md" />
+          <div className="leading-tight">
+            <p className="text-sm font-bold tracking-wide">ICTU TRANSIT</p>
+            <p className="text-xs text-white/50">Smart Bus Ticketing System</p>
+          </div>
+        </Link>
       </div>
 
       <div className="relative max-w-xl">

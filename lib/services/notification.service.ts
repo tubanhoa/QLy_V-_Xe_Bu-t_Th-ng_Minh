@@ -27,55 +27,21 @@ const API_BASE_URL =
 const NOTIFICATIONS_CACHE_KEY = 'ictu_notifications_cache_v1'
 const PREFERENCES_CACHE_KEY = 'ictu_notification_preferences_v1'
 
-// Mock notifications ban đầu cho mục đích kiểm thử UI/UX khi chưa có dữ liệu từ backend
-const INITIAL_SEED_NOTIFICATIONS: NotificationItem[] = [
+// Thông báo chung toàn hệ thống dành cho khách (chỉ bao gồm tin tức/khuyến mãi công khai, KHÔNG bao gồm vé cá nhân hay đón xe)
+const GUEST_PUBLIC_ANNOUNCEMENTS: NotificationItem[] = [
   {
-    id: 'seed-notif-1',
-    userId: 'guest',
-    type: 'STATION_APPROACHING_PICKUP',
-    title: 'Xe buýt sắp đến điểm đón!',
-    body: 'Tuyến 01 (Xe 29B-123.45) đang cách Trạm ĐH CNTT & TT Thái Nguyên (ICTU) khoảng 450m (~3 phút). Quý khách vui lòng chuẩn bị sẵn sàng!',
-    data: {
-      tripId: 'trip_demo_01',
-      stationId: 'st_ictu_01',
-      stationName: 'Trạm ĐH CNTT & TT Thái Nguyên (ICTU)',
-      distanceMeters: 450,
-      etaMinutes: 3,
-      deepLink: '/tracking/trip_demo_01?pickup=st_ictu_01',
-      vehiclePlate: '29B-123.45',
-      routeCode: 'CT-01',
-    },
-    isRead: false,
-    deliveryStatus: 'SENT',
-    createdAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'seed-notif-2',
-    userId: 'guest',
-    type: 'TICKET_BOOKED',
-    title: 'Đặt vé thành công - ICTU-TK-98821',
-    body: 'Vé điện tử Tuyến 01 ĐH CNTT & TT ⇄ Bến xe TT đã được cấp mã QR HMAC-SHA256 hợp lệ. Chúc quý khách một hành trình an toàn!',
-    data: {
-      bookingCode: 'ICTU-BK-98821',
-      deepLink: '/?openTickets=true',
-    },
-    isRead: false,
-    deliveryStatus: 'SENT',
-    createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'seed-notif-3',
+    id: 'system-promo-1',
     userId: 'guest',
     type: 'PROMOTION',
-    title: 'Ưu đãi sinh viên ICTU giảm 50%',
-    body: 'Vé tháng sinh viên ICTU tuyến CT-01 & CT-02 đang được trợ giá 50%. Hãy đăng ký trực tuyến ngay hôm nay!',
+    title: 'Chính sách ưu đãi học sinh - sinh viên ICTU giảm 50%',
+    body: 'Sinh viên Trường ĐH Công nghệ Thông tin & Truyền thông được hỗ trợ 50% giá vé tháng trên toàn mạng lưới xe buýt CT-01 và CT-02.',
     data: {
       deepLink: '/?openMonthlyPass=true',
     },
-    isRead: true,
-    readAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    isRead: true, // Mặc định đã đọc để khách không bị hiển thị huy hiệu báo đỏ sai lệch
+    readAt: new Date().toISOString(),
     deliveryStatus: 'SENT',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date().toISOString(),
   },
 ]
 
@@ -99,17 +65,43 @@ class NotificationService {
   }
 
   private getLocalCache(userId: string): NotificationItem[] {
-    if (typeof window === 'undefined') return INITIAL_SEED_NOTIFICATIONS
+    if (typeof window === 'undefined') {
+      return userId === 'guest' ? GUEST_PUBLIC_ANNOUNCEMENTS : []
+    }
     try {
-      const raw = localStorage.getItem(`${NOTIFICATIONS_CACHE_KEY}_${userId}`)
+      // Tự động dọn dẹp các thông báo giả lập cũ còn sót trong localStorage của khách
+      const cacheKey = `${NOTIFICATIONS_CACHE_KEY}_${userId}`
+      const raw = localStorage.getItem(cacheKey)
+
       if (raw) {
-        return JSON.parse(raw)
+        const parsed: NotificationItem[] = JSON.parse(raw)
+        // Nếu là khách, tuyệt đối loại bỏ các thông báo cá nhân như TICKET_BOOKED hoặc STATION_APPROACHING
+        if (userId === 'guest') {
+          const cleaned = parsed.filter(
+            (n) =>
+              (n.type === 'PROMOTION' || n.type === 'SYSTEM') &&
+              !n.id.startsWith('seed-notif-1') &&
+              !n.id.startsWith('seed-notif-2') &&
+              !n.title.includes('ICTU-TK-98821'),
+          )
+          if (cleaned.length === 0) {
+            localStorage.setItem(cacheKey, JSON.stringify(GUEST_PUBLIC_ANNOUNCEMENTS))
+            return GUEST_PUBLIC_ANNOUNCEMENTS
+          }
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(cacheKey, JSON.stringify(cleaned))
+          }
+          return cleaned
+        }
+        return parsed
       }
-      // Khởi tạo seed ban đầu nếu chưa có cache
-      localStorage.setItem(`${NOTIFICATIONS_CACHE_KEY}_${userId}`, JSON.stringify(INITIAL_SEED_NOTIFICATIONS))
-      return INITIAL_SEED_NOTIFICATIONS
+
+      // Khởi tạo ban đầu
+      const initialItems = userId === 'guest' ? GUEST_PUBLIC_ANNOUNCEMENTS : []
+      localStorage.setItem(cacheKey, JSON.stringify(initialItems))
+      return initialItems
     } catch {
-      return INITIAL_SEED_NOTIFICATIONS
+      return userId === 'guest' ? GUEST_PUBLIC_ANNOUNCEMENTS : []
     }
   }
 

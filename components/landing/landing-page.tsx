@@ -31,7 +31,7 @@ export function LandingPage() {
   const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
-  const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | null>(null)
+  const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner' | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null)
   const [pendingTrip, setPendingTrip] = useState<TripSearchResult | null>(null)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
@@ -129,8 +129,8 @@ export function LandingPage() {
         </div>
 
         {/* Left Quiet Zone: Soft pastel gradient fade creating high-focus tranquil area for greeting & search */}
-        <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/40 to-transparent lg:w-[48%]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-transparent to-white/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/65 via-white/35 to-transparent lg:w-[48%] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent pointer-events-none" />
 
         {/* Ambient Drifting Clouds in Sky - GPU Accelerated & Lightweight */}
         <div className="absolute top-2 left-0 w-[140%] h-36 opacity-20 blur-sm animate-cloud-1 pointer-events-none will-change-transform">
@@ -160,7 +160,17 @@ export function LandingPage() {
 
       {/* 2-Tier Header with Transparent Background */}
       <div className="relative shrink-0 z-30">
-        <TopUtilityBar />
+        <TopUtilityBar
+          onOpenModal={(modal) => {
+            if (modal === 'lookup') {
+              setIsTicketModalOpen(true)
+            } else if (modal === 'student-pass') {
+              setIsMonthlyPassModalOpen(true)
+            } else {
+              setActiveModal(modal)
+            }
+          }}
+        />
         <MainHeader
           onOpenSeatPicker={() => setIsTripSearchOpen(true)}
           onOpenModal={(modal) => {
@@ -310,6 +320,11 @@ export function LandingPage() {
         isOpen={isNotificationCenterOpen}
         onClose={() => setIsNotificationCenterOpen(false)}
         notificationController={notifController}
+        isAuthenticated={isAuthenticated}
+        onOpenAuth={() => {
+          setIsNotificationCenterOpen(false)
+          setIsAuthPromptOpen(true)
+        }}
       />
 
       {/* Hộp Thoại Xin Quyền Web Push Notification */}
