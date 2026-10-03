@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { trackingService } from '@/lib/services/tracking.service'
+import { haptic } from '@/lib/utils/haptics'
 import type {
   LiveLocation,
   StationEtaItem,
@@ -28,12 +29,19 @@ export interface UseBusTrackingReturn {
   stationEtas: StationEtaItem[]
   stationAlert: StationAlert | null
   incidents: TripIncident[]
+  activePendingIncident: TripIncident | null
+  resolvedNotice: {
+    incidentId: string
+    resolutionNotes?: string
+    resolvedAt?: string
+  } | null
   simulatorStatus: SimulatorStatus | null
   connectionMode: ConnectionMode
   isConnected: boolean
   isLoading: boolean
   lastUpdated: Date | null
   clearStationAlert: () => void
+  clearResolvedNotice: () => void
   refreshData: () => Promise<void>
   startSimulator: (multiplier?: number) => Promise<boolean>
   stopSimulator: () => Promise<boolean>
@@ -45,6 +53,12 @@ export function useBusTracking(tripId: string): UseBusTrackingReturn {
   const [stationEtas, setStationEtas] = useState<StationEtaItem[]>([])
   const [stationAlert, setStationAlert] = useState<StationAlert | null>(null)
   const [incidents, setIncidents] = useState<TripIncident[]>([])
+  const [activePendingIncident, setActivePendingIncident] = useState<TripIncident | null>(null)
+  const [resolvedNotice, setResolvedNotice] = useState<{
+    incidentId: string
+    resolutionNotes?: string
+    resolvedAt?: string
+  } | null>(null)
   const [simulatorStatus, setSimulatorStatus] = useState<SimulatorStatus | null>(null)
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('connecting')
   const [isConnected, setIsConnected] = useState(false)
@@ -78,6 +92,16 @@ export function useBusTracking(tripId: string): UseBusTrackingReturn {
 
       if (incRes.success && incRes.data) {
         setIncidents(incRes.data)
+        const pending = incRes.data.find(
+          (i: TripIncident) =>
+            i.resolutionStatus === 'pending' ||
+            (!i.resolvedAt && i.resolutionStatus !== 'resolved'),
+        )
+        if (pending) {
+          setActivePendingIncident(pending)
+        } else {
+          setActivePendingIncident(null)
+        }
       }
 
       if (simRes.success && simRes.data) {
@@ -204,6 +228,56 @@ export function useBusTracking(tripId: string): UseBusTrackingReturn {
       setIsConnected(true)
     })
 
+    socket.on('passenger:incident-alert', (data: any) => {
+      if (!isComponentMounted.current) return
+      const newIncident: TripIncident = {
+        id: data.incidentId || data.id || `inc_${Date.now()}`,
+        tripId: data.tripId || tripId,
+        type: data.incidentType || data.type || 'other',
+        incidentType: data.incidentType || data.type || 'other',
+        severity: data.severity || 'medium',
+        description: data.description || '',
+        delayMinutesEstimate: data.delayMinutesEstimate,
+        resolutionStatus: 'pending',
+        reportedAt: data.reportedAt || new Date().toISOString(),
+      }
+      setIncidents((prev) => [newIncident, ...prev.filter((i) => i.id !== newIncident.id)])
+      setActivePendingIncident(newIncident)
+      setResolvedNotice(null)
+      try {
+        haptic.notification('warning')
+      } catch {
+        // ignore
+      }
+    })
+
+    socket.on('passenger:incident-resolved', (data: any) => {
+      if (!isComponentMounted.current) return
+      setIncidents((prev) =>
+        prev.map((i) =>
+          i.id === data.incidentId
+            ? {
+                ...i,
+                resolutionStatus: 'resolved',
+                resolvedAt: data.resolvedAt || new Date().toISOString(),
+                resolutionNotes: data.resolutionNotes || i.resolutionNotes,
+              }
+            : i,
+        ),
+      )
+      setActivePendingIncident(null)
+      setResolvedNotice({
+        incidentId: data.incidentId,
+        resolutionNotes: data.resolutionNotes,
+        resolvedAt: data.resolvedAt || new Date().toISOString(),
+      })
+      try {
+        haptic.play('success')
+      } catch {
+        // ignore
+      }
+    })
+
     socket.on('passenger:station-alert', (alert: StationAlert) => {
       if (!isComponentMounted.current) return
       setStationAlert(alert)
@@ -266,17 +340,24 @@ export function useBusTracking(tripId: string): UseBusTrackingReturn {
     setStationAlert(null)
   }, [])
 
+  const clearResolvedNotice = useCallback(() => {
+    setResolvedNotice(null)
+  }, [])
+
   return {
     location,
     stationEtas,
     stationAlert,
     incidents,
+    activePendingIncident,
+    resolvedNotice,
     simulatorStatus,
     connectionMode,
     isConnected,
     isLoading,
     lastUpdated,
     clearStationAlert,
+    clearResolvedNotice,
     refreshData: fetchInitialSnapshot,
     startSimulator,
     stopSimulator,
