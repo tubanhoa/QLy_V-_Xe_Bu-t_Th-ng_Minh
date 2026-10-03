@@ -132,20 +132,6 @@ function LoginFormContent() {
 
   return (
     <div className="w-full max-w-md rounded-3xl border border-slate-200/80 dark:border-emerald-500/20 bg-white/95 dark:bg-card/90 p-6 sm:p-8 shadow-2xl shadow-emerald-950/10 backdrop-blur-xl">
-      {/* Quick Navigation Back to Home (Chỉ hiển thị trên Mobile, Desktop đã có nút riêng bên trái) */}
-      <div className="mb-4 flex items-center justify-between border-b border-slate-100 dark:border-border/60 pb-3 lg:hidden">
-        <Link
-          href="/"
-          className="group inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#005A36] dark:text-slate-400 dark:hover:text-emerald-400 transition-colors"
-        >
-          <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 dark:bg-muted text-slate-600 dark:text-slate-300 group-hover:bg-[#005A36] group-hover:text-white transition-all">
-            <ArrowLeft size={13} strokeWidth={2.4} />
-          </span>
-          <span className="font-extrabold">Về Trang chủ</span>
-        </Link>
-        <span className="text-[11px] font-semibold text-slate-400">ICTU Smart Transit</span>
-      </div>
-
       {/* Active Session Notification (if previously logged in, gives user choice instead of force-redirecting) */}
       {isAuthenticated && user && (
         <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/30 p-3.5 text-xs text-foreground">
