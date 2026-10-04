@@ -25,6 +25,7 @@ export class ReportsService {
       .createQueryBuilder('booking')
       .innerJoinAndSelect('booking.trip', 'trip')
       .innerJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('booking.payments', 'payment')
       .where('booking.status = :status', { status: BookingStatus.PAID })
       .andWhere('booking.bookingTime BETWEEN :start AND :end', { start, end })
       .getMany();
@@ -33,6 +34,14 @@ export class ReportsService {
     let totalDiscount = 0;
     const revenueByRouteMap = new Map<string, { routeCode: string; name: string; revenue: number; ticketCount: number }>();
     const revenueByDateMap = new Map<string, number>();
+    const revenueByChannelMap = new Map<string, number>();
+
+    const CHANNEL_LABELS: Record<string, string> = {
+      vnpay: 'Ví điện tử VNPAY',
+      momo: 'Ví MoMo',
+      vietqr: 'Mã VietQR Pro',
+      cash: 'Tiền mặt tại trạm',
+    };
 
     for (const b of bookings) {
       const amount = Number(b.finalAmount);
@@ -53,7 +62,18 @@ export class ReportsService {
 
       const dateStr = new Date(b.bookingTime).toISOString().slice(0, 10);
       revenueByDateMap.set(dateStr, (revenueByDateMap.get(dateStr) || 0) + amount);
+
+      const rawMethod = b.payments?.[0]?.paymentMethod?.toLowerCase() || 'vnpay';
+      const channelLabel = CHANNEL_LABELS[rawMethod] || 'Cổng thanh toán điện tử';
+      revenueByChannelMap.set(channelLabel, (revenueByChannelMap.get(channelLabel) || 0) + amount);
     }
+
+    const revenueByChannel = Array.from(revenueByChannelMap.entries()).map(([channel, amount]) => ({
+      channel,
+      amount: `${amount.toLocaleString('vi-VN')} đ`,
+      rawAmount: amount,
+      share: totalRevenue > 0 ? Math.round((amount / totalRevenue) * 100) : 0,
+    }));
 
     return {
       totalRevenue,
@@ -64,6 +84,7 @@ export class ReportsService {
         date,
         revenue,
       })),
+      revenueByChannel,
     };
   }
 

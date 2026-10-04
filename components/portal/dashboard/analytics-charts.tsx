@@ -13,6 +13,7 @@ import {
   Navigation,
   ArrowUpRight,
 } from 'lucide-react'
+import type { OccupancyTripItem } from '@/lib/services/analytics.service'
 
 interface AnalyticsChartsProps {
   revenueTrend: Array<{ date: string; revenue: number }>
@@ -23,17 +24,19 @@ interface AnalyticsChartsProps {
     ticketCount: number
   }>
   totalRevenue: number
+  occupancyTrips?: OccupancyTripItem[]
 }
 
 export function AnalyticsCharts({
   revenueTrend,
   revenueByRoute,
   totalRevenue,
+  occupancyTrips = [],
 }: AnalyticsChartsProps) {
-  // Tính max revenue để vẽ biểu đồ SVG
+  // Tính max revenue để vẽ biểu đồ SVG an toàn
   const maxRevenue = Math.max(
     ...revenueTrend.map((r) => r.revenue),
-    6000000,
+    100000,
   )
 
   // Điểm SVG cho biểu đồ đường
@@ -50,6 +53,33 @@ export function AnalyticsCharts({
   const fillAreaD = points.length > 0
     ? `${pathD} L ${points[points.length - 1].x} 150 L ${points[0].x} 150 Z`
     : ''
+
+  // Tính tỷ lệ phụ tải theo các khung giờ thực tế từ danh sách chuyến xe trong cơ sở dữ liệu
+  const timeSlots = [
+    { time: '06:30', label: 'Vào ca 1', targetH: 6 },
+    { time: '07:15', label: 'Cao điểm ICTU', targetH: 7 },
+    { time: '11:30', label: 'Tan ca trưa', targetH: 11 },
+    { time: '16:45', label: 'Tan ca chiều', targetH: 16 },
+    { time: '17:30', label: 'Về KTX', targetH: 17 },
+  ]
+
+  const peakHourStats = timeSlots.map((slot) => {
+    const matching = occupancyTrips.filter((t) => {
+      if (!t.departureTime) return false
+      const h = new Date(t.departureTime).getUTCHours() + 7 // Vietnam time UTC+7
+      return Math.abs((h % 24) - slot.targetH) <= 1
+    })
+
+    const calculatedRate = matching.length > 0
+      ? Math.round(matching.reduce((acc, t) => acc + (t.rate || 0), 0) / matching.length)
+      : 0
+
+    return {
+      time: slot.time,
+      label: slot.label,
+      rate: calculatedRate,
+    }
+  })
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -83,45 +113,51 @@ export function AnalyticsCharts({
 
           {/* SVG Line Chart */}
           <div className="relative w-full h-44 sm:h-52 overflow-hidden rounded-2xl bg-slate-50/60 dark:bg-slate-900/40 p-2 border border-slate-100 dark:border-slate-800">
-            <svg
-              viewBox="0 0 480 160"
-              className="w-full h-full overflow-visible"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
+            {points.length > 0 ? (
+              <svg
+                viewBox="0 0 480 160"
+                className="w-full h-full overflow-visible"
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-              {/* Grid Lines */}
-              <line x1="40" y1="40" x2="440" y2="40" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
-              <line x1="40" y1="90" x2="440" y2="90" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
-              <line x1="40" y1="140" x2="440" y2="140" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
+                {/* Grid Lines */}
+                <line x1="40" y1="40" x2="440" y2="40" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
+                <line x1="40" y1="90" x2="440" y2="90" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
+                <line x1="40" y1="140" x2="440" y2="140" stroke="#e2e8f0" strokeDasharray="3 3" opacity="0.6" />
 
-              {/* Area Fill */}
-              {fillAreaD && <path d={fillAreaD} fill="url(#revenueGradient)" />}
+                {/* Area Fill */}
+                {fillAreaD && <path d={fillAreaD} fill="url(#revenueGradient)" />}
 
-              {/* Line Stroke */}
-              {pathD && (
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              )}
+                {/* Line Stroke */}
+                {pathD && (
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
 
-              {/* Data Points */}
-              {points.map((pt, i) => (
-                <g key={i}>
-                  <circle cx={pt.x} cy={pt.y} r="5" fill="#ffffff" stroke="#10b981" strokeWidth="3" />
-                </g>
-              ))}
-            </svg>
+                {/* Data Points */}
+                {points.map((pt, i) => (
+                  <g key={i}>
+                    <circle cx={pt.x} cy={pt.y} r="5" fill="#ffffff" stroke="#10b981" strokeWidth="3" />
+                  </g>
+                ))}
+              </svg>
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                Chưa có dữ liệu giao dịch trong kỳ
+              </div>
+            )}
           </div>
 
           {/* Trục X ngày tháng */}
@@ -141,17 +177,11 @@ export function AnalyticsCharts({
               <Clock size={13} className="text-indigo-600" />
               <span>Phụ tải theo khung giờ cao điểm đón sinh viên ICTU:</span>
             </span>
-            <span className="text-[10px] text-slate-400">Tỷ lệ lấp đầy ghế</span>
+            <span className="text-[10px] text-slate-400">Tỷ lệ lấp đầy ghế thực tế</span>
           </div>
 
           <div className="grid grid-cols-5 gap-2 text-center text-xs">
-            {[
-              { time: '06:30', rate: 92, label: 'Vào ca 1' },
-              { time: '07:15', rate: 96, label: 'Cao điểm ICTU' },
-              { time: '11:30', rate: 78, label: 'Tan ca trưa' },
-              { time: '16:45', rate: 94, label: 'Tan ca chiều' },
-              { time: '17:30', rate: 86, label: 'Về KTX' },
-            ].map((slot) => (
+            {peakHourStats.map((slot) => (
               <div key={slot.time} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200 block text-[11px]">
                   {slot.time}
@@ -182,31 +212,35 @@ export function AnalyticsCharts({
           </div>
 
           <div className="space-y-3.5">
-            {revenueByRoute.map((item) => {
-              const percent = totalRevenue > 0 ? Math.round((item.revenue / totalRevenue) * 100) : 50
-              return (
-                <div key={item.routeCode} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-black text-slate-800 dark:text-slate-200">
-                      {item.routeCode} ({item.name})
-                    </span>
-                    <span className="font-mono font-bold text-slate-600 dark:text-slate-400">
-                      {percent}%
-                    </span>
+            {revenueByRoute.length > 0 ? (
+              revenueByRoute.map((item) => {
+                const percent = totalRevenue > 0 ? Math.round((item.revenue / totalRevenue) * 100) : 0
+                return (
+                  <div key={item.routeCode} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-black text-slate-800 dark:text-slate-200">
+                        {item.routeCode} ({item.name})
+                      </span>
+                      <span className="font-mono font-bold text-slate-600 dark:text-slate-400">
+                        {percent}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>{item.ticketCount} lượt vé</span>
+                      <span className="font-mono">{item.revenue.toLocaleString('vi-VN')} đ</span>
+                    </div>
                   </div>
-                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span>{item.ticketCount} lượt vé</span>
-                    <span className="font-mono">{item.revenue.toLocaleString('vi-VN')} đ</span>
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-4">Chưa có dữ liệu tuyến xe</p>
+            )}
           </div>
         </div>
 
