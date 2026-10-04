@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StationEntity } from '../../database/entities/station.entity.js';
+import { RouteStationEntity } from '../../database/entities/route-station.entity.js';
 import { CreateStationDto, UpdateStationDto } from './dto/transit.dto.js';
 
 @Injectable()
@@ -9,6 +10,8 @@ export class StationsService {
   constructor(
     @InjectRepository(StationEntity)
     private readonly stationRepository: Repository<StationEntity>,
+    @InjectRepository(RouteStationEntity)
+    private readonly routeStationRepository: Repository<RouteStationEntity>,
   ) {}
 
   async findAll() {
@@ -57,5 +60,26 @@ export class StationsService {
     });
 
     return this.findById(id);
+  }
+
+  async delete(id: string) {
+    await this.findById(id);
+
+    // RÀNG BUỘC TOÀN VẸN: Kiểm tra xem trạm có đang nằm trong bất kỳ tuyến xe nào đang hoạt động (active)
+    const activeRoutesCount = await this.routeStationRepository
+      .createQueryBuilder('rs')
+      .innerJoin('rs.route', 'route')
+      .where('rs.stationId = :stationId', { stationId: id })
+      .andWhere('route.status = :status', { status: 'active' })
+      .getCount();
+
+    if (activeRoutesCount > 0) {
+      throw new ConflictException(
+        'Trạm dừng đang thuộc các tuyến xe hoạt động. Vui lòng gỡ trạm khỏi lộ trình tuyến trước khi xóa.',
+      );
+    }
+
+    await this.stationRepository.update(id, { status: 'deleted' });
+    return { message: 'Đã xóa trạm dừng thành công' };
   }
 }

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -23,14 +24,14 @@ export class StationsController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách các trạm dừng xe buýt' })
+  @ApiOperation({ summary: 'Lấy danh sách các trạm dừng xe buýt đang hoạt động' })
   async findAll() {
     return this.stationsService.findAll();
   }
 
   @Public()
   @Get(':id')
-  @ApiOperation({ summary: 'Lấy thông tin chi tiết trạm dừng' })
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết trạm dừng kèm các tuyến xe đi qua' })
   async findById(@Param('id') id: string) {
     return this.stationsService.findById(id);
   }
@@ -51,5 +52,16 @@ export class StationsController {
   @ApiOperation({ summary: 'Cập nhật thông tin trạm dừng (Manager, Admin)' })
   async update(@Param('id') id: string, @Body() dto: UpdateStationDto) {
     return this.stationsService.update(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Xóa trạm dừng với kiểm tra ràng buộc không thuộc tuyến đang hoạt động (Manager, Admin)',
+  })
+  async delete(@Param('id') id: string) {
+    return this.stationsService.delete(id);
   }
 }
