@@ -6,6 +6,9 @@ import {
   IsBoolean,
   IsArray,
   ValidateNested,
+  Min,
+  Max,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -57,7 +60,12 @@ export class CreateRouteDto {
   @IsNumber()
   distanceKm?: number;
 
-  @ApiProperty({ example: 10000, description: 'Giá vé gốc (VND)' })
+  @ApiPropertyOptional({ example: 35, description: 'Thời gian dự kiến di chuyển toàn tuyến (phút)' })
+  @IsOptional()
+  @IsNumber()
+  estimatedDurationMinutes?: number;
+
+  @ApiProperty({ example: 10000, description: 'Giá vé gốc / cơ sở (VND)' })
   @IsNumber()
   basePrice: number;
 
@@ -80,6 +88,27 @@ export class CreateRouteDto {
   @IsOptional()
   @IsNumber()
   frequencyMinutes?: number;
+
+  @ApiPropertyOptional({
+    enum: ['fixed', 'distance', 'stage'],
+    example: 'fixed',
+    description: 'Kiểu biểu phí: fixed (đồng giá) | distance (cự ly) | stage (chặng)',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['fixed', 'distance', 'stage'])
+  pricingType?: string;
+
+  @ApiPropertyOptional({
+    example: [
+      { minKm: 0, maxKm: 5, price: 7000, studentPrice: 4000 },
+      { minKm: 5, maxKm: 10, price: 10000, studentPrice: 5000 },
+      { minKm: 10, maxKm: 999, price: 15000, studentPrice: 8000 },
+    ],
+    description: 'Quy tắc biểu phí chi tiết theo khoảng cách hoặc số chặng',
+  })
+  @IsOptional()
+  fareRules?: any;
 
   @ApiPropertyOptional({ type: [RouteStopDto], description: 'Danh sách các trạm dừng theo thứ tự' })
   @IsOptional()
@@ -110,6 +139,11 @@ export class UpdateRouteDto {
   @IsNumber()
   distanceKm?: number;
 
+  @ApiPropertyOptional({ example: 35, description: 'Thời gian dự kiến di chuyển toàn tuyến (phút)' })
+  @IsOptional()
+  @IsNumber()
+  estimatedDurationMinutes?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
@@ -135,6 +169,16 @@ export class UpdateRouteDto {
   @IsNumber()
   frequencyMinutes?: number;
 
+  @ApiPropertyOptional({ enum: ['fixed', 'distance', 'stage'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['fixed', 'distance', 'stage'])
+  pricingType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  fareRules?: any;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -148,6 +192,84 @@ export class UpdateRouteDto {
   stops?: RouteStopDto[];
 }
 
+export class UpdatePricingDto {
+  @ApiProperty({
+    enum: ['fixed', 'distance', 'stage'],
+    example: 'distance',
+    description: 'Kiểu tính giá: fixed, distance hoặc stage',
+  })
+  @IsString()
+  @IsIn(['fixed', 'distance', 'stage'])
+  pricingType: string;
+
+  @ApiProperty({ example: 10000, description: 'Giá vé gốc / mở cửa (VND)' })
+  @IsNumber()
+  basePrice: number;
+
+  @ApiPropertyOptional({ example: 5000, description: 'Giá vé ưu đãi sinh viên' })
+  @IsOptional()
+  @IsNumber()
+  studentPrice?: number;
+
+  @ApiPropertyOptional({
+    example: [
+      { minKm: 0, maxKm: 5, price: 7000, studentPrice: 4000 },
+      { minKm: 5, maxKm: 10, price: 10000, studentPrice: 5000 },
+      { minKm: 10, maxKm: 999, price: 15000, studentPrice: 8000 },
+    ],
+    description: 'Bảng quy tắc bậc thang tính theo cự ly km hoặc số chặng',
+  })
+  @IsOptional()
+  fareRules?: any;
+}
+
+export class CalculateFareDto {
+  @ApiProperty({ example: 'station-uuid-1', description: 'ID trạm đón khách' })
+  @IsString()
+  @IsNotEmpty()
+  pickupStationId: string;
+
+  @ApiProperty({ example: 'station-uuid-2', description: 'ID trạm trả khách' })
+  @IsString()
+  @IsNotEmpty()
+  dropoffStationId: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Khách hàng có phải là Học sinh - Sinh viên không' })
+  @IsOptional()
+  @IsBoolean()
+  isStudent?: boolean;
+}
+
+export class AddRouteStationDto {
+  @ApiProperty({ description: 'Station ID' })
+  @IsString()
+  @IsNotEmpty()
+  stationId: string;
+
+  @ApiProperty({ example: 3, description: 'Thứ tự dừng chỉ định (stopOrder)' })
+  @IsNumber()
+  @Min(1)
+  stopOrder: number;
+
+  @ApiPropertyOptional({ example: 4.5, description: 'Khoảng cách từ điểm xuất phát (km)' })
+  @IsOptional()
+  @IsNumber()
+  distanceFromOriginKm?: number;
+
+  @ApiPropertyOptional({ example: 12, description: 'Thời gian di chuyển dự kiến (phút)' })
+  @IsOptional()
+  @IsNumber()
+  estimatedMinutes?: number;
+}
+
+export class BulkUpdateRouteStationsDto {
+  @ApiProperty({ type: [RouteStopDto], description: 'Danh sách toàn bộ trạm trên tuyến theo thứ tự mới' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RouteStopDto)
+  stops: RouteStopDto[];
+}
+
 export class CreateStationDto {
   @ApiProperty({ example: 'Trạm ĐH CNTT & TT Thái Nguyên' })
   @IsString()
@@ -159,12 +281,16 @@ export class CreateStationDto {
   @IsString()
   address?: string;
 
-  @ApiProperty({ example: 21.585284 })
+  @ApiProperty({ example: 21.585284, description: 'Vĩ độ GPS [-90, 90]' })
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude: number;
 
-  @ApiProperty({ example: 105.806297 })
+  @ApiProperty({ example: 105.806297, description: 'Kinh độ GPS [-180, 180]' })
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude: number;
 
   @ApiPropertyOptional({ example: true })
@@ -184,14 +310,18 @@ export class UpdateStationDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Vĩ độ GPS [-90, 90]' })
   @IsOptional()
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   latitude?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Kinh độ GPS [-180, 180]' })
   @IsOptional()
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   longitude?: number;
 
   @ApiPropertyOptional()

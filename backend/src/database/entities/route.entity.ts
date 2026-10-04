@@ -44,6 +44,15 @@ export class RouteEntity {
   @Column({ name: 'frequency_minutes', type: 'integer', nullable: true })
   frequencyMinutes: number;
 
+  @Column({ name: 'estimated_duration_minutes', type: 'integer', nullable: true })
+  estimatedDurationMinutes: number;
+
+  @Column({ name: 'pricing_type', type: 'varchar', length: 30, default: 'fixed' })
+  pricingType: string;
+
+  @Column({ name: 'fare_rules', type: 'jsonb', nullable: true })
+  fareRules: any;
+
   @Column({ type: 'varchar', length: 20, default: 'active' })
   status: string;
 
