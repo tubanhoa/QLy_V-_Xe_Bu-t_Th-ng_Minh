@@ -21,9 +21,12 @@ import {
   Bus,
   WifiOff,
   Receipt,
+  AlertTriangle,
+  X,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ticketService } from '@/lib/services/ticket.service'
+import { trackingService } from '@/lib/services/tracking.service'
 import { offlineTicketCache } from '@/lib/services/offline-ticket-cache'
 import { useAuth } from '@/lib/auth-context'
 import type { TicketSummary, TicketFilterStatus } from '@/lib/types/ticket'
@@ -74,9 +77,10 @@ interface TicketCardProps {
   onExchange?: () => void
   onCancel?: () => void
   onViewRefund?: () => void
+  onViewIncident?: (ticket: TicketSummary) => void
 }
 
-function TicketCard({ ticket, onClick, onExchange, onCancel, onViewRefund }: TicketCardProps) {
+function TicketCard({ ticket, onClick, onExchange, onCancel, onViewRefund, onViewIncident }: TicketCardProps) {
   const statusColor = TICKET_STATUS_COLOR[ticket.status] ?? TICKET_STATUS_COLOR['PENDING']
 
   const formatDate = (iso: string) =>
@@ -126,6 +130,24 @@ function TicketCard({ ticket, onClick, onExchange, onCancel, onViewRefund }: Tic
           <span>Ghế <strong className="text-[#005A36]">{ticket.seatNumber}</strong></span>
         </div>
       </div>
+
+      {ticket.tripStatus === 'delayed' && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewIncident?.(ticket)
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold shadow-2xs hover:bg-amber-100 transition-all cursor-pointer animate-pulse"
+          title="Nhấn để xem chi tiết sự cố và phương án xử lý"
+        >
+          <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+          <span>⚠️ Dự kiến trễ ~{ticket.delayMinutes || 15} phút</span>
+          <span className="ml-auto text-[11px] text-amber-700 font-semibold underline">
+            Chi tiết
+          </span>
+          <ChevronRight size={13} className="text-amber-600" />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 gap-2 text-xs">
         <span className="font-mono font-black text-sm text-[#005A36]">
@@ -190,6 +212,7 @@ export function MyTicketsPage() {
   const [cancellingTicket, setCancellingTicket] = useState<TicketSummary | null>(null)
   const [exchangingTicket, setExchangingTicket] = useState<TicketSummary | null>(null)
   const [viewingRefundTicket, setViewingRefundTicket] = useState<TicketSummary | null>(null)
+  const [incidentTicket, setIncidentTicket] = useState<TicketSummary | null>(null)
   const [isOffline, setIsOffline] = useState(false)
 
   const loadTickets = useCallback(async () => {
@@ -204,7 +227,38 @@ export function MyTicketsPage() {
     setLoading(false)
 
     if (res.success && res.data) {
-      setTickets(res.data.items)
+      const items = res.data.items || []
+      try {
+        const enriched = await Promise.all(
+          items.map(async (item) => {
+            if (
+              item.tripId &&
+              (item.status === 'PAID' || item.status === 'VALID' || item.status === 'RESERVED')
+            ) {
+              const incRes = await trackingService.getTripIncidents(item.tripId)
+              if (incRes.success && incRes.data) {
+                const pending = incRes.data.find(
+                  (i) =>
+                    i.resolutionStatus === 'pending' ||
+                    (!i.resolvedAt && i.resolutionStatus !== 'resolved'),
+                )
+                if (pending) {
+                  return {
+                    ...item,
+                    tripStatus: 'delayed',
+                    delayMinutes: pending.delayMinutesEstimate || 15,
+                    incidentDescription: pending.description,
+                  }
+                }
+              }
+            }
+            return item
+          }),
+        )
+        setTickets(enriched)
+      } catch {
+        setTickets(items)
+      }
     } else {
       setError(res.message || 'Chưa tải được danh sách vé')
     }
@@ -354,6 +408,7 @@ export function MyTicketsPage() {
               onExchange={() => setExchangingTicket(t)}
               onCancel={() => setCancellingTicket(t)}
               onViewRefund={() => setViewingRefundTicket(t)}
+              onViewIncident={() => setIncidentTicket(t)}
             />
           ))}
         </div>
@@ -412,6 +467,73 @@ export function MyTicketsPage() {
             loadTickets()
           }}
         />
+      )}
+
+      {/* Passenger Incident Modal: Xem chi tiết lý do sự cố & gợi ý hành khách */}
+      {incidentTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="size-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Cảnh Báo Chuyến Xe Bị Chậm
+                  </h3>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">
+                    {incidentTicket.routeName || 'Tuyến CT-01'} · Ghế {incidentTicket.seatNumber}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIncidentTicket(null)}
+                className="size-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-amber-900 font-extrabold text-xs">
+                <Clock size={14} className="text-amber-600 shrink-0" />
+                <span>Dự kiến trễ ~{incidentTicket.delayMinutes || 15} phút so với lịch trình</span>
+              </div>
+              <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                {incidentTicket.incidentDescription ||
+                  'Tài xế đang ghi nhận ùn tắc giao thông hoặc sự cố kỹ thuật trên tuyến. Hệ thống đang liên tục điều phối bù giờ đón.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-xs">
+              <h4 className="font-extrabold text-slate-800">Gợi ý dành cho hành khách:</h4>
+              <ul className="space-y-1 text-slate-600 list-disc list-inside text-[11px] leading-relaxed">
+                <li>Xem vị trí GPS trực tiếp của xe buýt trên bản đồ thời gian thực.</li>
+                <li>Nếu cần đổi giờ khởi hành, quý khách có thể thực hiện Đổi chuyến vé.</li>
+                <li>Hotline điều phối ICTU Transit: <strong className="text-[#005A36]">1900 6868</strong> / <strong className="text-[#005A36]">0208 3846 113</strong></li>
+              </ul>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIncidentTicket(null)}
+                className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Đóng
+              </button>
+              <Link
+                href={`/tracking/${incidentTicket.tripId || '5f8d76d7-717b-4904-ac52-dd64b0a515c0'}`}
+                className="flex-1 py-3 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer text-center"
+              >
+                <Bus size={15} />
+                <span>Xem Vị Trí Xe Live</span>
+              </Link>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

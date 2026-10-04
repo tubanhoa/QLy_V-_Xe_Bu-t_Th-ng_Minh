@@ -165,6 +165,10 @@ class HapticManager {
     }
   }
 
+  public notification(type: HapticSoundType = 'warning') {
+    this.play(type)
+  }
+
   public setMuted(muted: boolean) {
     this.isMuted = muted
   }

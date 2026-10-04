@@ -23,6 +23,7 @@ import { AdminReports } from './modules/admin-reports'
 import { AdminSettings } from './modules/admin-settings'
 import { ContentSkeleton, ModulePreview } from './dashboard/content-states'
 import { DriverDashboard } from './dashboard/driver-dashboard'
+import { DriverCockpit } from './dashboard/driver-cockpit'
 import { OpsDashboard } from './dashboard/ops-dashboard'
 import { DesktopSider } from './desktop-sider'
 import { DriverBottomNav } from './driver-bottom-nav'
@@ -39,6 +40,7 @@ export function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState('dashboard')
   const [loading, setLoading] = useState(false)
+  const [isCockpitMode, setIsCockpitMode] = useState(true)
   const loadingTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
@@ -129,12 +131,24 @@ export function AppShell() {
     )
   }
 
+  // Đối với Tài xế / Phụ xe: Mặc định bật ngay Buồng Lái Kỹ Thuật Số (Cockpit HUD) không thanh cuộn
+  if (portalRole === 'driver' && isCockpitMode) {
+    return <DriverCockpit onSwitchToOfficeView={() => setIsCockpitMode(false)} />
+  }
+
   const renderContent = () => {
     if (loading) return <ContentSkeleton />
 
     // Phân hệ Driver (Tài xế / Phụ xe)
     if (portalRole === 'driver') {
-      if (activeItem.key === 'driver-trip') return <DriverDashboard onNavigate={handleNavigate} />
+      if (activeItem.key === 'driver-trip') {
+        return (
+          <DriverDashboard
+            onNavigate={handleNavigate}
+            onOpenCockpit={() => setIsCockpitMode(true)}
+          />
+        )
+      }
       if (activeItem.key === 'scanner') return <DriverScanner onBack={() => handleNavigate('driver-trip')} />
       if (activeItem.key === 'manifest') return <DriverManifest onBack={() => handleNavigate('driver-trip')} />
       if (activeItem.key === 'incident-report') return <DriverIncident onBack={() => handleNavigate('driver-trip')} />
@@ -194,6 +208,23 @@ export function AppShell() {
                 : 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-10 duration-300 md:p-6'
             }
           >
+            {portalRole === 'driver' && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 px-4 text-emerald-950 dark:text-emerald-200 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <p className="text-xs font-bold">
+                    Đang xem ở Chế độ Hành chính / Văn phòng
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCockpitMode(true)}
+                  className="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
+                >
+                  🚀 Bật Buồng Lái Táp-lô (HUD Cockpit)
+                </button>
+              </div>
+            )}
             {renderContent()}
           </div>
         </Layout.Content>

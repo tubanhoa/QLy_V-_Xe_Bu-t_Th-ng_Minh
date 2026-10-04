@@ -15,8 +15,11 @@ import type {
   LiveTrackingResponse,
   SimulatorStatus,
   TripIncident,
+  ReportIncidentDto,
+  ResolveIncidentDto,
 } from '@/lib/types/tracking'
 import { UnifiedApiResponse } from '@/lib/types/sprint1'
+import { authService } from '@/lib/services/auth.service'
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
@@ -143,6 +146,111 @@ class TrackingService {
     }
   }
 
+  /** Báo cáo sự cố trên đường cho chuyến xe (Tài xế / Phụ xe) */
+  async reportIncident(
+    dto: ReportIncidentDto,
+    token?: string,
+  ): Promise<UnifiedApiResponse<TripIncident>> {
+    try {
+      const authToken = token || authService.getToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+
+      // Chuẩn hóa severity sang enum backend ('low' | 'medium' | 'high' | 'critical')
+      const severityMap: Record<string, string> = {
+        minor: 'low',
+        moderate: 'medium',
+        severe: 'high',
+        critical: 'critical',
+      }
+      const rawSeverity = dto.severity || dto.incidentSeverity || 'medium'
+      const severity = severityMap[rawSeverity] || rawSeverity
+
+      const payload = {
+        tripId: dto.tripId,
+        incidentType: dto.incidentType,
+        severity,
+        description: dto.description,
+        ...(dto.delayMinutesEstimate != null
+          ? { delayMinutesEstimate: Number(dto.delayMinutesEstimate) }
+          : {}),
+      }
+
+      const res = await fetch(`${this.baseUrl}/driver/incidents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          message: json?.message || 'Không thể gửi báo cáo sự cố',
+        }
+      }
+
+      const item = json?.data || json
+      const formatted: TripIncident = {
+        ...item,
+        type: item.incidentType || item.type,
+      }
+      return { success: true, data: formatted }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /** Đóng/Giải tỏa sự cố và khôi phục trạng thái chuyến xe */
+  async resolveIncident(
+    incidentId: string,
+    notes?: string,
+    token?: string,
+  ): Promise<UnifiedApiResponse<TripIncident>> {
+    try {
+      const authToken = token || authService.getToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+
+      const res = await fetch(
+        `${this.baseUrl}/driver/incidents/${incidentId}/resolve`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            resolutionNotes:
+              notes || 'Đoạn đường đã thông thoáng, tiếp tục đón khách bình thường',
+          }),
+        },
+      )
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          message: json?.message || 'Không thể giải tỏa sự cố',
+        }
+      }
+
+      const item = json?.data || json
+      const formatted: TripIncident = {
+        ...item,
+        type: item.incidentType || item.type,
+      }
+      return { success: true, data: formatted }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
   /** Lấy danh sách sự cố trên chuyến */
   async getTripIncidents(
     tripId: string,
@@ -155,7 +263,14 @@ class TrackingService {
       if (!res.ok) {
         return { success: false, message: json?.message || 'Không thể tải sự cố' }
       }
-      return { success: true, data: json?.data || json || [] }
+      const rawList: any[] = json?.data || json || []
+      const list: TripIncident[] = Array.isArray(rawList)
+        ? rawList.map((item) => ({
+            ...item,
+            type: item.incidentType || item.type,
+          }))
+        : []
+      return { success: true, data: list }
     } catch (e: any) {
       return { success: false, message: e?.message || 'Lỗi kết nối' }
     }

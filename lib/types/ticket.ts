@@ -48,6 +48,9 @@ export interface TicketSummary {
   busNumber?: string
   checkedInAt?: string | null
   refundInfo?: RefundInfo
+  tripStatus?: 'scheduled' | 'in_progress' | 'delayed' | 'completed' | 'cancelled' | string
+  delayMinutes?: number
+  incidentDescription?: string
 }
 
 export interface TicketDetail extends TicketSummary {
