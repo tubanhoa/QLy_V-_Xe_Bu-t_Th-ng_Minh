@@ -14,7 +14,10 @@ import {
   AlertCircle,
   GraduationCap,
   Bus,
-  SlidersHorizontal,
+  Trash2,
+  Sparkles,
+  Filter,
+  AlertTriangle,
 } from 'lucide-react'
 import { userService, type BackendUser } from '@/lib/services/user.service'
 
@@ -23,8 +26,26 @@ export function AdminStaff() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [classificationFilter, setClassificationFilter] = useState<'all' | 'official' | 'test'>('all')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [errorFeedback, setErrorFeedback] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [isCleaning, setIsCleaning] = useState(false)
+  const [confirmCleanOpen, setConfirmCleanOpen] = useState(false)
+  const [deletingUser, setDeletingUser] = useState<BackendUser | null>(null)
+
+  const isTestAccount = useCallback((u: BackendUser): boolean => {
+    if (typeof u.isTestAccount === 'boolean') return u.isTestAccount
+    const lower = (u.email || '').toLowerCase()
+    return (
+      lower.startsWith('integration-test-') ||
+      lower.startsWith('alias-test-') ||
+      lower.startsWith('trips-test-') ||
+      lower.startsWith('test.cloud@') ||
+      lower.includes('test-passenger-') ||
+      lower.includes('test-user-')
+    )
+  }, [])
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -32,6 +53,7 @@ export function AdminStaff() {
       const res = await userService.getUsers({
         search: search.trim() || undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
+        classification: classificationFilter !== 'all' ? classificationFilter : undefined,
         limit: 100,
       })
       if (res.success && res.data) {
@@ -42,7 +64,7 @@ export function AdminStaff() {
     } finally {
       setLoading(false)
     }
-  }, [search, roleFilter])
+  }, [search, roleFilter, classificationFilter])
 
   useEffect(() => {
     fetchUsers()
@@ -69,28 +91,85 @@ export function AdminStaff() {
           ),
         )
       } else {
-        setFeedback(res.message || 'Không thể cập nhật phân quyền.')
+        setErrorFeedback(res.message || 'Không thể cập nhật phân quyền.')
       }
     } catch {
-      setFeedback('Lỗi kết nối khi cập nhật vai trò người dùng.')
+      setErrorFeedback('Lỗi kết nối khi cập nhật vai trò người dùng.')
     } finally {
       setUpdatingId(null)
-      setTimeout(() => setFeedback(null), 4000)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 4000)
     }
   }
 
-  // Lọc danh sách theo từ khóa tìm kiếm (phía client nếu có gõ)
+  const handleDeleteUser = async (user: BackendUser) => {
+    try {
+      const res = await userService.deleteUser(user.id)
+      if (res.success) {
+        setFeedback(`Đã xóa tài khoản [${user.email}] thành công khỏi hệ thống!`)
+        setUsers((prev) => prev.filter((u) => u.id !== user.id))
+      } else {
+        setErrorFeedback(res.message || 'Không thể xóa người dùng.')
+      }
+    } catch {
+      setErrorFeedback('Lỗi hệ thống khi xóa người dùng.')
+    } finally {
+      setDeletingUser(null)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 4000)
+    }
+  }
+
+  const handleCleanupTestData = async () => {
+    setIsCleaning(true)
+    setConfirmCleanOpen(false)
+    try {
+      const res = await userService.cleanupTestData()
+      if (res.success) {
+        setFeedback(
+          res.deletedCount && res.deletedCount > 0
+            ? `Thành công! Đã dọn dẹp sạch ${res.deletedCount} tài khoản kiểm thử và dữ liệu rác.`
+            : 'Cơ sở dữ liệu hoàn toàn sạch sẽ, không có tài khoản kiểm thử nào.',
+        )
+        await fetchUsers()
+      } else {
+        setErrorFeedback(res.message || 'Lỗi khi dọn dẹp dữ liệu kiểm thử.')
+      }
+    } catch {
+      setErrorFeedback('Lỗi kết nối máy chủ khi dọn dẹp dữ liệu.')
+    } finally {
+      setIsCleaning(false)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 4000)
+    }
+  }
+
+  // Lọc danh sách theo từ khóa tìm kiếm (phía client)
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase()
-    return (
+    const matchSearch =
       u.fullName.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       (u.phoneNumber && u.phoneNumber.includes(q)) ||
       (u.studentId && u.studentId.toLowerCase().includes(q))
-    )
+
+    const isTest = isTestAccount(u)
+    let matchClassification = true
+    if (classificationFilter === 'official') matchClassification = !isTest
+    if (classificationFilter === 'test') matchClassification = isTest
+
+    return matchSearch && matchClassification
   })
 
-  // Đếm số lượng theo nhóm
+  // Thống kê phân loại
+  const testCount = users.filter(isTestAccount).length
+  const officialCount = users.length - testCount
   const adminCount = users.filter((u) => u.role?.name === 'admin').length
   const managerCount = users.filter((u) => u.role?.name === 'manager').length
   const driverCount = users.filter((u) => u.role?.name === 'driver').length
@@ -101,14 +180,26 @@ export function AdminStaff() {
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
               DATABASE SUPABASE CLOUD
             </span>
-            <span className="text-[11px] text-slate-400 font-mono">
-              Tổng số: {users.length} tài khoản
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">
+              <ShieldCheck size={11} />
+              {officialCount} Tài khoản chính thức
             </span>
+            {testCount > 0 ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+                <AlertTriangle size={11} />
+                {testCount} Tài khoản Test / Rác
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
+                <Sparkles size={11} className="text-emerald-500" />
+                Cơ sở dữ liệu sạch (0 test)
+              </span>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             Nhân Sự & Phân Quyền Hệ Thống (RBAC)
@@ -118,37 +209,58 @@ export function AdminStaff() {
           </p>
         </div>
 
-        {/* Nút Làm Mới */}
-        <button
-          type="button"
-          onClick={() => fetchUsers()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin text-emerald-600' : ''} />
-          <span>Đồng bộ từ Database</span>
-        </button>
+        {/* Nút tác vụ */}
+        <div className="flex items-center gap-2">
+          {/* Nút Dọn dẹp dữ liệu kiểm thử */}
+          <button
+            type="button"
+            onClick={() => setConfirmCleanOpen(true)}
+            disabled={isCleaning}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              testCount > 0
+                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs animate-pulse'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+            }`}
+            title="Tự động tìm kiếm và loại bỏ các tài khoản kiểm thử test tự động"
+          >
+            <Trash2 size={14} className={isCleaning ? 'animate-spin' : ''} />
+            <span>{isCleaning ? 'Đang dọn dẹp...' : testCount > 0 ? `Dọn dẹp data test (${testCount})` : 'Dọn dẹp data test'}</span>
+          </button>
+
+          {/* Nút Làm Mới */}
+          <button
+            type="button"
+            onClick={() => fetchUsers()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin text-emerald-600' : ''} />
+            <span>Đồng bộ từ Database</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Role Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
+      <div className="flex flex-col gap-3">
+        {/* Hàng 1: Phân loại tài khoản (Chính thức vs Test) */}
+        <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs shadow-xs">
+          <div className="flex items-center gap-1 px-2.5 py-1 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
+            <Filter size={13} />
+            <span>Phân loại:</span>
+          </div>
           {[
             { key: 'all', label: `Tất cả (${users.length})` },
-            { key: 'admin', label: `Super Admin (${adminCount})` },
-            { key: 'manager', label: `Điều hành (${managerCount})` },
-            { key: 'driver', label: `Tài xế (${driverCount})` },
-            { key: 'passenger', label: `Hành khách / HSSV (${passengerCount})` },
+            { key: 'official', label: `🟢 Tài khoản chính thức (${officialCount})` },
+            { key: 'test', label: `🟡 Dữ liệu kiểm thử / Test (${testCount})` },
           ].map((tab) => (
             <button
               key={tab.key}
               type="button"
-              onClick={() => setRoleFilter(tab.key)}
+              onClick={() => setClassificationFilter(tab.key as any)}
               className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                roleFilter === tab.key
-                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                classificationFilter === tab.key
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60'
               }`}
             >
               {tab.label}
@@ -156,16 +268,43 @@ export function AdminStaff() {
           ))}
         </div>
 
-        {/* Search Input */}
-        <div className="relative w-full md:w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo tên, email, SĐT, mã SV..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-10 pr-3 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none shadow-xs"
-          />
+        {/* Hàng 2: Vai trò & Tìm kiếm */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          {/* Role Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
+            {[
+              { key: 'all', label: `Tất cả vai trò` },
+              { key: 'admin', label: `Super Admin (${adminCount})` },
+              { key: 'manager', label: `Điều hành (${managerCount})` },
+              { key: 'driver', label: `Tài xế (${driverCount})` },
+              { key: 'passenger', label: `Hành khách / HSSV (${passengerCount})` },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setRoleFilter(tab.key)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  roleFilter === tab.key
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input */}
+          <div className="relative w-full md:w-80">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, email, SĐT, mã SV..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-10 pr-3 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none shadow-xs"
+            />
+          </div>
         </div>
       </div>
 
@@ -173,6 +312,13 @@ export function AdminStaff() {
         <div className="animate-in fade-in rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs font-semibold text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
           <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
           <span>{feedback}</span>
+        </div>
+      )}
+
+      {errorFeedback && (
+        <div className="animate-in fade-in rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-950 dark:text-red-100 flex items-center gap-2">
+          <AlertCircle size={16} className="text-red-500 shrink-0" />
+          <span>{errorFeedback}</span>
         </div>
       )}
 
@@ -185,23 +331,24 @@ export function AdminStaff() {
                 <th className="p-4 pl-6">Mã định danh</th>
                 <th className="p-4">Họ và tên</th>
                 <th className="p-4">Email / SĐT</th>
+                <th className="p-4">Phân loại</th>
                 <th className="p-4">Vai trò (Role)</th>
                 <th className="p-4">Trạng thái</th>
                 <th className="p-4">Ngày tạo</th>
-                <th className="p-4 pr-6 text-right">Phân quyền</th>
+                <th className="p-4 pr-6 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-xs text-slate-400">
                     <RefreshCw size={20} className="animate-spin text-emerald-600 mx-auto mb-2" />
                     Đang tải danh sách tài khoản từ Supabase Cloud...
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-xs text-slate-400">
                     Không tìm thấy tài khoản phù hợp với điều kiện tìm kiếm.
                   </td>
                 </tr>
@@ -209,12 +356,21 @@ export function AdminStaff() {
                 filteredUsers.map((u) => {
                   const roleName = u.role?.name || 'passenger'
                   const isUpdating = updatingId === u.id
+                  const isTest = isTestAccount(u)
+                  const isProtectedSuperAdmin =
+                    u.email === 'admin@smartbus.ictu.vn' || u.email === 'narukun2812@gmail.com'
+
                   const userCode = u.studentId
                     ? `SV-${u.studentId}`
                     : `USR-${u.id.slice(0, 6).toUpperCase()}`
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <tr
+                      key={u.id}
+                      className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors ${
+                        isTest ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''
+                      }`}
+                    >
                       <td className="p-4 pl-6 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
                         {userCode}
                       </td>
@@ -240,6 +396,19 @@ export function AdminStaff() {
                           <p className="flex items-center gap-1 mt-0.5 font-mono">
                             <Phone size={12} /> {u.phoneNumber}
                           </p>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {isTest ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/40">
+                            <AlertTriangle size={11} />
+                            Dữ liệu Test
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
+                            <ShieldCheck size={11} className="text-emerald-600" />
+                            Chính thức
+                          </span>
                         )}
                       </td>
                       <td className="p-4">
@@ -273,17 +442,31 @@ export function AdminStaff() {
                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '---'}
                       </td>
                       <td className="p-4 pr-6 text-right">
-                        <select
-                          disabled={isUpdating}
-                          value={roleName}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs disabled:opacity-50"
-                        >
-                          <option value="admin">Super Admin</option>
-                          <option value="manager">Điều hành</option>
-                          <option value="driver">Tài xế</option>
-                          <option value="passenger">Hành khách / HSSV</option>
-                        </select>
+                        <div className="inline-flex items-center gap-2">
+                          <select
+                            disabled={isUpdating}
+                            value={roleName}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs disabled:opacity-50"
+                          >
+                            <option value="admin">Super Admin</option>
+                            <option value="manager">Điều hành</option>
+                            <option value="driver">Tài xế</option>
+                            <option value="passenger">Hành khách / HSSV</option>
+                          </select>
+
+                          {/* Nút Xóa tài khoản */}
+                          {!isProtectedSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setDeletingUser(u)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                              title="Xóa tài khoản này"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -293,6 +476,79 @@ export function AdminStaff() {
           </table>
         </div>
       </div>
+
+      {/* Confirmation Modal - Dọn dẹp dữ liệu kiểm thử */}
+      {confirmCleanOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl">
+            <div className="size-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center mb-4">
+              <AlertTriangle size={24} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              Xác nhận dọn dẹp data kiểm thử?
+            </h3>
+            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+              Hệ thống sẽ quét và loại bỏ toàn bộ các tài khoản kiểm thử tự động (tiền tố test, integration-test, trips-test, alias-test, v.v.) cùng các dữ liệu rác liên quan trong Supabase. Các tài khoản chính thức (Admin, Điều hành, Tài xế, Sinh viên ICTU thực tế) sẽ được giữ nguyên 100%.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmCleanOpen(false)}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleCleanupTestData}
+                disabled={isCleaning}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>Tiến hành dọn dẹp ngay</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal - Xóa 1 tài khoản đơn lẻ */}
+      {deletingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl">
+            <div className="size-12 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 flex items-center justify-center mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              Xác nhận xóa tài khoản?
+            </h3>
+            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+              Bạn có chắc chắn muốn xóa tài khoản{' '}
+              <strong className="text-slate-900 dark:text-white font-mono">
+                {deletingUser.email}
+              </strong>{' '}
+              ({deletingUser.fullName})? Hành động này sẽ loại bỏ vĩnh viễn tài khoản khỏi Supabase Database.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeletingUser(null)}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteUser(deletingUser)}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>Xác nhận xóa</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

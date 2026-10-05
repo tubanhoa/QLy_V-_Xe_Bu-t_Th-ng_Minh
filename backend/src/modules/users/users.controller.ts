@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -26,17 +27,25 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Danh sách người dùng (Admin)' })
+  @ApiOperation({ summary: 'Danh sách người dùng (Admin) kèm phân loại chính thức / test' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'role', required: false })
   @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'classification', required: false, description: 'all | official | test' })
   async findAll(
     @Query() pagination: PaginationDto,
     @Query('search') search?: string,
     @Query('role') role?: string,
     @Query('status') status?: string,
+    @Query('classification') classification?: string,
   ) {
-    return this.usersService.findAll(pagination, search, role, status);
+    return this.usersService.findAll(pagination, search, role, status, classification);
+  }
+
+  @Post('cleanup-test-data')
+  @ApiOperation({ summary: 'Dọn dẹp toàn bộ tài khoản kiểm thử và dữ liệu rác (1-Click Clean)' })
+  async cleanupTestData() {
+    return this.usersService.cleanupTestData();
   }
 
   @Post()
@@ -67,5 +76,11 @@ export class UsersController {
   @ApiOperation({ summary: 'Khóa / Mở khóa tài khoản người dùng' })
   async changeStatus(@Param('id') id: string, @Body() dto: ChangeStatusDto) {
     return this.usersService.changeStatus(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Xóa tài khoản người dùng hoặc tài khoản rác' })
+  async remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 }

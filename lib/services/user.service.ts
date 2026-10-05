@@ -27,6 +27,8 @@ export interface BackendUser {
     name: 'admin' | 'manager' | 'driver' | 'passenger' | string
     description?: string
   }
+  isTestAccount?: boolean
+  classification?: 'official' | 'test' | string
 }
 
 export interface GetUsersResponse {
@@ -101,6 +103,7 @@ class UserService {
     search?: string
     role?: string
     status?: string
+    classification?: string
     page?: number
     limit?: number
   }): Promise<{ success: boolean; data?: GetUsersResponse; message?: string }> {
@@ -109,6 +112,9 @@ class UserService {
       if (params?.search) q.append('search', params.search)
       if (params?.role) q.append('role', params.role)
       if (params?.status) q.append('status', params.status)
+      if (params?.classification && params.classification !== 'all') {
+        q.append('classification', params.classification)
+      }
       if (params?.page) q.append('page', String(params.page))
       if (params?.limit) q.append('limit', String(params.limit || 50))
 
@@ -160,6 +166,49 @@ class UserService {
         return { success: false, message: json?.message || 'Không thể đổi trạng thái tài khoản' }
       }
       return { success: true, data: json?.data || json }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /** Xóa tài khoản người dùng hoặc tài khoản rác */
+  async deleteUser(userId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users/${userId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { success: false, message: json?.message || 'Không thể xóa tài khoản' }
+      }
+      return { success: true, message: json?.message || 'Đã xóa tài khoản thành công' }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /** Dọn dẹp toàn bộ tài khoản kiểm thử và dữ liệu rác (1-Click Clean) */
+  async cleanupTestData(): Promise<{
+    success: boolean
+    deletedCount?: number
+    deletedEmails?: string[]
+    message?: string
+  }> {
+    try {
+      const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users/cleanup-test-data`, {
+        method: 'POST',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { success: false, message: json?.message || 'Không thể thực hiện dọn dẹp' }
+      }
+      const data = json?.data || json
+      return {
+        success: true,
+        deletedCount: data.deletedCount,
+        deletedEmails: data.deletedEmails,
+        message: data.message || 'Đã dọn dẹp dữ liệu kiểm thử thành công',
+      }
     } catch (e: any) {
       return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
     }
