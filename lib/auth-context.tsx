@@ -18,7 +18,8 @@ interface AuthContextValue {
   role: string
   accessToken: string | null
   isAuthenticated: boolean
-  login: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; message?: string }>
+  isLoaded: boolean
+  login: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; message?: string; user?: AuthUser }>
   setUserSession: (data: LoginResponseData, remember?: boolean) => void
   logout: () => void
   themeMode: ThemeMode
@@ -34,12 +35,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [themeMode, setThemeMode] = useState<ThemeMode>('light')
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Hàm helper định dạng user profile đồng nhất
+  // Hàm helper chuẩn hóa và định dạng user profile đồng nhất
   const formatUserProfile = (rawUser: AuthUser): UserProfile => {
+    const rawRole = (rawUser as any)?.role
+    const roleName = (
+      typeof rawRole === 'string'
+        ? rawRole
+        : rawRole?.name || (rawUser.studentId ? 'passenger' : 'passenger')
+    ).toLowerCase()
+
     let roleTitle = 'Hành khách'
-    if (rawUser.role === 'admin') roleTitle = 'Quản trị viên'
-    else if (rawUser.role === 'manager' || rawUser.role === 'dispatcher') roleTitle = 'Điều hành viên'
-    else if (rawUser.role === 'driver') roleTitle = 'Tài xế xe buýt'
+    if (roleName === 'admin') roleTitle = 'Quản trị viên'
+    else if (roleName === 'manager' || roleName === 'dispatcher') roleTitle = 'Điều hành viên'
+    else if (roleName === 'driver') roleTitle = 'Tài xế xe buýt'
     else if (rawUser.studentId) roleTitle = `Sinh viên ICTU (${rawUser.studentId})`
 
     const name = rawUser.fullName || rawUser.email
@@ -50,10 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .slice(-2)
         .map((w) => w[0].toUpperCase())
         .join('') || 'U'
-    const staffId = rawUser.studentId || `ICTU-${(rawUser.role || 'US').toUpperCase()}-01`
+    const staffId = rawUser.studentId || `ICTU-${roleName.toUpperCase()}-01`
 
     return {
       ...rawUser,
+      role: roleName,
       name,
       roleTitle,
       staffId,
@@ -100,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authService.login({ email, password })
       if (res.success && res.data) {
         setUserSession(res.data, remember)
-        return { success: true, message: res.message }
+        return { success: true, message: res.message, user: res.data.user }
       }
       return { success: false, message: res.message || 'Đăng nhập không thành công' }
     },
@@ -128,13 +137,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: user?.role || 'passenger',
       accessToken,
       isAuthenticated,
+      isLoaded,
       login,
       setUserSession,
       logout,
       themeMode,
       toggleTheme,
     }),
-    [user, accessToken, isAuthenticated, login, setUserSession, logout, themeMode, toggleTheme],
+    [user, accessToken, isAuthenticated, isLoaded, login, setUserSession, logout, themeMode, toggleTheme],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

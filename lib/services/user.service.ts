@@ -116,7 +116,8 @@ class UserService {
         q.append('classification', params.classification)
       }
       if (params?.page) q.append('page', String(params.page))
-      if (params?.limit) q.append('limit', String(params.limit || 50))
+      const safeLimit = Math.min(Math.max(params?.limit || 50, 1), 100)
+      q.append('limit', String(safeLimit))
 
       const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users?${q.toString()}`, {
         cache: 'no-store',

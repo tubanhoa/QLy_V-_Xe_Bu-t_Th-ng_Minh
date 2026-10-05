@@ -70,7 +70,7 @@ export function AdminStaff() {
     setLoading(true)
     try {
       const res = await userService.getUsers({
-        limit: 200,
+        limit: 100,
       })
       if (res.success && res.data) {
         setUsers(res.data.items || [])
@@ -274,7 +274,7 @@ export function AdminStaff() {
               </span>
             )}
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-xl sm:text-2xl font-black tracking-normal text-slate-900 dark:text-white">
             Nhân Sự & Phân Quyền Hệ Thống (RBAC)
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">

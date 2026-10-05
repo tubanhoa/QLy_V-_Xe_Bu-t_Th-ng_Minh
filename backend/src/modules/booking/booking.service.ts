@@ -462,6 +462,10 @@ export class BookingService {
         .andWhere('ticket.status NOT IN (:...excluded)', {
           excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
         })
+        .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+          pendingStatus: BookingStatus.PENDING,
+          now: new Date(),
+        })
         .getMany();
 
       if (existingTickets.length > 0) {

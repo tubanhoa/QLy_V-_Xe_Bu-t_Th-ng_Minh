@@ -92,6 +92,8 @@ export interface CreateRoutePayload {
     distanceFromOriginKm?: number
     estimatedMinutes?: number
   }>
+  assignedDriverId?: string
+  assignedVehicleId?: string
 }
 
 export interface UpdateRoutePayload {
@@ -108,6 +110,12 @@ export interface UpdateRoutePayload {
   pricingType?: PricingType
   fareRules?: FareRule[]
   status?: string
+  stops?: Array<{
+    stationId: string
+    stopOrder: number
+    distanceFromOriginKm?: number
+    estimatedMinutes?: number
+  }>
 }
 
 export interface CreateStationPayload {

@@ -15,6 +15,7 @@ import {
   DispatchTripDto,
   UpdateTripStatusDto,
   VerifyQrDto,
+  CreateAdhocTripDto,
 } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
@@ -48,6 +49,15 @@ export class TripsController {
   @ApiOperation({ summary: 'Tự động sinh lịch trình chạy xe theo ngày (Manager, Admin)' })
   async generateSchedule(@Body() dto: GenerateTripsDto) {
     return this.tripsService.generateSchedule(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Post('adhoc')
+  @ApiOperation({ summary: 'Tạo chuyến xe tăng cường / phát sinh thực tế (Manager, Admin)' })
+  async createAdhoc(@Body() dto: CreateAdhocTripDto) {
+    return this.tripsService.createAdhocTrip(dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

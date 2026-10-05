@@ -71,6 +71,33 @@ function LoginFormContent() {
     setPassword('Password@123')
   }
 
+  // Tự động điều hướng nếu đã có phiên đăng nhập hợp lệ (tránh kẹt ở màn hình login)
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const isSwitching = searchParams.get('switch') === 'true'
+      if (!isSwitching) {
+        const isStaff =
+          user.role === 'admin' ||
+          user.role === 'dispatcher' ||
+          user.role === 'driver' ||
+          user.role === 'manager'
+        const defaultTarget = isStaff ? '/dashboard' : '/'
+        const safeRedirect =
+          redirectParam && !redirectParam.startsWith('/login') && !redirectParam.startsWith('/dang-nhap')
+            ? redirectParam
+            : null
+        const targetUrl = safeRedirect === '/admin' ? '/dashboard' : safeRedirect || defaultTarget
+
+        const timer = setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = targetUrl
+          }
+        }, 500)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [isAuthenticated, user, redirectParam, searchParams])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!identifier.trim()) {
@@ -91,18 +118,30 @@ function LoginFormContent() {
 
       const res = await login(emailToLogin, password, remember)
       if (res.success) {
+        const rawRole = (res.user as any)?.role
+        const roleStr = (typeof rawRole === 'string' ? rawRole : rawRole?.name || '').toLowerCase()
+        const isStaff = ['admin', 'dispatcher', 'manager', 'driver'].includes(roleStr)
+
         message.success(
-          portalMode === 'student'
-            ? `Đăng nhập HSSV thành công! Chào mừng ${user?.fullName || identifier}`
-            : `Đăng nhập Cổng Điều Hành thành công!`,
+          isStaff
+            ? `Đăng nhập Cổng Điều Hành thành công! Đang chuyển hướng...`
+            : `Đăng nhập HSSV thành công! Đang chuyển hướng về Trang chủ...`,
         )
-        if (redirectParam) {
-          router.push(redirectParam)
-        } else if (portalMode === 'staff') {
-          router.push('/dashboard')
-        } else {
-          router.push('/?openTickets=true')
-        }
+        const defaultTarget = isStaff ? '/dashboard' : '/'
+        const safeRedirect =
+          redirectParam && !redirectParam.startsWith('/login') && !redirectParam.startsWith('/dang-nhap')
+            ? redirectParam
+            : null
+        const targetUrl = safeRedirect === '/admin' ? '/dashboard' : safeRedirect || defaultTarget
+
+        // Dùng window.location.href để đảm bảo trình duyệt điều hướng tức thì 100% trên localhost
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = targetUrl
+          } else {
+            router.push(targetUrl)
+          }
+        }, 300)
       } else {
         message.error(res.message || 'Email hoặc mật khẩu không chính xác')
       }
@@ -118,8 +157,15 @@ function LoginFormContent() {
     try {
       const res = await login('student.an@ictu.edu.vn', 'Password@123', false)
       if (res.success) {
-        message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU!')
-        router.push(redirectParam || '/?openTickets=true')
+        message.success('Đăng nhập thành công với tài khoản Microsoft Office 365 ICTU! Đang chuyển hướng...')
+        const targetUrl = redirectParam || '/'
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = targetUrl
+          } else {
+            router.push(targetUrl)
+          }
+        }, 300)
       } else {
         message.error(res.message || 'Không thể kết nối dịch vụ Office 365')
       }
@@ -132,39 +178,47 @@ function LoginFormContent() {
 
   return (
     <div className="w-full max-w-md rounded-3xl border border-slate-200/80 dark:border-emerald-500/20 bg-white/95 dark:bg-card/90 p-6 sm:p-8 shadow-2xl shadow-emerald-950/10 backdrop-blur-xl">
-      {/* Active Session Notification (if previously logged in, gives user choice instead of force-redirecting) */}
+      {/* Active Session Notification */}
       {isAuthenticated && user && (
-        <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/30 p-3.5 text-xs text-foreground">
+        <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-50/90 dark:bg-emerald-950/40 p-3.5 text-xs text-foreground shadow-xs animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-bold text-[#005A36] dark:text-emerald-300 truncate">
-                Đang đăng nhập: {user.name}
+              <div className="flex items-center gap-1.5 font-bold text-[#005A36] dark:text-emerald-300 truncate">
+                <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Đang đăng nhập: {user.name}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate pl-5">
+                {user.roleTitle} &bull; Tự động chuyển hướng trong giây lát...
               </p>
-              <p className="text-[11px] text-muted-foreground truncate">{user.roleTitle}</p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {user.role === 'admin' || user.role === 'dispatcher' || user.role === 'driver' || user.role === 'manager' ? (
-                <Link
-                  href="/dashboard"
-                  className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
-                >
-                  Vào Bảng Điều Hành
-                </Link>
-              ) : (
-                <Link
-                  href="/?openTickets=true"
-                  className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
-                >
-                  Vào Ví Vé & Tiện Ích
-                </Link>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const isStaff =
+                    user.role === 'admin' ||
+                    user.role === 'dispatcher' ||
+                    user.role === 'driver' ||
+                    user.role === 'manager'
+                  const defaultTarget = isStaff ? '/dashboard' : '/'
+                  const safeRedirect =
+                    redirectParam && !redirectParam.startsWith('/login') && !redirectParam.startsWith('/dang-nhap')
+                      ? redirectParam
+                      : null
+                  const target = safeRedirect === '/admin' ? '/dashboard' : safeRedirect || defaultTarget
+                  window.location.href = target
+                }}
+                className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-3 py-1.5 text-xs font-bold text-white shadow-xs cursor-pointer active:scale-95 transition-all"
+              >
+                Vào ngay
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   logout()
                   message.info('Đã đăng xuất tài khoản')
                 }}
-                className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted cursor-pointer"
+                className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted cursor-pointer active:scale-95 transition-all"
               >
                 Đổi tài khoản
               </button>

@@ -38,6 +38,28 @@ export class ListTripsQueryDto {
   status?: TripStatus;
 
   @ApiPropertyOptional({
+    example: 'all',
+    enum: ['all', 'regular', 'adhoc', 'special'],
+    description: 'Phân loại chuyến: regular (định kỳ tự động), adhoc (tăng cường), special (sự kiện)',
+  })
+  @IsOptional()
+  @IsIn(['all', 'regular', 'adhoc', 'special'], {
+    message: 'tripType phải là all, regular, adhoc hoặc special',
+  })
+  tripType?: string;
+
+  @ApiPropertyOptional({
+    example: 'all',
+    enum: ['all', 'assigned', 'unassigned'],
+    description: 'Trạng thái phân công: assigned (đã đủ xe và tài xế), unassigned (chưa phân công)',
+  })
+  @IsOptional()
+  @IsIn(['all', 'assigned', 'unassigned'], {
+    message: 'assignmentStatus phải là all, assigned hoặc unassigned',
+  })
+  assignmentStatus?: string;
+
+  @ApiPropertyOptional({
     example: true,
     description: 'STT6: true = loại bỏ chuyến đã xuất bến (departed/in_progress/completed)',
   })

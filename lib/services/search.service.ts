@@ -12,7 +12,7 @@ const API_BASE_URL =
 
 export const DEFAULT_ROUTES: BusRoute[] = [
   {
-    id: 'route-ct01',
+    id: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
     routeCode: 'CT-01',
     name: 'ĐH CNTT & TT (ICTU) ↔ Bến Xe Trung Tâm Thái Nguyên',
     origin: 'ĐH CNTT & TT Thái Nguyên',
@@ -26,61 +26,61 @@ export const DEFAULT_ROUTES: BusRoute[] = [
     status: 'active',
     routeStations: [
       {
-        id: 'rs-01',
-        routeId: 'route-ct01',
-        stationId: 'st-01',
+        id: '99fe206e-88d5-4920-ba44-1aa179dd4963',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        stationId: '9b6109af-42fb-4cc3-8c43-b6aeb146c12d',
         stopOrder: 1,
         station: {
-          id: 'st-01',
-          name: 'ĐH CNTT & TT Thái Nguyên',
+          id: '9b6109af-42fb-4cc3-8c43-b6aeb146c12d',
+          name: 'Trạm ĐH CNTT & TT Thái Nguyên (ICTU)',
           address: 'Đường Z115, Quyết Thắng, TP. Thái Nguyên',
           isHub: true,
         },
       },
       {
-        id: 'rs-02',
-        routeId: 'route-ct01',
-        stationId: 'st-02',
+        id: 'eaaed515-6771-436f-9d97-a7256ae5894f',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        stationId: '9c7dd985-c2b8-45f3-89dd-e81005ecb064',
         stopOrder: 2,
         station: {
-          id: 'st-02',
+          id: '9c7dd985-c2b8-45f3-89dd-e81005ecb064',
           name: 'Trạm Cổng KTX ĐH Thái Nguyên',
           address: 'Đường Lương Ngọc Quyến, TP. Thái Nguyên',
           isHub: false,
         },
       },
       {
-        id: 'rs-03',
-        routeId: 'route-ct01',
-        stationId: 'st-03',
+        id: '8a0d70df-3497-42b2-9b12-ccc0b9225232',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        stationId: 'e3857ce6-b6a9-4e32-b332-49a2d2126c1c',
         stopOrder: 3,
         station: {
-          id: 'st-03',
+          id: 'e3857ce6-b6a9-4e32-b332-49a2d2126c1c',
           name: 'Trạm Ngã 3 Mỏ Chè',
           address: 'Đường Quang Trung, TP. Thái Nguyên',
           isHub: false,
         },
       },
       {
-        id: 'rs-04',
-        routeId: 'route-ct01',
-        stationId: 'st-04',
+        id: '3083f5c6-c45f-45ca-b651-f90c10c21e6b',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        stationId: '0fb02323-7438-4e8f-9fb0-4cbe1c7d2f8c',
         stopOrder: 4,
         station: {
-          id: 'st-04',
+          id: '0fb02323-7438-4e8f-9fb0-4cbe1c7d2f8c',
           name: 'Trạm Bệnh Viện Đa Khoa Trung Ương',
           address: 'Số 479 Lương Ngọc Quyến, TP. Thái Nguyên',
           isHub: true,
         },
       },
       {
-        id: 'rs-05',
-        routeId: 'route-ct01',
-        stationId: 'st-05',
+        id: '49cc7f0a-fb58-465a-a10c-d7b2570a9c54',
+        routeId: '5f8d76d7-717b-4904-ac52-dd64b0a515c0',
+        stationId: 'ab50975f-2579-430e-95db-0c949355704c',
         stopOrder: 5,
         station: {
-          id: 'st-05',
-          name: 'Bến Xe Trung Tâm Thái Nguyên',
+          id: 'ab50975f-2579-430e-95db-0c949355704c',
+          name: 'Trạm Bến Xe Trung Tâm Thái Nguyên',
           address: 'Đường Lương Ngọc Quyến, Quang Trung, TP. Thái Nguyên',
           isHub: true,
         },
@@ -88,7 +88,7 @@ export const DEFAULT_ROUTES: BusRoute[] = [
     ],
   },
   {
-    id: 'route-ct02',
+    id: '4252a0a9-82a7-48f0-850e-c60488a09016',
     routeCode: 'CT-02',
     name: 'Bến Xe Nam Thái Nguyên ↔ Khu Công Nghiệp Sông Công',
     origin: 'Bến Xe Nam Thái Nguyên',
@@ -102,37 +102,37 @@ export const DEFAULT_ROUTES: BusRoute[] = [
     status: 'active',
     routeStations: [
       {
-        id: 'rs-06',
-        routeId: 'route-ct02',
-        stationId: 'st-06',
+        id: 'baf6815d-dad7-4f0a-8631-4da5d280a53c',
+        routeId: '4252a0a9-82a7-48f0-850e-c60488a09016',
+        stationId: 'fb0a1bab-bfa8-4491-a84a-9679f433ab9a',
         stopOrder: 1,
         station: {
-          id: 'st-06',
-          name: 'Bến Xe Nam Thái Nguyên',
+          id: 'fb0a1bab-bfa8-4491-a84a-9679f433ab9a',
+          name: 'Trạm Bến Xe Nam Thái Nguyên',
           address: 'Phường Tích Lương, TP. Thái Nguyên',
           isHub: true,
         },
       },
       {
-        id: 'rs-07',
-        routeId: 'route-ct02',
-        stationId: 'st-07',
+        id: '69a564b7-e8ae-4827-a8ef-1e2578aecf8d',
+        routeId: '4252a0a9-82a7-48f0-850e-c60488a09016',
+        stationId: '68ff1076-a0d2-4818-a148-84a17949a70a',
         stopOrder: 2,
         station: {
-          id: 'st-07',
+          id: '68ff1076-a0d2-4818-a148-84a17949a70a',
           name: 'Trạm Ngã 4 Tích Lương',
           address: 'Đường 3 Tháng 2, Tích Lương, TP. Thái Nguyên',
           isHub: false,
         },
       },
       {
-        id: 'rs-08',
-        routeId: 'route-ct02',
-        stationId: 'st-08',
+        id: '2ffeb403-0066-4221-a6e4-86166186146e',
+        routeId: '4252a0a9-82a7-48f0-850e-c60488a09016',
+        stationId: '1d662b8c-e229-4c15-b330-d86ab7a85a52',
         stopOrder: 3,
         station: {
-          id: 'st-08',
-          name: 'Khu Công Nghiệp Sông Công',
+          id: '1d662b8c-e229-4c15-b330-d86ab7a85a52',
+          name: 'Trạm Khu Công Nghiệp Sông Công',
           address: 'KCN Sông Công 1, TP. Sông Công',
           isHub: true,
         },
@@ -140,93 +140,6 @@ export const DEFAULT_ROUTES: BusRoute[] = [
     ],
   },
 ]
-
-function generateFallbackTrips(query?: SearchTripsQuery): TripSearchResult[] {
-  const dateStr = query?.date?.trim() || new Date().toISOString().split('T')[0]
-  const originQuery = (query?.origin || '').trim().toLowerCase()
-  const destQuery = (query?.destination || '').trim().toLowerCase()
-
-  const ct01Times = [
-    '06:00', '06:30', '07:00', '07:15', '07:45', '08:15', '09:00', '10:00',
-    '11:30', '13:00', '14:30', '16:00', '17:15', '18:00', '19:30', '20:45'
-  ]
-  const ct02Times = [
-    '06:15', '07:00', '07:45', '08:30', '09:30', '11:00', '13:30', '15:00',
-    '16:30', '17:45', '19:00', '20:15'
-  ]
-
-  const allTrips: TripSearchResult[] = []
-
-  // Kiểm tra tuyến CT-01
-  const isExcludedFromCt01 =
-    destQuery.includes('sông công') ||
-    originQuery.includes('sông công') ||
-    (originQuery.includes('nam') && !originQuery.includes('việt nam')) ||
-    (destQuery.includes('nam') && !destQuery.includes('việt nam'))
-
-  if (!isExcludedFromCt01) {
-    ct01Times.forEach((time, idx) => {
-      const [h, m] = time.split(':').map(Number)
-      const depDate = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`)
-      const arrDate = new Date(depDate.getTime() + 45 * 60 * 1000)
-      const available = 14 + ((idx * 3) % 12)
-
-      allTrips.push({
-        id: `trip-ct01-${idx + 1}`,
-        routeId: 'route-ct01',
-        routeName: 'ĐH CNTT & TT (ICTU) ↔ Bến Xe Trung Tâm Thái Nguyên',
-        routeCode: 'CT-01',
-        origin: query?.origin?.trim() || 'ĐH CNTT & TT Thái Nguyên',
-        destination: query?.destination?.trim() || 'Bến Xe Trung Tâm Thái Nguyên',
-        departureTime: depDate.toISOString(),
-        arrivalTime: arrDate.toISOString(),
-        status: 'scheduled',
-        basePrice: 10000,
-        studentPrice: 5000,
-        totalSeats: 28,
-        availableSeats: available,
-        vehiclePlate: idx % 2 === 0 ? '20B-012.34' : '20B-056.78',
-        vehicleType: 'electric',
-      })
-    })
-  }
-
-  // Kiểm tra tuyến CT-02
-  const isExcludedFromCt02 =
-    destQuery.includes('ictu') ||
-    originQuery.includes('ictu') ||
-    destQuery.includes('trung tâm') ||
-    originQuery.includes('trung tâm')
-
-  if (!isExcludedFromCt02) {
-    ct02Times.forEach((time, idx) => {
-      const [h, m] = time.split(':').map(Number)
-      const depDate = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`)
-      const arrDate = new Date(depDate.getTime() + 40 * 60 * 1000)
-      const available = 10 + ((idx * 4) % 15)
-
-      allTrips.push({
-        id: `trip-ct02-${idx + 1}`,
-        routeId: 'route-ct02',
-        routeName: 'Bến Xe Nam Thái Nguyên ↔ Khu Công Nghiệp Sông Công',
-        routeCode: 'CT-02',
-        origin: query?.origin?.trim() || 'Bến Xe Nam Thái Nguyên',
-        destination: query?.destination?.trim() || 'Khu Công Nghiệp Sông Công',
-        departureTime: depDate.toISOString(),
-        arrivalTime: arrDate.toISOString(),
-        status: 'scheduled',
-        basePrice: 15000,
-        studentPrice: 8000,
-        totalSeats: 28,
-        availableSeats: available,
-        vehiclePlate: '20B-099.99',
-        vehicleType: 'electric',
-      })
-    })
-  }
-
-  return allTrips
-}
 
 class SearchService {
   private baseUrl: string
@@ -271,7 +184,7 @@ class SearchService {
       }
       throw new Error(`Server returned ${response.status}`)
     } catch (error: any) {
-      console.warn('[SearchService.getRoutes] Backend offline hoặc lỗi, sử dụng dữ liệu tuyến cục bộ:', error)
+      console.warn('[SearchService.getRoutes] Sử dụng dữ liệu tuyến cấu hình chuẩn Supabase:', error)
       let list = [...DEFAULT_ROUTES]
       if (params?.keyword?.trim()) {
         const kw = params.keyword.trim().toLowerCase()
@@ -280,7 +193,7 @@ class SearchService {
             r.routeCode.toLowerCase().includes(kw) ||
             r.name.toLowerCase().includes(kw) ||
             r.origin.toLowerCase().includes(kw) ||
-            r.destination.toLowerCase().includes(kw)
+            r.destination.toLowerCase().includes(kw),
         )
       }
       return {
@@ -309,7 +222,10 @@ class SearchService {
       throw new Error(`Server returned ${response.status}`)
     } catch (error: any) {
       console.warn(`[SearchService.getRouteById] Fallback tuyến ${id}:`, error)
-      const found = DEFAULT_ROUTES.find((r) => r.id === id || r.routeCode.toLowerCase() === id.toLowerCase()) || null
+      const found =
+        DEFAULT_ROUTES.find(
+          (r) => r.id === id || r.routeCode.toLowerCase() === id.toLowerCase(),
+        ) || null
       return {
         success: true,
         data: found,
@@ -340,17 +256,17 @@ class SearchService {
       if (response.ok) {
         const resJson = await response.json()
         const trips = Array.isArray(resJson) ? resJson : resJson?.data
-        if (Array.isArray(trips) && trips.length > 0) {
+        if (Array.isArray(trips)) {
           return { success: true, data: trips }
         }
       }
       throw new Error(`Server status ${response.status}`)
     } catch (error: any) {
-      console.warn('[SearchService.searchTrips] Kích hoạt cơ chế tạo chuyến dự phòng thông minh:', error)
-      const fallbackTrips = generateFallbackTrips(query)
+      console.warn('[SearchService.searchTrips] Lỗi khi truy vấn chuyến xe từ database:', error)
       return {
-        success: true,
-        data: fallbackTrips,
+        success: false,
+        message: 'Không thể kết nối đến máy chủ hoặc chưa có chuyến xe phù hợp.',
+        data: [],
       }
     }
   }

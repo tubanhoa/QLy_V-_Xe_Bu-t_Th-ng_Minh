@@ -16,6 +16,8 @@ export interface TripItem {
   departureTime: string
   arrivalTime?: string
   status: 'scheduled' | 'boarding' | 'departed' | 'in_progress' | 'completed' | 'delayed' | 'cancelled'
+  tripType?: 'regular' | 'adhoc' | 'special'
+  note?: string
   basePrice?: number
   availableSeats?: number
   totalSeats?: number
@@ -54,9 +56,21 @@ export interface DispatchTripPayload {
 
 export interface GenerateTripsPayload {
   routeId: string
-  startDate: string
-  endDate: string
-  departures: string[]
+  date: string
+  startTime?: string
+  endTime?: string
+  intervalMinutes?: number
+}
+
+export interface CreateAdhocTripPayload {
+  routeId: string
+  departureTime: string
+  arrivalTime?: string
+  vehicleId?: string
+  driverId?: string
+  conductorId?: string
+  tripType?: 'adhoc' | 'special' | 'regular'
+  note?: string
 }
 
 export interface TripApiResponse<T> {
@@ -86,6 +100,8 @@ class TripService {
     limit?: number
     routeId?: string
     status?: string
+    tripType?: string
+    assignmentStatus?: string
     date?: string
     search?: string
   }): Promise<
@@ -105,6 +121,10 @@ class TripService {
       if (query?.limit) params.append('limit', String(query.limit))
       if (query?.routeId) params.append('routeId', query.routeId)
       if (query?.status) params.append('status', query.status)
+      if (query?.tripType && query.tripType !== 'all') params.append('tripType', query.tripType)
+      if (query?.assignmentStatus && query.assignmentStatus !== 'all') {
+        params.append('assignmentStatus', query.assignmentStatus)
+      }
       if (query?.date) params.append('date', query.date)
       if (query?.search) params.append('search', query.search)
 
@@ -203,6 +223,34 @@ class TripService {
           success: false,
           data: null,
           message: json?.message || 'Không thể sinh lịch trình',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /** Tạo chuyến tăng cường / đột xuất thực tế (Ad-hoc Trip) */
+  async createAdhocTrip(
+    payload: CreateAdhocTripPayload
+  ): Promise<TripApiResponse<TripItem | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/adhoc`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể tạo chuyến tăng cường',
         }
       }
       return json

@@ -38,7 +38,7 @@ const SKELETON_MS = 550
 
 export function AppShell() {
   const router = useRouter()
-  const { user, role, isAuthenticated, logout, themeMode } = useAuth()
+  const { user, role, isAuthenticated, isLoaded, logout, themeMode } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState('dashboard')
@@ -47,8 +47,10 @@ export function AppShell() {
   const loadingTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/login')
-  }, [isAuthenticated, router])
+    if (isLoaded && !isAuthenticated) {
+      router.replace('/login')
+    }
+  }, [isLoaded, isAuthenticated, router])
 
   useEffect(() => () => clearTimeout(loadingTimer.current), [])
 
@@ -76,6 +78,17 @@ export function AppShell() {
   const handleLogout = () => {
     logout()
     router.replace('/login')
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3 text-white">
+          <div className="size-10 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+          <p className="text-xs font-bold text-slate-400">Đang khởi tạo phiên làm việc...</p>
+        </div>
+      </div>
+    )
   }
 
   if (!user) return null

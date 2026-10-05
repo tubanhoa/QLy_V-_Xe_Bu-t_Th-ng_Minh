@@ -208,6 +208,33 @@ export class RoutesService {
       await this.routeStationRepository.save(stopsToSave);
     }
 
+    // Tự động kích hoạt lịch chạy hôm nay và phân quyền trực tiếp cho Tài xế + Xe buýt
+    const today = new Date();
+    const sampleTimes = ['07:00', '09:30', '13:30', '15:30', '17:30', '19:00'];
+    const durationMin = dto.estimatedDurationMinutes || 40;
+
+    const tripsToCreate = sampleTimes.map((t) => {
+      const [h, m] = t.split(':').map(Number);
+      const dep = new Date(today);
+      dep.setHours(h, m, 0, 0);
+      const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
+
+      const trip = new TripEntity();
+      trip.routeId = savedRoute.id;
+      if (dto.assignedVehicleId) trip.vehicleId = dto.assignedVehicleId;
+      if (dto.assignedDriverId) trip.driverId = dto.assignedDriverId;
+      trip.departureTime = dep;
+      trip.arrivalTime = arr;
+      trip.status = TripStatus.SCHEDULED;
+      return trip;
+    });
+
+    try {
+      await this.tripRepository.save(tripsToCreate);
+    } catch (tripErr: any) {
+      console.warn('[RoutesService.create] Lỗi khi tự động sinh chuyến xe mẫu:', tripErr);
+    }
+
     return this.findById(savedRoute.id);
   }
 

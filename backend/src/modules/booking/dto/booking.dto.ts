@@ -65,6 +65,45 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   paymentMethod?: string;
+
+  @IsOptional()
+  seatIds?: any;
+
+  @IsOptional()
+  totalAmount?: any;
+
+  @IsOptional()
+  originStation?: any;
+
+  @IsOptional()
+  destinationStation?: any;
+
+  @IsOptional()
+  passengerName?: any;
+
+  @IsOptional()
+  passengerPhone?: any;
+
+  @IsOptional()
+  passengerEmail?: any;
+
+  @IsOptional()
+  invoiceEmail?: any;
+
+  @IsOptional()
+  isInvoiceRequested?: any;
+
+  @IsOptional()
+  departureTime?: any;
+
+  @IsOptional()
+  routeCode?: any;
+
+  @IsOptional()
+  routeName?: any;
+
+  @IsOptional()
+  vehiclePlate?: any;
 }
 
 export class SearchTripsDto {

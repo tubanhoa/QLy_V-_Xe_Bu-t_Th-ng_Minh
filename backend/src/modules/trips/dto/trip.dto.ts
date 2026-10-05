@@ -74,3 +74,45 @@ export class VerifyQrDto {
   @IsString()
   tripId?: string;
 }
+
+export class CreateAdhocTripDto {
+  @ApiProperty({ description: 'ID tuyến xe' })
+  @IsString()
+  @IsNotEmpty({ message: 'Vui lòng chọn tuyến xe' })
+  routeId: string;
+
+  @ApiProperty({ example: '2026-10-06T08:30:00.000Z', description: 'Thời điểm khởi hành (ISO string)' })
+  @IsDateString({}, { message: 'Thời điểm khởi hành không hợp lệ' })
+  @IsNotEmpty({ message: 'Vui lòng chọn thời gian khởi hành' })
+  departureTime: string;
+
+  @ApiPropertyOptional({ example: '2026-10-06T09:15:00.000Z', description: 'Thời điểm đến bến dự kiến' })
+  @IsOptional()
+  @IsDateString()
+  arrivalTime?: string;
+
+  @ApiPropertyOptional({ description: 'ID phương tiện xe buýt' })
+  @IsOptional()
+  @IsString()
+  vehicleId?: string;
+
+  @ApiPropertyOptional({ description: 'ID tài xế' })
+  @IsOptional()
+  @IsString()
+  driverId?: string;
+
+  @ApiPropertyOptional({ description: 'ID phụ xe' })
+  @IsOptional()
+  @IsString()
+  conductorId?: string;
+
+  @ApiPropertyOptional({ example: 'adhoc', default: 'adhoc' })
+  @IsOptional()
+  @IsString()
+  tripType?: 'adhoc' | 'special' | 'regular';
+
+  @ApiPropertyOptional({ description: 'Ghi chú lý do tăng cường' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}

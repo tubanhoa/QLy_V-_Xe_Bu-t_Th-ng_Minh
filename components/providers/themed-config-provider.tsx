@@ -23,7 +23,7 @@ export function ThemedConfigProvider({ children }: { children: React.ReactNode }
           colorWarning: '#F59E0B',
           colorError: '#EF4444',
           borderRadius: 10,
-          fontFamily: "var(--font-jakarta), -apple-system, BlinkMacSystemFont, sans-serif",
+          fontFamily: "var(--font-be-vietnam-pro), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
           colorBgLayout: isDark ? '#0A131C' : '#F4F7F6',
           colorBgContainer: isDark ? '#0F1C27' : '#FFFFFF',
           colorBgElevated: isDark ? '#132330' : '#FFFFFF',

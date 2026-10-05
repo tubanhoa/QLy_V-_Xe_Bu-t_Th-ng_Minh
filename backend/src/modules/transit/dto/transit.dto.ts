@@ -116,6 +116,16 @@ export class CreateRouteDto {
   @ValidateNested({ each: true })
   @Type(() => RouteStopDto)
   stops?: RouteStopDto[];
+
+  @ApiPropertyOptional({ example: 'uuid-driver-id', description: 'ID tài xế được phân quyền phụ trách tuyến xe' })
+  @IsOptional()
+  @IsString()
+  assignedDriverId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-vehicle-id', description: 'ID phương tiện xe buýt điện chạy tuyến' })
+  @IsOptional()
+  @IsString()
+  assignedVehicleId?: string;
 }
 
 export class UpdateRouteDto {

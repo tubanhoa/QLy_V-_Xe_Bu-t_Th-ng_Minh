@@ -16,7 +16,7 @@ import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
-import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto } from './dto/trip.dto.js';
+import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto, CreateAdhocTripDto } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import { TripStatus, TicketStatus, BookingStatus } from '../../common/constants/status.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
@@ -61,6 +61,8 @@ export class TripsService {
       date,
       routeId,
       status,
+      tripType,
+      assignmentStatus,
       excludeDeparted,
       page = 1,
       limit = 20,
@@ -75,7 +77,7 @@ export class TripsService {
       .leftJoinAndSelect('trip.driver', 'driver')
       .leftJoinAndSelect('trip.conductor', 'conductor');
 
-    // Filter by date (BETWEEN startOfDay AND endOfDay)
+    // Filter by date or Rolling Window (T+3 days)
     if (date) {
       const parsedDate = new Date(date);
       if (isNaN(parsedDate.getTime())) {
@@ -88,15 +90,13 @@ export class TripsService {
         end: endOfDay.toISOString(),
       });
     } else {
-      // Default: today
-      const today = new Date();
-      const startOfDay = new Date(today);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(today);
-      endOfDay.setHours(23, 59, 59, 999);
+      // Default: Cửa sổ lập lịch trượt (Rolling Window: Hôm nay + 3 ngày tới)
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfRollingWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3, 23, 59, 59, 999);
       qb.andWhere('trip.departureTime BETWEEN :start AND :end', {
         start: startOfDay.toISOString(),
-        end: endOfDay.toISOString(),
+        end: endOfRollingWindow.toISOString(),
       });
     }
 
@@ -108,6 +108,18 @@ export class TripsService {
     // Filter by status
     if (status) {
       qb.andWhere('trip.status = :status', { status });
+    }
+
+    // Filter by tripType (regular / adhoc / special)
+    if (tripType && tripType !== 'all') {
+      qb.andWhere('trip.tripType = :tripType', { tripType });
+    }
+
+    // Filter by assignmentStatus (assigned / unassigned)
+    if (assignmentStatus === 'assigned') {
+      qb.andWhere('trip.vehicleId IS NOT NULL AND trip.driverId IS NOT NULL');
+    } else if (assignmentStatus === 'unassigned') {
+      qb.andWhere('(trip.vehicleId IS NULL OR trip.driverId IS NULL)');
     }
 
     // STT6: Exclude departed trips
@@ -181,6 +193,7 @@ export class TripsService {
           departureTime,
           arrivalTime,
           status: TripStatus.SCHEDULED,
+          tripType: 'regular',
         }),
       );
 
@@ -189,10 +202,55 @@ export class TripsService {
 
     const savedTrips = await this.tripRepository.save(tripsToSave);
     return {
-      message: `Đã tự động sinh ${savedTrips.length} chuyến xe cho ngày ${dto.date}`,
+      message: `Đã tự động sinh ${savedTrips.length} chuyến xe định kỳ (chờ phân công) cho ngày ${dto.date}`,
       count: savedTrips.length,
       trips: savedTrips,
     };
+  }
+
+  async createAdhocTrip(dto: CreateAdhocTripDto) {
+    const route = await this.routeRepository.findOne({ where: { id: dto.routeId } });
+    if (!route) {
+      throw new NotFoundException(`Không tìm thấy tuyến xe với ID ${dto.routeId}`);
+    }
+
+    if (dto.vehicleId) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { id: dto.vehicleId } });
+      if (!vehicle) {
+        throw new NotFoundException('Phương tiện xe buýt không tồn tại');
+      }
+    }
+
+    if (dto.driverId) {
+      const driver = await this.userRepository.findOne({ where: { id: dto.driverId } });
+      if (!driver) {
+        throw new NotFoundException('Tài xế không tồn tại');
+      }
+    }
+
+    const departure = new Date(dto.departureTime);
+    let arrival: Date;
+    if (dto.arrivalTime) {
+      arrival = new Date(dto.arrivalTime);
+    } else {
+      const estimatedTripMinutes = route.distanceKm ? Math.round(Number(route.distanceKm) * 2.5) : 45;
+      arrival = new Date(departure.getTime() + estimatedTripMinutes * 60 * 1000);
+    }
+
+    const trip = this.tripRepository.create({
+      routeId: route.id,
+      vehicleId: dto.vehicleId || undefined,
+      driverId: dto.driverId || undefined,
+      conductorId: dto.conductorId || undefined,
+      departureTime: departure,
+      arrivalTime: arrival,
+      status: TripStatus.SCHEDULED,
+      tripType: dto.tripType || 'adhoc',
+      note: dto.note || undefined,
+    });
+
+    const saved = await this.tripRepository.save(trip);
+    return this.findById(saved.id);
   }
 
   async dispatch(dto: DispatchTripDto) {
