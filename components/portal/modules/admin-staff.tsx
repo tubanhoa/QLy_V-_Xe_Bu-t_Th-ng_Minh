@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   CheckCircle2,
   Mail,
@@ -18,8 +18,24 @@ import {
   Sparkles,
   Filter,
   AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { userService, type BackendUser } from '@/lib/services/user.service'
+
+const ROLE_PRIORITY: Record<string, number> = {
+  admin: 4,
+  manager: 3,
+  driver: 2,
+  passenger: 1,
+}
+
+type SortField = 'role' | 'fullName' | 'createdAt'
+type SortOrder = 'asc' | 'desc'
 
 export function AdminStaff() {
   const [users, setUsers] = useState<BackendUser[]>([])
@@ -27,6 +43,8 @@ export function AdminStaff() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [classificationFilter, setClassificationFilter] = useState<'all' | 'official' | 'test'>('all')
+  const [sortField, setSortField] = useState<SortField>('role')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -47,14 +65,12 @@ export function AdminStaff() {
     )
   }, [])
 
+  // Tải danh sách người dùng đầy đủ từ Supabase Cloud
   const fetchUsers = useCallback(async () => {
     setLoading(true)
     try {
       const res = await userService.getUsers({
-        search: search.trim() || undefined,
-        role: roleFilter !== 'all' ? roleFilter : undefined,
-        classification: classificationFilter !== 'all' ? classificationFilter : undefined,
-        limit: 100,
+        limit: 200,
       })
       if (res.success && res.data) {
         setUsers(res.data.items || [])
@@ -64,7 +80,7 @@ export function AdminStaff() {
     } finally {
       setLoading(false)
     }
-  }, [search, roleFilter, classificationFilter])
+  }, [])
 
   useEffect(() => {
     fetchUsers()
@@ -150,30 +166,87 @@ export function AdminStaff() {
     }
   }
 
-  // Lọc danh sách theo từ khóa tìm kiếm (phía client)
-  const filteredUsers = users.filter((u) => {
-    const q = search.toLowerCase()
-    const matchSearch =
-      u.fullName.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      (u.phoneNumber && u.phoneNumber.includes(q)) ||
-      (u.studentId && u.studentId.toLowerCase().includes(q))
+  // Toggle Sắp xếp theo cột
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder(field === 'role' ? 'desc' : 'asc')
+    }
+  }
 
-    const isTest = isTestAccount(u)
-    let matchClassification = true
-    if (classificationFilter === 'official') matchClassification = !isTest
-    if (classificationFilter === 'test') matchClassification = isTest
+  // Lọc và sắp xếp người dùng
+  const filteredAndSortedUsers = useMemo(() => {
+    const q = search.trim().toLowerCase()
 
-    return matchSearch && matchClassification
-  })
+    return users
+      .filter((u) => {
+        // 1. Lọc theo từ khóa tìm kiếm
+        const matchSearch =
+          !q ||
+          u.fullName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.phoneNumber && u.phoneNumber.includes(q)) ||
+          (u.studentId && u.studentId.toLowerCase().includes(q)) ||
+          (u.faculty && u.faculty.toLowerCase().includes(q))
 
-  // Thống kê phân loại
-  const testCount = users.filter(isTestAccount).length
-  const officialCount = users.length - testCount
-  const adminCount = users.filter((u) => u.role?.name === 'admin').length
-  const managerCount = users.filter((u) => u.role?.name === 'manager').length
-  const driverCount = users.filter((u) => u.role?.name === 'driver').length
-  const passengerCount = users.filter((u) => u.role?.name === 'passenger').length
+        // 2. Lọc theo phân loại (Chính thức / Test)
+        const isTest = isTestAccount(u)
+        let matchClassification = true
+        if (classificationFilter === 'official') matchClassification = !isTest
+        if (classificationFilter === 'test') matchClassification = isTest
+
+        // 3. Lọc theo vai trò được chọn trên button
+        const userRole = (u.role?.name || 'passenger').toLowerCase()
+        const matchRole = roleFilter === 'all' || userRole === roleFilter.toLowerCase()
+
+        return matchSearch && matchClassification && matchRole
+      })
+      .sort((a, b) => {
+        if (sortField === 'role') {
+          const priorityA = ROLE_PRIORITY[(a.role?.name || 'passenger').toLowerCase()] || 0
+          const priorityB = ROLE_PRIORITY[(b.role?.name || 'passenger').toLowerCase()] || 0
+          return sortOrder === 'desc' ? priorityB - priorityA : priorityA - priorityB
+        }
+
+        if (sortField === 'fullName') {
+          const nameA = a.fullName || ''
+          const nameB = b.fullName || ''
+          return sortOrder === 'asc'
+            ? nameA.localeCompare(nameB, 'vi')
+            : nameB.localeCompare(nameA, 'vi')
+        }
+
+        if (sortField === 'createdAt') {
+          const timeA = new Date(a.createdAt || 0).getTime()
+          const timeB = new Date(b.createdAt || 0).getTime()
+          return sortOrder === 'desc' ? timeB - timeA : timeA - timeB
+        }
+
+        return 0
+      })
+  }, [users, search, roleFilter, classificationFilter, sortField, sortOrder, isTestAccount])
+
+  // Thống kê phân loại dựa trên tổng số tài khoản thực tế trong DB
+  const testCount = useMemo(() => users.filter(isTestAccount).length, [users, isTestAccount])
+  const officialCount = useMemo(() => users.length - testCount, [users, testCount])
+  const adminCount = useMemo(
+    () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'admin').length,
+    [users],
+  )
+  const managerCount = useMemo(
+    () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'manager').length,
+    [users],
+  )
+  const driverCount = useMemo(
+    () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'driver').length,
+    [users],
+  )
+  const passengerCount = useMemo(
+    () => users.filter((u) => (u.role?.name || 'passenger').toLowerCase() === 'passenger').length,
+    [users],
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -224,7 +297,13 @@ export function AdminStaff() {
             title="Tự động tìm kiếm và loại bỏ các tài khoản kiểm thử test tự động"
           >
             <Trash2 size={14} className={isCleaning ? 'animate-spin' : ''} />
-            <span>{isCleaning ? 'Đang dọn dẹp...' : testCount > 0 ? `Dọn dẹp data test (${testCount})` : 'Dọn dẹp data test'}</span>
+            <span>
+              {isCleaning
+                ? 'Đang dọn dẹp...'
+                : testCount > 0
+                ? `Dọn dẹp data test (${testCount})`
+                : 'Dọn dẹp data test'}
+            </span>
           </button>
 
           {/* Nút Làm Mới */}
@@ -268,12 +347,12 @@ export function AdminStaff() {
           ))}
         </div>
 
-        {/* Hàng 2: Vai trò & Tìm kiếm */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-          {/* Role Filter Tabs */}
+        {/* Hàng 2: Button Sắp xếp & Lọc Vai Trò + Ô Tìm kiếm */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          {/* Role Filter Tabs (Nút lọc vai trò) */}
           <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
             {[
-              { key: 'all', label: `Tất cả vai trò` },
+              { key: 'all', label: `Tất cả vai trò (${users.length})` },
               { key: 'admin', label: `Super Admin (${adminCount})` },
               { key: 'manager', label: `Điều hành (${managerCount})` },
               { key: 'driver', label: `Tài xế (${driverCount})` },
@@ -294,16 +373,72 @@ export function AdminStaff() {
             ))}
           </div>
 
-          {/* Search Input */}
-          <div className="relative w-full md:w-80">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Tìm theo tên, email, SĐT, mã SV..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-10 pr-3 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none shadow-xs"
-            />
+          {/* Quick Sắp xếp vai trò & Tìm kiếm */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sắp xếp: Dropdown & Toggle */}
+            <div className="flex items-center gap-1.5">
+              <select
+                value={`${sortField}-${sortOrder}`}
+                onChange={(e) => {
+                  const [field, order] = e.target.value.split('-') as [SortField, SortOrder]
+                  setSortField(field)
+                  setSortOrder(order)
+                }}
+                className="h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
+              >
+                <option value="role-desc">Sắp xếp: Vai trò (Cao ➔ Thấp)</option>
+                <option value="role-asc">Sắp xếp: Vai trò (Thấp ➔ Cao)</option>
+                <option value="fullName-asc">Sắp xếp: Họ tên (A ➔ Z)</option>
+                <option value="fullName-desc">Sắp xếp: Họ tên (Z ➔ A)</option>
+                <option value="createdAt-desc">Sắp xếp: Ngày tạo (Mới nhất)</option>
+                <option value="createdAt-asc">Sắp xếp: Ngày tạo (Cũ nhất)</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (sortField !== 'role') {
+                    setSortField('role')
+                    setSortOrder('desc')
+                  } else {
+                    setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
+                  }
+                }}
+                className={`h-10 inline-flex items-center gap-1.5 px-3 text-xs font-bold rounded-2xl border transition-all cursor-pointer ${
+                  sortField === 'role'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+                }`}
+                title="Bấm để đảo chiều sắp xếp theo cấp bậc vai trò"
+              >
+                {sortField === 'role' && sortOrder === 'desc' ? (
+                  <ArrowDownWideNarrow size={14} className="text-emerald-600" />
+                ) : sortField === 'role' && sortOrder === 'asc' ? (
+                  <ArrowUpNarrowWide size={14} className="text-emerald-600" />
+                ) : (
+                  <ArrowUpDown size={14} className="text-slate-400" />
+                )}
+                <span className="hidden sm:inline">
+                  {sortField === 'role'
+                    ? sortOrder === 'desc'
+                      ? 'Cao ➔ Thấp'
+                      : 'Thấp ➔ Cao'
+                    : 'Đảo chiều'}
+                </span>
+              </button>
+            </div>
+
+            {/* Ô tìm kiếm */}
+            <div className="relative flex-1 sm:w-72">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm tên, email, SĐT, mã SV, khoa..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-10 pr-3 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none shadow-xs"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -326,15 +461,72 @@ export function AdminStaff() {
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
               <tr>
                 <th className="p-4 pl-6">Mã định danh</th>
-                <th className="p-4">Họ và tên</th>
+
+                {/* Sắp xếp theo Tên */}
+                <th
+                  onClick={() => handleSort('fullName')}
+                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Họ và tên</span>
+                    {sortField === 'fullName' ? (
+                      sortOrder === 'asc' ? (
+                        <ArrowUp size={13} className="text-emerald-600 font-bold" />
+                      ) : (
+                        <ArrowDown size={13} className="text-emerald-600 font-bold" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={13} className="text-slate-300 dark:text-slate-600" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="p-4">Email / SĐT</th>
                 <th className="p-4">Phân loại</th>
-                <th className="p-4">Vai trò (Role)</th>
+
+                {/* Sắp xếp theo Vai trò (Role) */}
+                <th
+                  onClick={() => handleSort('role')}
+                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Vai trò (Role)</span>
+                    {sortField === 'role' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDownWideNarrow size={14} className="text-emerald-600 font-bold" />
+                      ) : (
+                        <ArrowUpNarrowWide size={14} className="text-emerald-600 font-bold" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={13} className="text-slate-300 dark:text-slate-600" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="p-4">Trạng thái</th>
-                <th className="p-4">Ngày tạo</th>
+
+                {/* Sắp xếp theo Ngày tạo */}
+                <th
+                  onClick={() => handleSort('createdAt')}
+                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Ngày tạo</span>
+                    {sortField === 'createdAt' ? (
+                      sortOrder === 'desc' ? (
+                        <ArrowDown size={13} className="text-emerald-600 font-bold" />
+                      ) : (
+                        <ArrowUp size={13} className="text-emerald-600 font-bold" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={13} className="text-slate-300 dark:text-slate-600" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="p-4 pr-6 text-right">Thao tác</th>
               </tr>
             </thead>
@@ -346,15 +538,15 @@ export function AdminStaff() {
                     Đang tải danh sách tài khoản từ Supabase Cloud...
                   </td>
                 </tr>
-              ) : filteredUsers.length === 0 ? (
+              ) : filteredAndSortedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-xs text-slate-400">
-                    Không tìm thấy tài khoản phù hợp với điều kiện tìm kiếm.
+                    Không tìm thấy tài khoản phù hợp với điều kiện tìm kiếm và vai trò đã chọn.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => {
-                  const roleName = u.role?.name || 'passenger'
+                filteredAndSortedUsers.map((u) => {
+                  const roleName = (u.role?.name || 'passenger').toLowerCase()
                   const isUpdating = updatingId === u.id
                   const isTest = isTestAccount(u)
                   const isProtectedSuperAdmin =
@@ -376,10 +568,10 @@ export function AdminStaff() {
                       </td>
                       <td className="p-4">
                         <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          {roleName === 'admin' && <ShieldAlert size={14} className="text-purple-600" />}
-                          {roleName === 'manager' && <UserCheck size={14} className="text-blue-600" />}
-                          {roleName === 'driver' && <Bus size={14} className="text-emerald-600" />}
-                          {roleName === 'passenger' && <GraduationCap size={14} className="text-slate-400" />}
+                          {roleName === 'admin' && <ShieldAlert size={14} className="text-purple-600 shrink-0" />}
+                          {roleName === 'manager' && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                          {roleName === 'driver' && <Bus size={14} className="text-emerald-600 shrink-0" />}
+                          {roleName === 'passenger' && <GraduationCap size={14} className="text-slate-400 shrink-0" />}
                           <span>{u.fullName}</span>
                         </p>
                         {u.faculty && (
