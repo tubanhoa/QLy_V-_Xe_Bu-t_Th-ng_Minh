@@ -1098,4 +1098,25 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       order: { reportedAt: 'DESC' },
     });
   }
+
+  async getAllIncidents(status?: string, severity?: string) {
+    const qb = this.incidentRepository
+      .createQueryBuilder('inc')
+      .leftJoinAndSelect('inc.trip', 'trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
+      .leftJoinAndSelect('inc.reportedByUser', 'reportedByUser');
+
+    if (status && status !== 'all') {
+      qb.andWhere('inc.resolutionStatus = :status', { status });
+    }
+
+    if (severity && severity !== 'all') {
+      qb.andWhere('inc.severity = :severity', { severity });
+    }
+
+    qb.orderBy('inc.reportedAt', 'DESC');
+    return qb.getMany();
+  }
 }

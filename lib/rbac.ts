@@ -96,10 +96,22 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       icon: LayoutDashboard,
     },
     {
-      key: 'staff',
-      label: 'Nhân sự & Phân quyền',
-      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
-      icon: Users,
+      key: 'schedule',
+      label: 'Lịch trình & Điều xe',
+      description: 'Phân ca tài xế, tạo lịch chạy xe thông minh',
+      icon: CalendarDays,
+    },
+    {
+      key: 'gps',
+      label: 'Bản đồ Giám sát GPS',
+      description: 'Định vị GPS trực tuyến & Bộ giả lập IoT',
+      icon: Navigation,
+    },
+    {
+      key: 'incidents',
+      label: 'Cảnh báo & Sự cố',
+      description: 'Theo dõi sự cố đội xe, tắc đường, trễ giờ',
+      icon: AlertTriangle,
     },
     {
       key: 'routes',
@@ -124,6 +136,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Vé tháng & Trợ giá HSSV',
       description: 'Chính sách ưu đãi sinh viên ICTU, voucher',
       icon: Ticket,
+    },
+    {
+      key: 'staff',
+      label: 'Nhân sự & Phân quyền',
+      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
+      icon: Users,
     },
     {
       key: 'reports',

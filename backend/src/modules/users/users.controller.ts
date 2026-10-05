@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service.js';
-import { CreateUserDto, UpdateUserDto, ChangeRoleDto, ChangeStatusDto } from './dto/user.dto.js';
+import { CreateUserDto, UpdateUserDto, ChangeRoleDto, ChangeStatusDto, ListUsersQueryDto } from './dto/user.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -32,14 +32,8 @@ export class UsersController {
   @ApiQuery({ name: 'role', required: false })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'classification', required: false, description: 'all | official | test' })
-  async findAll(
-    @Query() pagination: PaginationDto,
-    @Query('search') search?: string,
-    @Query('role') role?: string,
-    @Query('status') status?: string,
-    @Query('classification') classification?: string,
-  ) {
-    return this.usersService.findAll(pagination, search, role, status, classification);
+  async findAll(@Query() query: ListUsersQueryDto) {
+    return this.usersService.findAll(query, query.search, query.role, query.status, query.classification);
   }
 
   @Post('cleanup-test-data')

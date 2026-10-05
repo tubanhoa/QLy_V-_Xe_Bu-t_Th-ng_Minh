@@ -2,6 +2,7 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-vali
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '../../../common/constants/roles.constant.js';
 import { UserStatus } from '../../../common/constants/status.constant.js';
+import { PaginationDto } from '../../../common/dto/pagination.dto.js';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'driver.nam@ictu.edu.vn' })
@@ -89,4 +90,21 @@ export class ChangeStatusDto {
   @IsString()
   @IsNotEmpty()
   status: UserStatus;
+}
+
+export class ListUsersQueryDto extends PaginationDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  classification?: string;
 }

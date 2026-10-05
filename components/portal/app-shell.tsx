@@ -166,6 +166,9 @@ export function AppShell() {
     // Phân hệ Super Admin (Quản trị viên)
     if (portalRole === 'admin') {
       if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
+      if (activeItem.key === 'schedule') return <DispatcherSchedule />
+      if (activeItem.key === 'gps') return <DispatcherGpsMap />
+      if (activeItem.key === 'incidents') return <DispatcherIncidents />
       if (activeItem.key === 'routes') return <AdminRoutes />
       if (activeItem.key === 'fleet') return <AdminFleet />
       if (activeItem.key === 'payments') return <AdminPayments />
