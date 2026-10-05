@@ -163,3 +163,28 @@ export class ResendTicketByCodeDto {
   @IsEmail({}, { message: 'Địa chỉ email không đúng định dạng' })
   email?: string;
 }
+
+export class AdminTicketsQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'paid' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: 'vnpay' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @ApiPropertyOptional({ example: 'BK-0745' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}

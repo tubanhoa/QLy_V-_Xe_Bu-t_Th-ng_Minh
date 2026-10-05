@@ -216,6 +216,126 @@ class PaymentService {
       }
     }
   }
+
+  /**
+   * Lấy toàn bộ danh sách vé và giao dịch đặt vé (Dành cho Quản trị viên)
+   * Endpoint: GET /api/v1/booking/admin/tickets
+   */
+  async getAdminTickets(query?: {
+    page?: number
+    limit?: number
+    status?: string
+    paymentMethod?: string
+    search?: string
+  }): Promise<
+    UnifiedApiResponse<{
+      items: Array<{
+        id: string
+        ticketCode: string
+        bookingCode: string
+        customerName: string
+        phone: string
+        email: string
+        route: string
+        seatNumber: string
+        amount: number
+        paymentMethod: string
+        status: string
+        createdAt: string
+        departureTime?: string
+      }>
+      meta: {
+        page: number
+        limit: number
+        total: number
+        totalPages: number
+      }
+    }>
+  > {
+    try {
+      const params = new URLSearchParams()
+      if (query?.page) params.append('page', String(query.page))
+      if (query?.limit) params.append('limit', String(query.limit))
+      if (query?.status) params.append('status', query.status)
+      if (query?.paymentMethod) params.append('paymentMethod', query.paymentMethod)
+      if (query?.search) params.append('search', query.search)
+
+      const url = `${this.baseUrl}/booking/admin/tickets${
+        params.toString() ? `?${params.toString()}` : ''
+      }`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải danh sách vé quản trị',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson?.data || resJson,
+      }
+    } catch (error: any) {
+      console.error('[PaymentService.getAdminTickets] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối tải dữ liệu giao dịch',
+      }
+    }
+  }
+
+  /**
+   * Lấy danh sách log hoàn tiền đối soát
+   * Endpoint: GET /api/v1/payment/refund-logs
+   */
+  async getRefundLogs(query?: {
+    page?: number
+    limit?: number
+    status?: string
+  }): Promise<UnifiedApiResponse<any>> {
+    try {
+      const params = new URLSearchParams()
+      if (query?.page) params.append('page', String(query.page))
+      if (query?.limit) params.append('limit', String(query.limit))
+      if (query?.status) params.append('status', query.status)
+
+      const url = `${this.baseUrl}/payment/refund-logs${
+        params.toString() ? `?${params.toString()}` : ''
+      }`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải danh sách nhật ký hoàn tiền',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson?.data || resJson,
+      }
+    } catch (error: any) {
+      console.error('[PaymentService.getRefundLogs] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối tải nhật ký hoàn tiền',
+      }
+    }
+  }
 }
 
 export const paymentService = new PaymentService()

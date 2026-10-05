@@ -30,6 +30,7 @@ import {
   CancelTicketDto,
   HoldExchangeSeatDto,
   ConfirmExchangeDto,
+  AdminTicketsQueryDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { BookingStatus, TicketStatus, TripStatus, PaymentStatus } from '../../common/constants/status.constant.js';
@@ -644,6 +645,70 @@ export class BookingService {
           departureTime: t.booking?.trip?.departureTime,
           refundInfo,
           createdAt: t.createdAt,
+        };
+      }),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getAdminTickets(query: AdminTicketsQueryDto) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const qb = this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoinAndSelect('ticket.booking', 'booking')
+      .leftJoinAndSelect('booking.user', 'user')
+      .leftJoinAndSelect('booking.trip', 'trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('ticket.seat', 'seat')
+      .leftJoinAndSelect('booking.payments', 'payments');
+
+    if (query.status && query.status !== 'all') {
+      qb.andWhere('ticket.status = :status', { status: query.status });
+    }
+
+    if (query.paymentMethod && query.paymentMethod !== 'all') {
+      qb.andWhere('payments.paymentMethod = :method', { method: query.paymentMethod });
+    }
+
+    if (query.search && query.search.trim()) {
+      const s = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(ticket.ticketCode) LIKE :s OR LOWER(booking.bookingCode) LIKE :s OR LOWER(ticket.passengerName) LIKE :s OR LOWER(ticket.passengerPhone) LIKE :s OR LOWER(user.email) LIKE :s)',
+        { s },
+      );
+    }
+
+    qb.orderBy('ticket.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [tickets, total] = await qb.getManyAndCount();
+
+    return {
+      items: tickets.map((t) => {
+        const payment = t.booking?.payments?.[0];
+        return {
+          id: t.id,
+          ticketCode: t.ticketCode,
+          bookingCode: t.booking?.bookingCode || 'N/A',
+          customerName: t.passengerName || t.booking?.user?.fullName || 'Hành khách',
+          phone: t.passengerPhone || t.booking?.user?.phoneNumber || 'N/A',
+          email: t.booking?.user?.email || 'N/A',
+          route: t.booking?.trip?.route?.name || 'Tuyến xe ICTU',
+          seatNumber: t.seat?.seatNumber || 'N/A',
+          amount: Number(t.originalPrice || t.booking?.totalAmount || 10000),
+          paymentMethod: payment?.paymentMethod || 'vnpay',
+          status: t.status,
+          createdAt: t.createdAt,
+          departureTime: t.booking?.trip?.departureTime,
         };
       }),
       meta: {

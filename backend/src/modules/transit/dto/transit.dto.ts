@@ -367,6 +367,40 @@ export class CreateVehicleDto {
   batteryCapacityKwh?: number;
 }
 
+export class UpdateVehicleStatusDto {
+  @ApiProperty({ enum: ['active', 'maintenance', 'retired'], example: 'maintenance' })
+  @IsNotEmpty()
+  @IsString()
+  status: any;
+}
+
+export class UpdateVehicleDto {
+  @ApiPropertyOptional({ example: 'VinFast eBus 2024' })
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @ApiPropertyOptional({ example: 'electric' })
+  @IsOptional()
+  @IsString()
+  vehicleType?: string;
+
+  @ApiPropertyOptional({ example: 2024 })
+  @IsOptional()
+  @IsNumber()
+  manufactureYear?: number;
+
+  @ApiPropertyOptional({ example: 281.9 })
+  @IsOptional()
+  @IsNumber()
+  batteryCapacityKwh?: number;
+
+  @ApiPropertyOptional({ enum: ['active', 'maintenance', 'retired'] })
+  @IsOptional()
+  @IsString()
+  status?: any;
+}
+
 export class SearchRouteDto {
   @ApiPropertyOptional({ example: 'ĐH CNTT & TT Thái Nguyên', description: 'Điểm khởi hành / trạm đi' })
   @IsOptional()
