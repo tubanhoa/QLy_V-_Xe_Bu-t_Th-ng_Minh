@@ -7,6 +7,34 @@ import {
 } from '@/lib/types/payment'
 import { UnifiedApiResponse } from '@/lib/types/sprint1'
 
+export interface AdminTicketItem {
+  id: string
+  ticketCode: string
+  bookingCode: string
+  customerName: string
+  phone: string
+  email: string
+  route: string
+  seatNumber: string
+  amount: number
+  price?: number
+  paymentMethod: string
+  status: string
+  createdAt: string
+  departureTime?: string
+  user?: {
+    id?: string
+    fullName?: string
+    email?: string
+    phoneNumber?: string
+  }
+  booking?: {
+    id?: string
+    bookingCode?: string
+    paymentMethod?: string
+  }
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
 

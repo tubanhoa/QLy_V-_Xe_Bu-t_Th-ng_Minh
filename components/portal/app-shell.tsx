@@ -21,6 +21,9 @@ import { AdminPayments } from './modules/admin-payments'
 import { AdminStaff } from './modules/admin-staff'
 import { AdminReports } from './modules/admin-reports'
 import { AdminSettings } from './modules/admin-settings'
+import { AdminVouchers } from './modules/admin-vouchers'
+import { AdminFeedback } from './modules/admin-feedback'
+import { AdminInvoices } from './modules/admin-invoices'
 import { ContentSkeleton, ModulePreview } from './dashboard/content-states'
 import { DriverDashboard } from './dashboard/driver-dashboard'
 import { DriverCockpit } from './dashboard/driver-cockpit'
@@ -161,6 +164,7 @@ export function AppShell() {
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />
+      if (activeItem.key === 'feedback') return <AdminFeedback />
     }
 
     // Phân hệ Super Admin (Quản trị viên)
@@ -173,6 +177,9 @@ export function AppShell() {
       if (activeItem.key === 'fleet') return <AdminFleet />
       if (activeItem.key === 'payments') return <AdminPayments />
       if (activeItem.key === 'passes') return <DispatcherStudentApproval />
+      if (activeItem.key === 'vouchers') return <AdminVouchers />
+      if (activeItem.key === 'invoices') return <AdminInvoices />
+      if (activeItem.key === 'feedback') return <AdminFeedback />
       if (activeItem.key === 'staff') return <AdminStaff />
       if (activeItem.key === 'reports') return <AdminReports />
       if (activeItem.key === 'settings') return <AdminSettings />
