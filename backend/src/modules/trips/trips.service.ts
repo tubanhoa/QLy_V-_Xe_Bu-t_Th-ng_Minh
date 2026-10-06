@@ -177,6 +177,16 @@ export class TripsService {
     let currentMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
 
+    if (intervalMinutes <= 0) {
+      throw new BadRequestException('Tần suất chạy xe (intervalMinutes) phải lớn hơn 0 phút');
+    }
+
+    if (currentMinutes >= endMinutes) {
+      throw new BadRequestException(
+        `Giờ bắt đầu xuất bến (${startTimeStr}) phải sớm hơn giờ kết thúc ca chạy (${endTimeStr})`,
+      );
+    }
+
     // Estimate trip duration in minutes from route distance or default 45 mins
     const estimatedTripMinutes = route.distanceKm ? Math.round(Number(route.distanceKm) * 2.5) : 45;
 
