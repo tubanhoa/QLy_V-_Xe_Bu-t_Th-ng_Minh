@@ -41,6 +41,8 @@ export function DispatcherSchedule() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [tripTypeFilter, setTripTypeFilter] = useState<'all' | 'regular' | 'adhoc'>('all')
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned' | 'assigned'>('all')
+  const [routeFilter, setRouteFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('')
 
   // Dữ liệu tài nguyên xe, tài xế & tuyến đường
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -238,6 +240,30 @@ export function DispatcherSchedule() {
       return
     }
 
+    // Validation thời gian: Giờ bắt đầu < Giờ kết thúc & Khoảng cách phút hợp lệ
+    if (genStartTime && genEndTime) {
+      const [startH, startM] = genStartTime.split(':').map(Number)
+      const [endH, endM] = genEndTime.split(':').map(Number)
+      const startMinutes = startH * 60 + startM
+      const endMinutes = endH * 60 + endM
+
+      if (startMinutes >= endMinutes) {
+        alert(`Lỗi thời gian: Giờ bắt đầu ca chạy (${genStartTime}) phải sớm hơn Giờ kết thúc (${genEndTime})!`)
+        return
+      }
+
+      const totalSpan = endMinutes - startMinutes
+      const intervalNum = Number(genInterval) || 30
+      if (intervalNum <= 0) {
+        alert('Tần suất chạy xe phải lớn hơn 0 phút!')
+        return
+      }
+      if (totalSpan < intervalNum) {
+        alert(`Khoảng thời gian vận hành (${totalSpan} phút) không đủ để bố trí tần suất ${intervalNum} phút/chuyến!`)
+        return
+      }
+    }
+
     setIsSubmittingGenerate(true)
     try {
       const res = await tripService.generateSchedule({
@@ -279,8 +305,29 @@ export function DispatcherSchedule() {
     }
   }
 
-  // Lọc tìm kiếm phía Client
+  // Lọc tìm kiếm phía Client (Tuyến xe, Ngày áp dụng, Trạng thái, Tìm kiếm)
   const filtered = trips.filter((s) => {
+    // 1. Lọc theo tuyến đường
+    if (routeFilter !== 'all') {
+      const matchRoute =
+        s.routeId === routeFilter ||
+        s.route?.id === routeFilter ||
+        s.route?.routeCode === routeFilter
+      if (!matchRoute) return false
+    }
+
+    // 2. Lọc theo ngày áp dụng
+    if (dateFilter) {
+      if (!s.departureTime) return false
+      try {
+        const tripDateStr = new Date(s.departureTime).toISOString().split('T')[0]
+        if (tripDateStr !== dateFilter) return false
+      } catch {
+        return false
+      }
+    }
+
+    // 3. Tìm kiếm từ khóa text
     const sId = (s.id || '').toLowerCase()
     const rName = (s.route?.name || '').toLowerCase()
     const rCode = (s.route?.routeCode || '').toLowerCase()
@@ -614,6 +661,63 @@ export function DispatcherSchedule() {
             >
               ✅ Đã gán đầy đủ ({totalCount - unassignedCount})
             </button>
+          </div>
+        </div>
+
+        {/* Hàng 3: Lọc chi tiết theo Tuyến xe buýt & Ngày áp dụng */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+              <Bus size={13} /> Lọc theo tuyến:
+            </span>
+            <select
+              value={routeFilter}
+              onChange={(e) => setRouteFilter(e.target.value)}
+              className="h-8.5 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-emerald-500 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Tất cả các tuyến ({routes.length})</option>
+              {routes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  [{r.routeCode}] {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+              <Calendar size={13} /> Lọc theo ngày:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="h-8.5 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-emerald-500 focus:outline-none cursor-pointer"
+              />
+              {dateFilter && (
+                <button
+                  type="button"
+                  onClick={() => setDateFilter('')}
+                  title="Xóa lọc theo ngày"
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {(routeFilter !== 'all' || dateFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRouteFilter('all')
+                  setDateFilter('')
+                }}
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline px-1 cursor-pointer"
+              >
+                Đặt lại bộ lọc
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1134,6 +1238,21 @@ export function DispatcherSchedule() {
                 </div>
               </div>
 
+              {/* Validation cảnh báo thời gian trực quan */}
+              {(() => {
+                if (!genStartTime || !genEndTime) return null
+                const [sH, sM] = genStartTime.split(':').map(Number)
+                const [eH, eM] = genEndTime.split(':').map(Number)
+                const isInvalid = sH * 60 + sM >= eH * 60 + eM
+                if (!isInvalid) return null
+                return (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-600 dark:text-red-400 flex items-center gap-1.5 animate-in fade-in">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>Lỗi: Giờ bắt đầu ca chạy ({genStartTime}) phải sớm hơn Giờ kết thúc ({genEndTime})!</span>
+                  </div>
+                )
+              })()}
+
               <div>
                 <label className="text-xs font-semibold text-foreground">
                   Tần suất chạy xe (Phút / Chuyến)
@@ -1168,7 +1287,15 @@ export function DispatcherSchedule() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingGenerate}
+                  disabled={
+                    isSubmittingGenerate ||
+                    (() => {
+                      if (!genStartTime || !genEndTime) return false
+                      const [sH, sM] = genStartTime.split(':').map(Number)
+                      const [eH, eM] = genEndTime.split(':').map(Number)
+                      return sH * 60 + sM >= eH * 60 + eM
+                    })()
+                  }
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingGenerate ? 'Đang tạo biểu đồ...' : 'Xác Nhận Sinh Khung Giờ'}

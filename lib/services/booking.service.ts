@@ -86,17 +86,15 @@ export function releaseBookedSeats(tripId: string, seatNumbers: string[]): void 
 
 export function generateFallbackSeatMap(tripId: string): SeatMapData {
   const cols = ['A', 'B', 'C', 'D'] as const
-  const defaultBooked = ['01A', '02D', '04B', '05A']
+  // Không tự động tạo dữ liệu mock ghế: Mặc định tất cả các ghế đều TRỐNG 100% cho mục đích demo thực tế
   const tripBooked = getBookedSeatsForTrip(tripId)
-  const allBooked = Array.from(new Set([...defaultBooked, ...tripBooked]))
-  const bookedSet = new Set(allBooked)
+  const bookedSet = new Set(tripBooked)
 
   const seats: SeatItem[] = Array.from({ length: 28 }, (_, i) => {
     const rowNumber = Math.floor(i / 4) + 1
     const col = cols[i % 4]
     const seatNumber = `${String(rowNumber).padStart(2, '0')}${col}`
     const isBooked = bookedSet.has(seatNumber)
-    const isHolding = !isBooked && ['03A', '06B'].includes(seatNumber)
     return {
       seatId: `seat-${tripId}-${seatNumber}`,
       seatNumber,
@@ -104,7 +102,7 @@ export function generateFallbackSeatMap(tripId: string): SeatMapData {
       columnLabel: col,
       seatType: rowNumber === 1 ? 'priority' : 'standard',
       isBooked,
-      bookingStatus: isBooked ? 'booked' : isHolding ? 'holding' : 'available',
+      bookingStatus: isBooked ? 'booked' : 'available',
       isHeldByMe: false,
       holdExpiresAt: null,
       price: 10000,

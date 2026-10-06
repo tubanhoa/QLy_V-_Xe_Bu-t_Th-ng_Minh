@@ -12,6 +12,7 @@ import {
   Calendar,
   Check,
   Clock,
+  Compass,
   Filter,
   Loader2,
   MapPin,
@@ -60,10 +61,10 @@ export function TripSearchModal({
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
-  type SortCriteria = 'departure' | 'price' | 'seats'
+  type SortCriteria = 'departure' | 'route' | 'price' | 'seats'
   type SortDirection = 'asc' | 'desc'
 
-  const [filterType, setFilterType] = useState<'all' | 'soon' | 'available' | 'ct01' | 'ct02'>('all')
+  const [filterType, setFilterType] = useState<'all' | 'soon' | 'available'>('all')
   const [sortBy, setSortBy] = useState<SortCriteria>('departure')
   const [sortOrder, setSortOrder] = useState<SortDirection>('asc')
 
@@ -74,7 +75,7 @@ export function TripSearchModal({
     } else {
       // Đổi sang tiêu chí mới với chiều mặc định tối ưu nhất
       setSortBy(criteria)
-      // Mặc định: Giờ chạy -> asc (sớm nhất), Giá vé -> asc (thấp nhất), Ghế trống -> desc (nhiều nhất)
+      // Mặc định: Giờ chạy -> asc (sớm nhất), Tuyến đường -> asc (A-Z), Giá vé -> asc (thấp nhất), Ghế trống -> desc (nhiều nhất)
       setSortOrder(criteria === 'seats' ? 'desc' : 'asc')
     }
   }
@@ -91,18 +92,24 @@ export function TripSearchModal({
       })
     } else if (filterType === 'available') {
       result = result.filter((t) => Number(t.availableSeats || 0) >= 10)
-    } else if (filterType === 'ct01') {
-      result = result.filter((t) => t.routeCode.includes('01'))
-    } else if (filterType === 'ct02') {
-      result = result.filter((t) => t.routeCode.includes('02'))
     }
 
-    // Logic sắp xếp chính xác cho Giờ chạy, Giá vé và Ghế trống
+    // Logic sắp xếp chính xác cho Giờ chạy, Tuyến đường, Giá vé và Ghế trống
     result.sort((a, b) => {
       if (sortBy === 'departure') {
         const timeA = new Date(a.departureTime).getTime() || 0
         const timeB = new Date(b.departureTime).getTime() || 0
         return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
+      }
+
+      if (sortBy === 'route') {
+        const codeA = a.routeCode || ''
+        const codeB = b.routeCode || ''
+        const cmp = codeA.localeCompare(codeB, 'vi', { numeric: true })
+        if (cmp !== 0) return sortOrder === 'asc' ? cmp : -cmp
+        const timeA = new Date(a.departureTime).getTime() || 0
+        const timeB = new Date(b.departureTime).getTime() || 0
+        return timeA - timeB
       }
 
       if (sortBy === 'price') {
@@ -415,7 +422,7 @@ export function TripSearchModal({
                 type="button"
                 onClick={() => setFilterType('soon')}
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1',
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer',
                   filterType === 'soon'
                     ? 'bg-amber-500 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
@@ -429,7 +436,7 @@ export function TripSearchModal({
                 type="button"
                 onClick={() => setFilterType('available')}
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1',
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer',
                   filterType === 'available'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
@@ -438,40 +445,14 @@ export function TripSearchModal({
                 <Users size={12} className={filterType === 'available' ? 'text-emerald-200' : 'text-emerald-600'} />
                 <span>Còn nhiều chỗ (≥ 10)</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterType('ct01')}
-                className={cn(
-                  'shrink-0 rounded-full px-2.5 py-1 font-bold text-xs transition-all',
-                  filterType === 'ct01'
-                    ? 'bg-[#005A36] text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
-                )}
-              >
-                Tuyến CT-01
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterType('ct02')}
-                className={cn(
-                  'shrink-0 rounded-full px-2.5 py-1 font-bold text-xs transition-all',
-                  filterType === 'ct02'
-                    ? 'bg-[#005A36] text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
-                )}
-              >
-                Tuyến CT-02
-              </button>
             </div>
 
-            {/* Sorter Selector: Equal 3-column grid on mobile, inline on desktop */}
+            {/* Sorter Selector: Equal 4-column grid on mobile, inline on desktop */}
             <div className="flex items-center gap-1.5 w-full sm:w-auto sm:ml-auto">
               <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] hidden md:inline shrink-0">
                 Sắp xếp:
               </span>
-              <div className="grid grid-cols-3 sm:flex items-center rounded-xl bg-slate-200/60 p-0.5 border border-slate-200/80 w-full sm:w-auto">
+              <div className="grid grid-cols-4 sm:flex items-center rounded-xl bg-slate-200/60 p-0.5 border border-slate-200/80 w-full sm:w-auto">
                 {/* Giờ chạy */}
                 <button
                   type="button"
@@ -491,9 +472,29 @@ export function TripSearchModal({
                       {sortOrder === 'asc' ? <ArrowUp size={10} strokeWidth={3} /> : <ArrowDown size={10} strokeWidth={3} />}
                       {sortOrder === 'asc' ? 'Sớm' : 'Muộn'}
                     </span>
-                  ) : (
-                    <span className="hidden sm:inline">chạy</span>
+                  ) : null}
+                </button>
+
+                {/* Tuyến đường */}
+                <button
+                  type="button"
+                  title="Nhấn để đổi chiều: Tuyến A-Z <-> Tuyến Z-A"
+                  onClick={() => handleToggleSort('route')}
+                  className={cn(
+                    'rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-1 text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer select-none',
+                    sortBy === 'route'
+                      ? 'bg-white text-[#005A36] shadow-xs ring-1 ring-emerald-300/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900',
                   )}
+                >
+                  <Compass size={12} className={sortBy === 'route' ? 'text-[#005A36]' : 'text-slate-400'} />
+                  <span>Tuyến</span>
+                  {sortBy === 'route' ? (
+                    <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded flex items-center">
+                      {sortOrder === 'asc' ? <ArrowUp size={10} strokeWidth={3} /> : <ArrowDown size={10} strokeWidth={3} />}
+                      {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
+                    </span>
+                  ) : null}
                 </button>
 
                 {/* Giá vé */}
@@ -515,9 +516,7 @@ export function TripSearchModal({
                       {sortOrder === 'asc' ? <ArrowUp size={10} strokeWidth={3} /> : <ArrowDown size={10} strokeWidth={3} />}
                       {sortOrder === 'asc' ? 'Thấp' : 'Cao'}
                     </span>
-                  ) : (
-                    <span className="hidden sm:inline">vé</span>
-                  )}
+                  ) : null}
                 </button>
 
                 {/* Ghế trống */}
@@ -539,9 +538,7 @@ export function TripSearchModal({
                       {sortOrder === 'desc' ? <ArrowDown size={10} strokeWidth={3} /> : <ArrowUp size={10} strokeWidth={3} />}
                       {sortOrder === 'desc' ? 'Nhiều' : 'Ít'}
                     </span>
-                  ) : (
-                    <span className="hidden sm:inline">trống</span>
-                  )}
+                  ) : null}
                 </button>
               </div>
             </div>
@@ -565,6 +562,10 @@ export function TripSearchModal({
                       (sortOrder === 'asc'
                         ? 'Giờ xuất bến (Sớm nhất ➔ Muộn nhất)'
                         : 'Giờ xuất bến (Muộn nhất ➔ Sớm nhất)')}
+                    {sortBy === 'route' &&
+                      (sortOrder === 'asc'
+                        ? 'Tuyến đường (CT-01 ➔ CT-02 ➔ CT-03...)'
+                        : 'Tuyến đường (Z ➔ A)')}
                     {sortBy === 'price' &&
                       (sortOrder === 'asc'
                         ? 'Giá vé (Thấp nhất ➔ Cao nhất)'
@@ -671,9 +672,36 @@ export function TripSearchModal({
                   {/* Top Header Row */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                      <span className="rounded-xl bg-[#005A36] px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider">
-                        {trip.routeCode}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="rounded-xl bg-[#005A36] px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider">
+                          {trip.routeCode}
+                        </span>
+                        {/* Pill trạng thái ghế xe buýt chuyên nghiệp */}
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black border transition-all',
+                            isSoldOut
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : isAlmostFull
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200/70',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'size-1.5 rounded-full animate-pulse',
+                              isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
+                            )}
+                          />
+                          <span>
+                            {isSoldOut
+                              ? 'Hết chỗ'
+                              : isAlmostFull
+                                ? `Còn ${availableSeats}/${totalSeats} chỗ`
+                                : `Còn trống ${availableSeats}/${totalSeats} chỗ`}
+                          </span>
+                        </span>
+                      </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <h4 className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#005A36] transition-colors">
@@ -684,7 +712,7 @@ export function TripSearchModal({
                           </span>
                         </div>
                         <span className="text-[11px] font-medium text-slate-500">
-                          Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa chuẩn: {totalSeats} chỗ ngồi
+                          Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa: {totalSeats} ghế ngồi
                         </span>
                       </div>
                     </div>

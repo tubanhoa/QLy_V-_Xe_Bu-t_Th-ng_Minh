@@ -106,6 +106,9 @@ export interface TripSearchResult {
   availableSeats: number
   vehiclePlate: string
   vehicleType: string
+  createdAt?: string
+  isAdhoc?: boolean
+  isNew?: boolean
 }
 
 export interface SearchTripsQuery {

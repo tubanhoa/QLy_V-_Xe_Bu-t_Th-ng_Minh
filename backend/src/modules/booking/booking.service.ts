@@ -177,10 +177,14 @@ export class BookingService {
       bookedCountMap.set(r.tripId, parseInt(r.bookedCount, 10) || 0);
     });
 
+    const nowMs = Date.now();
     const results = trips.map((trip) => {
       const capacity = trip.vehicle?.seatCapacity || 28;
       const bookedCount = bookedCountMap.get(trip.id) || 0;
       const availableSeats = Math.max(0, capacity - bookedCount);
+      const isAdhoc = trip.tripType === 'adhoc' || trip.tripType === 'special';
+      const createdTimeMs = trip.createdAt ? new Date(trip.createdAt).getTime() : 0;
+      const isNew = isAdhoc || (nowMs - createdTimeMs <= 24 * 60 * 60 * 1000);
 
       return {
         id: trip.id,
@@ -198,6 +202,9 @@ export class BookingService {
         availableSeats,
         vehiclePlate: trip.vehicle?.licensePlate,
         vehicleType: trip.vehicle?.vehicleType,
+        createdAt: trip.createdAt,
+        isAdhoc,
+        isNew,
       };
     });
 
