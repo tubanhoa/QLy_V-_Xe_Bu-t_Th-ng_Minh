@@ -137,36 +137,9 @@ class BookingService {
     this.baseUrl = raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`
   }
 
-  /**
-   * Đảm bảo phiên đăng nhập hợp lệ khi người dùng đặt vé
-   * Nếu là khách vãng lai trải nghiệm, tự động lấy token sinh viên ICTU
-   */
-  private async ensureValidToken(): Promise<string | null> {
-    let token = authService.getToken()
-    if (!token || token.startsWith('mock_')) {
-      try {
-        const loginRes = await fetch(`${this.baseUrl}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: 'student.an@ictu.edu.vn',
-            password: 'Password@123',
-          }),
-        })
-        const loginJson = await loginRes.json().catch(() => null)
-        if (loginRes.ok && loginJson?.data?.accessToken) {
-          authService.saveSession(loginJson.data, true)
-          token = loginJson.data.accessToken
-        }
-      } catch (err) {
-        console.warn('[BookingService] Không thể tự động lấy token sinh viên:', err)
-      }
-    }
-    return token
-  }
-
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = await this.ensureValidToken()
+  /** Lấy Authorization Header từ phiên đăng nhập thực tế của người dùng */
+  private getAuthHeaders(): Record<string, string> {
+    const token = authService.getToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }

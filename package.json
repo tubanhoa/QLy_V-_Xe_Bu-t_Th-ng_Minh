@@ -5,6 +5,7 @@
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev",
+    "dev:all": "node scripts/start-dev.mjs",
     "build": "next build",
     "start": "next start"
   },

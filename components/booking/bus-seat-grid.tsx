@@ -27,7 +27,7 @@ interface BusSeatGridProps {
   disabled?: boolean
 }
 
-export function BusSeatGrid({
+function BusSeatGridComponent({
   seats,
   selectedSeatIds,
   onToggleSeat,
@@ -352,3 +352,5 @@ export function BusSeatGrid({
     </div>
   )
 }
+
+export const BusSeatGrid = React.memo(BusSeatGridComponent)

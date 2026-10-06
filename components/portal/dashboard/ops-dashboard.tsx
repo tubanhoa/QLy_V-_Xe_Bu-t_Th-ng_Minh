@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   ShieldCheck,
   Lock,
@@ -53,9 +53,17 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
 
   // Inactivity timeout watchdog (Tự động khóa phiên sau 15 phút không tương tác để bảo vệ bàn điều hành)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastActivityTimeRef = useRef<number>(Date.now())
   const INACTIVITY_LIMIT_MS = 15 * 60 * 1000 // 15 phút
 
   const resetInactivityTimer = useCallback(() => {
+    const now = Date.now()
+    // Throttle: Chỉ xử lý lại nếu lần reset trước đã cách hơn 30 giây để tránh giật lag scroll/mouse
+    if (now - lastActivityTimeRef.current < 30_000 && inactivityTimerRef.current) {
+      return
+    }
+    lastActivityTimeRef.current = now
+
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current)
     }
@@ -68,7 +76,7 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
     const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll']
     const handleActivity = () => resetInactivityTimer()
 
-    activityEvents.forEach((ev) => window.addEventListener(ev, handleActivity))
+    activityEvents.forEach((ev) => window.addEventListener(ev, handleActivity, { passive: true }))
     resetInactivityTimer()
 
     return () => {
@@ -103,71 +111,75 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
     return () => clearInterval(interval)
   }, [loadDashboardData])
 
-  // Chuyển đổi dữ liệu Live Trip sang cấu trúc giao diện TripsPanel
-  const mappedTrips: Trip[] = (data?.liveTrips || []).map((t: LiveTripItem, idx: number) => {
-    let tripStatus: TripStatus = 'scheduled'
-    if (t.status === 'RUNNING' || t.status === 'in_progress') tripStatus = 'running'
-    else if (t.status === 'COMPLETED' || t.status === 'completed') tripStatus = 'arriving'
-    else if (t.status === 'DELAYED' || t.status === 'delayed') tripStatus = 'delayed'
+  // Chuyển đổi dữ liệu Live Trip sang cấu trúc giao diện TripsPanel có memoization
+  const mappedTrips: Trip[] = useMemo(() => {
+    return (data?.liveTrips || []).map((t: LiveTripItem, idx: number) => {
+      let tripStatus: TripStatus = 'scheduled'
+      if (t.status === 'RUNNING' || t.status === 'in_progress') tripStatus = 'running'
+      else if (t.status === 'COMPLETED' || t.status === 'completed') tripStatus = 'arriving'
+      else if (t.status === 'DELAYED' || t.status === 'delayed') tripStatus = 'delayed'
 
-    const departureStr = t.departureTime
-      ? new Date(t.departureTime).toLocaleTimeString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-      : '07:15'
+      const departureStr = t.departureTime
+        ? new Date(t.departureTime).toLocaleTimeString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '07:15'
 
-    return {
-      id: t.id || `trip_${idx}`,
-      code: t.route?.routeCode ? `${t.route.routeCode}-#${idx + 1}` : `BUS-${idx + 101}`,
-      route: t.route ? `${t.route.routeCode} · ${t.route.name}` : 'Tuyến đang cập nhật',
-      plate: t.vehicle?.licensePlate || '20B-012.34',
-      driver: t.driver?.fullName || 'Trần Văn Nam (Tài xế)',
-      departure: departureStr,
-      occupancy: t.bookedSeatsCount ?? 0,
-      capacity: t.vehicle?.seatCapacity || 28,
-      status: tripStatus,
-    }
-  })
+      return {
+        id: t.id || `trip_${idx}`,
+        code: t.route?.routeCode ? `${t.route.routeCode}-#${idx + 1}` : `BUS-${idx + 101}`,
+        route: t.route ? `${t.route.routeCode} · ${t.route.name}` : 'Tuyến đang cập nhật',
+        plate: t.vehicle?.licensePlate || '20B-012.34',
+        driver: t.driver?.fullName || 'Trần Văn Nam (Tài xế)',
+        departure: departureStr,
+        occupancy: t.bookedSeatsCount ?? 0,
+        capacity: t.vehicle?.seatCapacity || 28,
+        status: tripStatus,
+      }
+    })
+  }, [data?.liveTrips])
 
-  // Dynamic KPIs từ dữ liệu thực tế 100% từ Supabase
-  const dynamicKpis = [
-    {
-      key: 'revenue',
-      label: 'Doanh thu kỳ này',
-      value: `${(data?.kpis.totalRevenue ?? 0).toLocaleString('vi-VN')} đ`,
-      delta: `${data?.kpis.totalRevenueGrowth !== undefined && data.kpis.totalRevenueGrowth >= 0 ? '+' : ''}${data?.kpis.totalRevenueGrowth ?? 0}%`,
-      progress: Math.min(
-        100,
-        Math.round(((data?.kpis.totalRevenue ?? 0) / 2000000) * 100),
-      ),
-      hint: 'Dữ liệu giao dịch live từ Supabase',
-    },
-    {
-      key: 'trips',
-      label: 'Vé số hóa đã phát hành',
-      value: `${(data?.kpis.totalTicketsSold ?? 0).toLocaleString('vi-VN')} vé`,
-      delta: `+${data?.kpis.ticketsGrowth ?? 0}%`,
-      progress: Math.min(100, Math.round(((data?.kpis.totalTicketsSold ?? 0) / 200) * 100)),
-      hint: 'Vé lượt QR Code & Thẻ sinh viên',
-    },
-    {
-      key: 'occupancy',
-      label: 'Hệ số lấp đầy TB',
-      value: `${data?.kpis.averageOccupancyRate ?? 0}%`,
-      delta: '+3.2%',
-      progress: data?.kpis.averageOccupancyRate ?? 0,
-      hint: 'Giờ cao điểm các cổng trường ICTU',
-    },
-    {
-      key: 'speed',
-      label: 'Đội xe đang vận hành',
-      value: `${data?.kpis.activeVehiclesCount ?? 3} xe`,
-      delta: `${data?.kpis.activeIncidentsCount ?? 0} cảnh báo`,
-      progress: 100,
-      hint: 'Giám sát kết nối GPS thời gian thực',
-    },
-  ]
+  // Dynamic KPIs từ dữ liệu thực tế 100% từ Supabase có memoization
+  const dynamicKpis = useMemo(() => {
+    return [
+      {
+        key: 'revenue',
+        label: 'Doanh thu kỳ này',
+        value: `${(data?.kpis.totalRevenue ?? 0).toLocaleString('vi-VN')} đ`,
+        delta: `${data?.kpis.totalRevenueGrowth !== undefined && data.kpis.totalRevenueGrowth >= 0 ? '+' : ''}${data?.kpis.totalRevenueGrowth ?? 0}%`,
+        progress: Math.min(
+          100,
+          Math.round(((data?.kpis.totalRevenue ?? 0) / 2000000) * 100),
+        ),
+        hint: 'Dữ liệu giao dịch live từ Supabase',
+      },
+      {
+        key: 'trips',
+        label: 'Vé số hóa đã phát hành',
+        value: `${(data?.kpis.totalTicketsSold ?? 0).toLocaleString('vi-VN')} vé`,
+        delta: `+${data?.kpis.ticketsGrowth ?? 0}%`,
+        progress: Math.min(100, Math.round(((data?.kpis.totalTicketsSold ?? 0) / 200) * 100)),
+        hint: 'Vé lượt QR Code & Thẻ sinh viên',
+      },
+      {
+        key: 'occupancy',
+        label: 'Hệ số lấp đầy TB',
+        value: `${data?.kpis.averageOccupancyRate ?? 0}%`,
+        delta: '+3.2%',
+        progress: data?.kpis.averageOccupancyRate ?? 0,
+        hint: 'Giờ cao điểm các cổng trường ICTU',
+      },
+      {
+        key: 'speed',
+        label: 'Đội xe đang vận hành',
+        value: `${data?.kpis.activeVehiclesCount ?? 3} xe`,
+        delta: `${data?.kpis.activeIncidentsCount ?? 0} cảnh báo`,
+        progress: 100,
+        hint: 'Giám sát kết nối GPS thời gian thực',
+      },
+    ]
+  }, [data?.kpis])
 
   return (
     <div className="flex flex-col gap-6">

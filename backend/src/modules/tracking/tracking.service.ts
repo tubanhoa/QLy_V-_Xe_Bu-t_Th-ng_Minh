@@ -114,7 +114,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         port: redisPort,
         password: redisPassword,
         maxRetriesPerRequest: 1,
-        connectTimeout: 2000,
+        connectTimeout: 500,
         lazyConnect: true,
       });
 

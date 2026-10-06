@@ -178,9 +178,9 @@ export class BookingController {
   @ApiOperation({ summary: 'Kiểm tra điều kiện hủy/đổi vé và tính phí theo thời gian thực' })
   async getCancellationPolicy(
     @Param('ticketId') ticketId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: any,
   ) {
-    return this.bookingService.getCancellationPolicy(ticketId, userId);
+    return this.bookingService.getCancellationPolicy(ticketId, user?.id, user?.role);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -190,12 +190,17 @@ export class BookingController {
   async cancelTicket(
     @Param('ticketId') ticketId: string,
     @Body() dto: CancelTicketDto,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: any,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
     @Headers('x-idempotency-key') xIdempotencyKeyHeader?: string,
   ) {
     const key = idempotencyKeyHeader || xIdempotencyKeyHeader || dto?.idempotencyKey;
-    return this.bookingService.cancelTicket(ticketId, userId, { ...dto, idempotencyKey: key });
+    return this.bookingService.cancelTicket(
+      ticketId,
+      user?.id,
+      { ...dto, idempotencyKey: key },
+      user?.role,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

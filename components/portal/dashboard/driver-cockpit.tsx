@@ -14,7 +14,7 @@
  * Branch: feature/SBTS-frontend-incident-management-and-realtime-alerts
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import {
   Bus,
   Clock,
@@ -152,54 +152,10 @@ const THAI_NGUYEN_STOPS: StationStop[] = [
 
 type SidePanelTab = 'none' | 'scanner' | 'manifest' | 'incident'
 
-export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
-  // 1. Data State từ API Backend
-  const [trips, setTrips] = useState<DriverTripItem[]>([])
-  const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // 2. Chế độ hiển thị & Bản đồ
-  const [mapType, setMapType] = useState<'vector' | 'google'>('vector')
-  const [isDayMode, setIsDayMode] = useState(true) // Mặc định Giao diện Sáng Ban Ngày theo yêu cầu
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [isWakeLocked, setIsWakeLocked] = useState(false)
+/** Đồng hồ độc lập ngăn toàn bộ buồng lái 1200 dòng re-render mỗi giây */
+const CockpitClock = memo(function CockpitClock() {
   const [currentTime, setCurrentTime] = useState('')
 
-  // 3. Tiến trình xe & Trạm dừng
-  const [currentStopIndex, setCurrentStopIndex] = useState(0)
-  const [busProgress, setBusProgress] = useState(0.12) // 0 -> 1 dọc tuyến
-  const [speedKmh, setSpeedKmh] = useState(32)
-  const [isGpsActive, setIsGpsActive] = useState(true)
-  const [audioNotice, setAudioNotice] = useState<string | null>(null)
-
-  // 4. Panel bên hông (Single-Surface Zero-Scroll Drawer)
-  const [activeTab, setActiveTab] = useState<SidePanelTab>('none')
-
-  // 5. Trạng thái Soát vé QR
-  const [manualCode, setManualCode] = useState('')
-  const [isVerifyingTicket, setIsVerifyingTicket] = useState(false)
-  const [ticketResult, setTicketResult] = useState<{
-    status: 'success' | 'duplicate' | 'error'
-    message: string
-    passenger?: string
-    seat?: string
-    ticketCode?: string
-    time?: string
-  } | null>(null)
-
-  // 6. Trạng thái Manifest Hành khách
-  const [manifestList, setManifestList] = useState<ManifestPassenger[]>([])
-  const [manifestSearch, setManifestSearch] = useState('')
-  const [isLoadingManifest, setIsLoadingManifest] = useState(false)
-
-  // 7. Trạng thái Báo sự cố SOS
-  const [selectedIncidentType, setSelectedIncidentType] = useState<IncidentType>('traffic_jam')
-  const [delayMinutes, setDelayMinutes] = useState(15)
-  const [incidentDescription, setIncidentDescription] = useState('')
-  const [isSubmittingIncident, setIsSubmittingIncident] = useState(false)
-  const [incidentSuccessNotice, setIncidentSuccessNotice] = useState<string | null>(null)
-
-  // Cập nhật đồng hồ thời gian thực
   useEffect(() => {
     const updateTime = () => {
       const now = new Date()
@@ -215,6 +171,66 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     const timer = setInterval(updateTime, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  return (
+    <span className="font-mono text-xl font-black text-slate-900 dark:text-white">
+      {currentTime}
+    </span>
+  )
+})
+
+export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
+  // 1. Data State từ API Backend
+  const [trips, setTrips] = useState<DriverTripItem[]>([])
+  const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // 2. Chế độ hiển thị & Bản đồ
+  const [mapType, setMapType] = useState<'vector' | 'google'>('vector')
+  const [isDayMode, setIsDayMode] = useState(true) // Mặc định Giao diện Sáng Ban Ngày theo yêu cầu
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isWakeLocked, setIsWakeLocked] = useState(false)
+
+  // 3. Tiến trình xe & Trạm dừng
+  const [currentStopIndex, setCurrentStopIndex] = useState(0)
+  const [busProgress, setBusProgress] = useState(0.12) // 0 -> 1 dọc tuyến
+  const [speedKmh, setSpeedKmh] = useState(32)
+  const [isGpsActive, setIsGpsActive] = useState(true)
+  const [audioNotice, setAudioNotice] = useState<string | null>(null)
+
+  // 4. Panel bên hông (Single-Surface Zero-Scroll Drawer)
+  const [activeTab, setActiveTab] = useState<SidePanelTab>('none')
+
+  // 5. Trạng thái Soát vé QR
+  const [manualCode, setManualCode] = useState('')
+  const [isVerifyingTicket, setIsVerifyingTicket] = useState(false)
+  const [ticketResult, setTicketResult] = useState<{
+    status: 'success' | 'duplicate' | 'error' | 'wrong_trip'
+    message: string
+    passenger?: string
+    seat?: string
+    ticketCode?: string
+    time?: string
+    correctTrip?: {
+      routeName?: string
+      departureTime?: string
+      vehiclePlate?: string
+    }
+  } | null>(null)
+
+  // 6. Trạng thái Manifest Hành khách
+  const [manifestList, setManifestList] = useState<ManifestPassenger[]>([])
+  const [manifestSearch, setManifestSearch] = useState('')
+  const [isLoadingManifest, setIsLoadingManifest] = useState(false)
+
+  // 7. Trạng thái Báo sự cố SOS
+  const [selectedIncidentType, setSelectedIncidentType] = useState<IncidentType>('traffic_jam')
+  const [delayMinutes, setDelayMinutes] = useState(15)
+  const [incidentDescription, setIncidentDescription] = useState('')
+  const [isSubmittingIncident, setIsSubmittingIncident] = useState(false)
+  const [incidentSuccessNotice, setIncidentSuccessNotice] = useState<string | null>(null)
+
+
 
   // Tự động giữ màn hình luôn sáng bằng Screen Wake Lock
   useEffect(() => {
@@ -387,12 +403,23 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
         message: 'CẢNH BÁO: Vé này đã được check-in trước đó!',
         time: nowTime,
       })
+    } else if (res.data?.isWrongTrip) {
+      driverHardware.playCue('ticketInvalid')
+      setTicketResult({
+        status: 'wrong_trip',
+        passenger: res.data.passenger,
+        seat: res.data.seat,
+        ticketCode: code,
+        message: res.data.message || 'CẢNH BÁO: Vé hợp lệ nhưng KHÔNG THUỘC CHUYẾN XE NÀY!',
+        time: nowTime,
+        correctTrip: res.data.correctTrip,
+      })
     } else {
       driverHardware.playCue('ticketInvalid')
       setTicketResult({
         status: 'error',
         ticketCode: code,
-        message: res.data?.message || res.message || 'Mã vé không hợp lệ hoặc sai tuyến xe!',
+        message: res.data?.message || res.message || 'Mã vé không hợp lệ hoặc không tìm thấy!',
         time: nowTime,
       })
     }
@@ -710,9 +737,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
         <div className="pointer-events-auto hidden md:flex items-center gap-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-5 py-2.5 shadow-lg border border-slate-200/90 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-slate-500" />
-            <span className="font-mono text-xl font-black text-slate-900 dark:text-white">
-              {currentTime}
-            </span>
+            <CockpitClock />
           </div>
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
           <div className="flex items-center gap-2">
@@ -898,22 +923,33 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                 <div
                   className={`mt-4 rounded-3xl p-4 border shadow-md transition-all ${
                     ticketResult.status === 'success'
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                      : ticketResult.status === 'duplicate'
-                      ? 'bg-amber-50 border-amber-300 text-amber-950'
-                      : 'bg-rose-50 border-rose-300 text-rose-950'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-200'
+                      : ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip'
+                      ? 'bg-amber-50 border-amber-300 text-amber-950 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-200'
+                      : 'bg-rose-50 border-rose-300 text-rose-950 dark:bg-rose-950/40 dark:border-rose-700 dark:text-rose-200'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    {ticketResult.status === 'success' && <CheckCircle2 size={28} className="text-emerald-600 shrink-0" />}
-                    {ticketResult.status === 'duplicate' && <AlertTriangle size={28} className="text-amber-600 shrink-0" />}
-                    {ticketResult.status === 'error' && <ShieldAlert size={28} className="text-rose-600 shrink-0" />}
-                    <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    {ticketResult.status === 'success' && <CheckCircle2 size={28} className="text-emerald-600 shrink-0 mt-0.5" />}
+                    {(ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip') && (
+                      <AlertTriangle size={28} className="text-amber-600 shrink-0 mt-0.5" />
+                    )}
+                    {ticketResult.status === 'error' && <ShieldAlert size={28} className="text-rose-600 shrink-0 mt-0.5" />}
+                    <div className="min-w-0 flex-1">
                       <h4 className="font-black text-sm">{ticketResult.message}</h4>
                       {ticketResult.passenger && (
-                        <p className="text-xs font-bold mt-0.5">
-                          Hành khách: {ticketResult.passenger} · Ghế: {ticketResult.seat}
+                        <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-300">
+                          Hành khách: {ticketResult.passenger} · Ghế: {ticketResult.seat || 'Tiêu chuẩn'}
                         </p>
+                      )}
+                      {ticketResult.correctTrip && (
+                        <div className="mt-2.5 rounded-xl bg-amber-100/80 dark:bg-amber-900/40 p-2.5 text-xs text-amber-900 dark:text-amber-200 border border-amber-300/50">
+                          <p className="font-bold">Hướng dẫn khách sang đúng xe:</p>
+                          <p className="mt-0.5">· Tuyến: <span className="font-semibold">{ticketResult.correctTrip.routeName}</span></p>
+                          {ticketResult.correctTrip.vehiclePlate && (
+                            <p>· Xe: <span className="font-semibold">{ticketResult.correctTrip.vehiclePlate}</span></p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

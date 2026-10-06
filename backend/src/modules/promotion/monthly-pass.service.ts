@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +12,7 @@ import { RegisterMonthlyPassDto, ReviewMonthlyPassDto } from './dto/promotion.dt
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { MonthlyPassCategory, ApprovalStatus } from '../../common/constants/status.constant.js';
 import { generateMonthlyPassCode } from '../../common/utils/booking-code.util.js';
+import { NotificationCenterService } from '../notification/notification-center.service.js';
 
 @Injectable()
 export class MonthlyPassService {
@@ -19,6 +21,8 @@ export class MonthlyPassService {
     private readonly monthlyPassRepository: Repository<MonthlyPassEntity>,
     @InjectRepository(RouteEntity)
     private readonly routeRepository: Repository<RouteEntity>,
+    @Optional()
+    private readonly notificationCenterService?: NotificationCenterService,
   ) {}
 
   async register(dto: RegisterMonthlyPassDto, userId: string) {
@@ -103,6 +107,28 @@ export class MonthlyPassService {
     }
 
     await this.monthlyPassRepository.save(pass);
+
+    // Gửi thông báo hệ thống cho sinh viên/hành khách
+    if (this.notificationCenterService && pass.userId) {
+      const isApproved = dto.status === ApprovalStatus.APPROVED;
+      await this.notificationCenterService
+        .saveNotification({
+          userId: pass.userId,
+          type: 'SYSTEM',
+          title: isApproved ? 'Hồ sơ vé tháng được phê duyệt' : 'Hồ sơ vé tháng bị từ chối',
+          message: isApproved
+            ? `Chúc mừng! Hồ sơ vé tháng của bạn (Mã: ${pass.passCode}) đã được phê duyệt thành công.`
+            : `Rất tiếc! Hồ sơ vé tháng của bạn (Mã: ${pass.passCode}) đã bị từ chối. Lý do: ${dto.rejectionReason || 'Thông tin không hợp lệ'}.`,
+          deepLink: '/portal/monthly-pass',
+          data: {
+            passId: pass.id,
+            passCode: pass.passCode,
+            status: dto.status,
+          },
+        })
+        .catch(() => {});
+    }
+
     return pass;
   }
 }

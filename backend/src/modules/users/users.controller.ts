@@ -72,6 +72,12 @@ export class UsersController {
     return this.usersService.changeStatus(id, dto);
   }
 
+  @Get(':id/driver-activity')
+  @ApiOperation({ summary: 'Xem hồ sơ hoạt động, lịch sử ca chạy và soát vé của tài xế' })
+  async getDriverActivity(@Param('id') id: string) {
+    return this.usersService.getDriverActivity(id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Xóa tài khoản người dùng hoặc tài khoản rác' })
   async remove(@Param('id') id: string) {

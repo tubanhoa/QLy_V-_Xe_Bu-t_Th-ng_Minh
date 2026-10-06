@@ -114,7 +114,7 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
   }, [holdExpiresAt, selectedSeats.length, fetchSeatMap])
 
   // 4. Chọn hoặc Bỏ chọn ghế với API Anti-Race-Condition
-  const toggleSeat = async (seat: SeatItem) => {
+  const toggleSeat = useCallback(async (seat: SeatItem) => {
     if (!tripId || isHoldingAction) return
 
     const isAlreadySelected = selectedSeats.some((s) => s.seatId === seat.seatId)
@@ -261,10 +261,10 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     } finally {
       setIsHoldingAction(false)
     }
-  }
+  }, [tripId, isHoldingAction, selectedSeats, isAuthenticated, fetchSeatMap])
 
   // 5. Giải phóng toàn bộ ghế đang giữ khi người dùng hủy bỏ hoặc đóng modal
-  const releaseAllHeldSeats = async () => {
+  const releaseAllHeldSeats = useCallback(async () => {
     if (!tripId || selectedSeats.length === 0) return
     const ids = selectedSeats.map((s) => s.seatId)
     setSelectedSeats([])
@@ -274,7 +274,11 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     } catch {
       // bỏ qua lỗi khi cleanup
     }
-  }
+  }, [tripId, selectedSeats])
+
+  const refreshSeatMap = useCallback(() => {
+    return fetchSeatMap(false)
+  }, [fetchSeatMap])
 
   return {
     seatMap,
@@ -289,6 +293,6 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     holdExpiresAt,
     toggleSeat,
     releaseAllHeldSeats,
-    refreshSeatMap: () => fetchSeatMap(false),
+    refreshSeatMap,
   }
 }

@@ -105,35 +105,9 @@ class AnalyticsService {
     this.baseUrl = raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`
   }
 
-  /**
-   * Tự động kiểm tra và đảm bảo Access Token JWT chuẩn kết nối Backend NestJS
-   */
-  private async ensureValidToken(forceRefresh = false): Promise<string | null> {
-    let token = authService.getToken()
-    if (!token || token.startsWith('mock_') || forceRefresh) {
-      try {
-        const loginRes = await fetch(`${this.baseUrl}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: 'admin@smartbus.ictu.vn',
-            password: 'Password@123',
-          }),
-        })
-        const loginJson = await loginRes.json().catch(() => null)
-        if (loginRes.ok && loginJson?.data?.accessToken) {
-          authService.saveSession(loginJson.data, true)
-          token = loginJson.data.accessToken
-        }
-      } catch (err) {
-        console.warn('[AnalyticsService] Lỗi tự động xác thực JWT:', err)
-      }
-    }
-    return token
-  }
-
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = await this.ensureValidToken()
+  /** Lấy Authorization Header từ phiên đăng nhập thực tế của người dùng */
+  private getAuthHeaders(): Record<string, string> {
+    const token = authService.getToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -144,16 +118,14 @@ class AnalyticsService {
   }
 
   /**
-   * Fetch with auto retry on 401 Unauthorized (JWT expiration recovery)
+   * Fetch với header xác thực JWT của tài khoản đang đăng nhập
    */
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-    let headers = await this.getAuthHeaders()
-    let res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
+    const headers = this.getAuthHeaders()
+    const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
 
-    if (res.status === 401) {
-      await this.ensureValidToken(true)
-      headers = await this.getAuthHeaders()
-      res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
+    if (res.status === 401 && typeof window !== 'undefined') {
+      authService.clearSession()
     }
     return res
   }

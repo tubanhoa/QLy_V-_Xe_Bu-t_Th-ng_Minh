@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo, memo } from 'react'
 import {
   Armchair,
   Bus,
@@ -27,12 +27,43 @@ interface StationItem {
   state: 'done' | 'current' | 'upcoming'
 }
 
+/** Component đếm ngược độc lập ngăn chặn render lại toàn bộ trang mỗi giây */
+const DepartureCountdown = memo(function DepartureCountdown({
+  departureTime,
+}: {
+  departureTime?: string
+}) {
+  const [countdownText, setCountdownText] = useState('00:00')
+
+  useEffect(() => {
+    if (!departureTime) return
+
+    const targetTime = new Date(departureTime).getTime()
+
+    const updateTimer = () => {
+      const diff = Math.max(0, Math.floor((targetTime - Date.now()) / 1000))
+      const minutes = String(Math.floor(diff / 60)).padStart(2, '0')
+      const seconds = String(diff % 60).padStart(2, '0')
+      setCountdownText(`${minutes}:${seconds}`)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [departureTime])
+
+  return (
+    <p className="mt-1 font-mono text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-emerald-300">
+      {countdownText}
+    </p>
+  )
+})
+
 export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardProps) {
   const [trips, setTrips] = useState<DriverTripItem[]>([])
   const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
   const [manifestCount, setManifestCount] = useState<number>(0)
   const [isLoading, setIsLoading] = useState(true)
-  const [countdownText, setCountdownText] = useState('00:00')
 
   // Tải danh sách ca chạy từ API Backend Supabase
   const loadTrips = useCallback(async () => {
@@ -69,75 +100,61 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
     loadTrips()
   }, [loadTrips])
 
-  // Đếm ngược thời gian xuất bến dựa trên departureTime thực tế
-  useEffect(() => {
-    if (!activeTrip?.departureTime) return
+  // Trích xuất lộ trình trạm dừng thực tế từ Supabase DB (routeStations) có memoization
+  const routeStops: StationItem[] = useMemo(() => {
+    const rawStations =
+      (activeTrip?.route as any)?.routeStations ||
+      activeTrip?.route?.stations ||
+      []
 
-    const targetTime = new Date(activeTrip.departureTime).getTime()
-
-    const updateTimer = () => {
-      const diff = Math.max(0, Math.floor((targetTime - Date.now()) / 1000))
-      const minutes = String(Math.floor(diff / 60)).padStart(2, '0')
-      const seconds = String(diff % 60).padStart(2, '0')
-      setCountdownText(`${minutes}:${seconds}`)
+    if (rawStations.length > 0) {
+      return [...rawStations]
+        .sort((a: any, b: any) => (a.stopOrder || 0) - (b.stopOrder || 0))
+        .map((s: any, idx: number) => ({
+          name: s.station?.name || s.name || `Trạm ${idx + 1}`,
+          time:
+            s.time ||
+            (s.departureTime
+              ? new Date(s.departureTime).toLocaleTimeString('vi-VN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : `+${(s.stopOrder || idx + 1) * 7}m`),
+          state: (idx === 0 ? 'current' : 'upcoming') as StationItem['state'],
+        }))
     }
 
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
+    return [
+      {
+        name: activeTrip?.route?.origin || 'Trạm ĐH CNTT & TT Thái Nguyên (ICTU)',
+        time: '07:00',
+        state: 'current' as const,
+      },
+      {
+        name: 'Trạm Cổng KTX ĐH Thái Nguyên',
+        time: '+8m',
+        state: 'upcoming' as const,
+      },
+      {
+        name: 'Trạm Bệnh Viện Đa Khoa Trung Ương',
+        time: '+24m',
+        state: 'upcoming' as const,
+      },
+      {
+        name: activeTrip?.route?.destination || 'Trạm Bến Xe Trung Tâm Thái Nguyên',
+        time: '+35m',
+        state: 'upcoming' as const,
+      },
+    ]
   }, [activeTrip])
 
-  // Trích xuất lộ trình trạm dừng thực tế từ Supabase DB (routeStations)
-  const rawStations =
-    (activeTrip?.route as any)?.routeStations ||
-    activeTrip?.route?.stations ||
-    []
-
-  const routeStops: StationItem[] =
-    rawStations.length > 0
-      ? [...rawStations]
-          .sort((a: any, b: any) => (a.stopOrder || 0) - (b.stopOrder || 0))
-          .map((s: any, idx: number) => ({
-            name: s.station?.name || s.name || `Trạm ${idx + 1}`,
-            time:
-              s.time ||
-              (s.departureTime
-                ? new Date(s.departureTime).toLocaleTimeString('vi-VN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : `+${(s.stopOrder || idx + 1) * 7}m`),
-            state: idx === 0 ? 'current' : 'upcoming',
-          }))
-      : [
-          {
-            name: activeTrip?.route?.origin || 'Trạm ĐH CNTT & TT Thái Nguyên (ICTU)',
-            time: '07:00',
-            state: 'current',
-          },
-          {
-            name: 'Trạm Cổng KTX ĐH Thái Nguyên',
-            time: '+8m',
-            state: 'upcoming',
-          },
-          {
-            name: 'Trạm Bệnh Viện Đa Khoa Trung Ương',
-            time: '+24m',
-            state: 'upcoming',
-          },
-          {
-            name: activeTrip?.route?.destination || 'Trạm Bến Xe Trung Tâm Thái Nguyên',
-            time: '+35m',
-            state: 'upcoming',
-          },
-        ]
-
-  const departureTimeString = activeTrip?.departureTime
-    ? new Date(activeTrip.departureTime).toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : 'Chưa xếp lịch'
+  const departureTimeString = useMemo(() => {
+    if (!activeTrip?.departureTime) return 'Chưa xếp lịch'
+    return new Date(activeTrip.departureTime).toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }, [activeTrip?.departureTime])
 
   const vehicleLicensePlate =
     (activeTrip?.vehicle as any)?.licensePlate ||
@@ -238,9 +255,7 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                   <Timer size={14} strokeWidth={1.75} aria-hidden="true" />
                   {activeTrip?.status === 'in_progress' ? 'Thời gian ca chạy' : 'Khởi hành sau'}
                 </p>
-                <p className="mt-1 font-mono text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-emerald-300">
-                  {countdownText}
-                </p>
+                <DepartureCountdown departureTime={activeTrip?.departureTime} />
               </div>
               <div className="text-right">
                 <p className="text-xs text-white/55">Giờ xuất bến</p>

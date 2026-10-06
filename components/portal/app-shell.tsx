@@ -7,32 +7,92 @@ import { LogOut, ShieldAlert, Sparkles, Ticket } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { ROLE_NAV, type Role } from '@/lib/rbac'
+import dynamic from 'next/dynamic'
 import { BottomSheet } from './bottom-sheet'
-import { DriverScanner } from './dashboard/driver-scanner'
-import { DriverManifest } from './dashboard/driver-manifest'
-import { DriverIncident } from './dashboard/driver-incident'
-import { DispatcherGpsMap } from './modules/dispatcher-gps-map'
-import { DispatcherStudentApproval } from './modules/dispatcher-student-approval'
-import { DispatcherSchedule } from './modules/dispatcher-schedule'
-import { DispatcherIncidents } from './modules/dispatcher-incidents'
-import { AdminRoutes } from './modules/admin-routes'
-import { AdminFleet } from './modules/admin-fleet'
-import { AdminPayments } from './modules/admin-payments'
-import { AdminStaff } from './modules/admin-staff'
-import { AdminReports } from './modules/admin-reports'
-import { AdminSettings } from './modules/admin-settings'
-import { AdminVouchers } from './modules/admin-vouchers'
-import { AdminFeedback } from './modules/admin-feedback'
-import { AdminInvoices } from './modules/admin-invoices'
 import { ContentSkeleton, ModulePreview } from './dashboard/content-states'
-import { DriverDashboard } from './dashboard/driver-dashboard'
-import { DriverCockpit } from './dashboard/driver-cockpit'
-import { OpsDashboard } from './dashboard/ops-dashboard'
 import { DesktopSider } from './desktop-sider'
 import { DriverBottomNav } from './driver-bottom-nav'
 import { NavMenu } from './nav-menu'
 import { OperatorCard } from './operator-card'
 import { TopHeader } from './top-header'
+
+// Tối ưu hóa hiệu năng Portal: Lazy Load các phân hệ theo Role (Code Splitting)
+const OpsDashboard = dynamic(
+  () => import('./dashboard/ops-dashboard').then((m) => m.OpsDashboard),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverDashboard = dynamic(
+  () => import('./dashboard/driver-dashboard').then((m) => m.DriverDashboard),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverCockpit = dynamic(
+  () => import('./dashboard/driver-cockpit').then((m) => m.DriverCockpit),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverScanner = dynamic(
+  () => import('./dashboard/driver-scanner').then((m) => m.DriverScanner),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverManifest = dynamic(
+  () => import('./dashboard/driver-manifest').then((m) => m.DriverManifest),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverIncident = dynamic(
+  () => import('./dashboard/driver-incident').then((m) => m.DriverIncident),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherGpsMap = dynamic(
+  () => import('./modules/dispatcher-gps-map').then((m) => m.DispatcherGpsMap),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherStudentApproval = dynamic(
+  () => import('./modules/dispatcher-student-approval').then((m) => m.DispatcherStudentApproval),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherSchedule = dynamic(
+  () => import('./modules/dispatcher-schedule').then((m) => m.DispatcherSchedule),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherIncidents = dynamic(
+  () => import('./modules/dispatcher-incidents').then((m) => m.DispatcherIncidents),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminRoutes = dynamic(
+  () => import('./modules/admin-routes').then((m) => m.AdminRoutes),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminFleet = dynamic(
+  () => import('./modules/admin-fleet').then((m) => m.AdminFleet),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminPayments = dynamic(
+  () => import('./modules/admin-payments').then((m) => m.AdminPayments),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminStaff = dynamic(
+  () => import('./modules/admin-staff').then((m) => m.AdminStaff),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminReports = dynamic(
+  () => import('./modules/admin-reports').then((m) => m.AdminReports),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminSettings = dynamic(
+  () => import('./modules/admin-settings').then((m) => m.AdminSettings),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminVouchers = dynamic(
+  () => import('./modules/admin-vouchers').then((m) => m.AdminVouchers),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminFeedback = dynamic(
+  () => import('./modules/admin-feedback').then((m) => m.AdminFeedback),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminInvoices = dynamic(
+  () => import('./modules/admin-invoices').then((m) => m.AdminInvoices),
+  { loading: () => <ContentSkeleton /> }
+)
 
 const SKELETON_MS = 550
 

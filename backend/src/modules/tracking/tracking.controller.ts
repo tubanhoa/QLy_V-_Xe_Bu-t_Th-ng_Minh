@@ -66,7 +66,9 @@ export class TrackingController {
     return this.trackingService.recordLocation(dto);
   }
 
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post('driver/update-location')
   @ApiOperation({
     summary: 'REST fallback để tài xế cập nhật vị trí GPS (hỗ trợ cả REST và WS)',

@@ -9,10 +9,12 @@ import { Repository, Like, FindOptionsWhere } from 'typeorm';
 import bcrypt from 'bcrypt';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { RoleEntity } from '../../database/entities/role.entity.js';
+import { TripEntity } from '../../database/entities/trip.entity.js';
+import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { CreateUserDto, UpdateUserDto, ChangeRoleDto, ChangeStatusDto } from './dto/user.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Role } from '../../common/constants/roles.constant.js';
-import { UserStatus } from '../../common/constants/status.constant.js';
+import { UserStatus, TripStatus } from '../../common/constants/status.constant.js';
 
 @Injectable()
 export class UsersService {
@@ -21,6 +23,10 @@ export class UsersService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
+    @InjectRepository(TripEntity)
+    private readonly tripRepository: Repository<TripEntity>,
+    @InjectRepository(TicketEntity)
+    private readonly ticketRepository: Repository<TicketEntity>,
   ) {}
 
   async findAll(
@@ -267,6 +273,90 @@ export class UsersService {
       deletedCount: usersToDelete.length,
       deletedEmails: usersToDelete.map((u) => u.email),
       message: `Đã dọn dẹp thành công ${usersToDelete.length} tài khoản kiểm thử và dữ liệu rác.`,
+    };
+  }
+
+  async getDriverActivity(driverId: string) {
+    const driver = await this.userRepository.findOne({
+      where: { id: driverId },
+      relations: { role: true },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Không tìm thấy tài khoản tài xế với ID ${driverId}`);
+    }
+
+    // 1. Lấy danh sách chuyến xe phụ trách (15 chuyến gần nhất)
+    const trips = await this.tripRepository.find({
+      where: { driverId },
+      relations: { route: true, vehicle: true },
+      order: { departureTime: 'DESC' },
+      take: 15,
+    });
+
+    // 2. Thống kê số lượng chuyến
+    const totalTrips = await this.tripRepository.count({ where: { driverId } });
+    const completedTrips = await this.tripRepository.count({
+      where: { driverId, status: TripStatus.COMPLETED },
+    });
+    const inProgressTrips = await this.tripRepository.count({
+      where: { driverId, status: TripStatus.IN_PROGRESS },
+    });
+
+    // 3. Tổng số lượt vé đã soát thành công bởi tài xế này
+    const totalTicketsCheckedIn = await this.ticketRepository.count({
+      where: { checkedInBy: driverId },
+    });
+
+    // 4. Lịch sử 10 lượt soát vé gần nhất
+    const recentCheckIns = await this.ticketRepository.find({
+      where: { checkedInBy: driverId },
+      relations: {
+        booking: {
+          trip: {
+            route: true,
+          },
+        },
+        seat: true,
+      },
+      order: { checkedInAt: 'DESC' },
+      take: 10,
+    });
+
+    return {
+      driver: {
+        id: driver.id,
+        fullName: driver.fullName,
+        email: driver.email,
+        phoneNumber: driver.phoneNumber,
+        idCardNumber: driver.idCardNumber,
+        status: driver.status,
+        licenseClass: driver.faculty || 'Hạng D (Xe 29-45 chỗ)',
+        role: driver.role?.name || 'driver',
+        createdAt: driver.createdAt,
+      },
+      stats: {
+        totalTrips,
+        completedTrips,
+        inProgressTrips,
+        totalTicketsCheckedIn,
+      },
+      trips: trips.map((t) => ({
+        id: t.id,
+        departureTime: t.departureTime,
+        status: t.status,
+        routeName: t.route?.name || 'Tuyến buýt ICTU',
+        routeCode: t.route?.routeCode,
+        vehiclePlate: t.vehicle?.licensePlate || 'Chưa gán xe',
+        capacity: t.vehicle?.seatCapacity,
+      })),
+      recentCheckIns: recentCheckIns.map((t) => ({
+        ticketCode: t.ticketCode,
+        passengerName: t.passengerName,
+        seatNumber: t.seat?.seatNumber || 'Ghế tiêu chuẩn',
+        routeName: t.booking?.trip?.route?.name || 'Tuyến buýt ICTU',
+        checkedInAt: t.checkedInAt,
+      })),
     };
   }
 }

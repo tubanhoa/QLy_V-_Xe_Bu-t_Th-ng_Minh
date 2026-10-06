@@ -28,7 +28,7 @@ interface DriverScannerProps {
 }
 
 interface ScanResult {
-  status: 'valid' | 'invalid' | 'duplicate'
+  status: 'valid' | 'invalid' | 'duplicate' | 'wrong_trip'
   passengerName?: string
   ticketCode: string
   seatNumber?: string
@@ -38,6 +38,14 @@ interface ScanResult {
   timestamp: string
   firstScannedAt?: string
   scanCount?: number
+  isMonthlyPass?: boolean
+  category?: string
+  correctTrip?: {
+    tripId?: string
+    routeName?: string
+    departureTime?: string
+    vehiclePlate?: string
+  }
 }
 
 export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
@@ -114,12 +122,14 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
         status: 'valid',
         passengerName: passenger,
         ticketCode: code,
-        seatNumber: res.data.seat || res.data.ticket?.seatNumber || 'Ghế tiêu chuẩn',
+        seatNumber: res.data.seat || res.data.ticket?.seatNumber || (res.data.isMonthlyPass ? 'Ghế tự do (Vé tháng HSSV)' : 'Ghế tiêu chuẩn'),
         route: activeTrip?.route?.name || 'Tuyến ICTU Transit',
         pickupStation: res.data.ticket?.pickupStation?.name || 'Trạm đón đăng ký',
         message: res.data.message || res.message || 'Vé hợp lệ - Đã ghi nhận check-in lên xe thành công',
         timestamp: nowStr,
         scanCount: 1,
+        isMonthlyPass: res.data.isMonthlyPass,
+        category: res.data.category,
       })
     } else if (res.data?.alreadyCheckedIn) {
       if (soundEnabled) driverHardware.playCue('ticketDuplicate')
@@ -131,13 +141,26 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
         message: res.data.message || 'Vé này đã được check-in trước đó!',
         timestamp: nowStr,
       })
+    } else if (res.data?.isWrongTrip) {
+      if (soundEnabled) driverHardware.playCue('ticketInvalid')
+
+      setScanResult({
+        status: 'wrong_trip',
+        ticketCode: code,
+        passengerName: res.data.passenger,
+        seatNumber: res.data.seat,
+        route: res.data.correctTrip?.routeName,
+        message: res.data.message || 'Vé hợp lệ nhưng KHÔNG THUỘC CHUYẾN XE NÀY!',
+        timestamp: nowStr,
+        correctTrip: res.data.correctTrip,
+      })
     } else {
       if (soundEnabled) driverHardware.playCue('ticketInvalid')
 
       setScanResult({
         status: 'invalid',
         ticketCode: code,
-        message: res.data?.message || res.message || 'Vé không hợp lệ hoặc không thuộc chuyến xe này!',
+        message: res.data?.message || res.message || 'Vé không hợp lệ hoặc không tìm thấy trong hệ thống!',
         timestamp: nowStr,
       })
     }
@@ -236,7 +259,7 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
             <input
               type="text"
-              placeholder="Nhập mã vé hoặc mã sinh viên (VD: TK-01A)..."
+              placeholder="Nhập mã vé (VD: TKT-ICTU-2026-NUJIO2 hoặc mã QR)..."
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
               className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-xs sm:text-sm text-white placeholder:text-white/40 focus:border-emerald-400 focus:outline-none"
@@ -258,6 +281,8 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
           className={`rounded-3xl border p-5 shadow-lg transition-all animate-in fade-in slide-in-from-bottom-2 ${
             scanResult.status === 'valid'
               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100'
+              : scanResult.status === 'wrong_trip'
+              ? 'border-amber-500/50 bg-amber-500/15 text-amber-950 dark:text-amber-100 ring-2 ring-amber-400/30'
               : scanResult.status === 'duplicate'
               ? 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
               : 'border-rose-500/30 bg-rose-500/10 text-rose-950 dark:text-rose-100'
@@ -267,6 +292,9 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
             <div className="flex items-center gap-3">
               {scanResult.status === 'valid' && (
                 <CheckCircle2 className="size-8 text-emerald-500 shrink-0" />
+              )}
+              {scanResult.status === 'wrong_trip' && (
+                <AlertTriangle className="size-8 text-amber-500 shrink-0 animate-bounce" />
               )}
               {scanResult.status === 'duplicate' && (
                 <AlertTriangle className="size-8 text-amber-500 shrink-0" />
@@ -278,11 +306,13 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
                 <h3 className="text-base font-bold">
                   {scanResult.status === 'valid'
                     ? 'Vé Hợp Lệ - Đã Check-in'
+                    : scanResult.status === 'wrong_trip'
+                    ? 'CẢNH BÁO: KHÁCH ĐI NHẦM CHUYẾN XE!'
                     : scanResult.status === 'duplicate'
                     ? 'Vé Đã Quét Trước Đó'
                     : 'Vé Không Hợp Lệ'}
                 </h3>
-                <p className="text-xs opacity-80">{scanResult.message}</p>
+                <p className="text-xs opacity-90 font-medium">{scanResult.message}</p>
               </div>
             </div>
             <span className="font-mono text-xs opacity-60">{scanResult.timestamp}</span>
@@ -290,6 +320,12 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
 
           {scanResult.passengerName && (
             <div className="mt-4 grid grid-cols-2 gap-2.5 rounded-2xl border border-black/5 dark:border-white/10 bg-white/40 dark:bg-black/20 p-3 text-xs">
+              {scanResult.isMonthlyPass && (
+                <div className="col-span-2 py-1.5 px-3 rounded-xl bg-teal-500/20 text-teal-800 dark:text-teal-200 font-extrabold text-[11px] flex items-center justify-between border border-teal-500/30">
+                  <span>🎓 THẺ VÉ THÁNG HSSV HỢP LỆ</span>
+                  <span className="uppercase text-[10px] tracking-wider opacity-80">{scanResult.category || 'Sinh viên ICTU'}</span>
+                </div>
+              )}
               <div>
                 <span className="text-[11px] opacity-70">Hành khách:</span>
                 <p className="font-bold">{scanResult.passengerName}</p>
@@ -304,8 +340,40 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
               </div>
               <div>
                 <span className="text-[11px] opacity-70">Trạng thái:</span>
-                <p className="font-bold text-emerald-600 dark:text-emerald-400">Đã lên xe</p>
+                <p
+                  className={`font-bold ${
+                    scanResult.status === 'valid'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : scanResult.status === 'wrong_trip'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                >
+                  {scanResult.status === 'valid'
+                    ? 'Đã lên xe'
+                    : scanResult.status === 'wrong_trip'
+                    ? 'Sai chuyến xe'
+                    : 'Chưa hợp lệ'}
+                </p>
               </div>
+              {scanResult.correctTrip && (
+                <div className="col-span-2 pt-2 mt-1 border-t border-amber-300/40 dark:border-amber-700/40 text-amber-900 dark:text-amber-200">
+                  <p className="text-[11px] font-bold">👉 Thông tin chuyến đúng của khách:</p>
+                  <p className="font-medium text-xs mt-0.5">
+                    • Tuyến: <strong>{scanResult.correctTrip.routeName || 'Tuyến ICTU'}</strong>
+                  </p>
+                  {scanResult.correctTrip.departureTime && (
+                    <p className="font-medium text-xs">
+                      • Giờ chạy: <strong>{new Date(scanResult.correctTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
+                    </p>
+                  )}
+                  {scanResult.correctTrip.vehiclePlate && (
+                    <p className="font-medium text-xs">
+                      • Biển số xe: <strong>{scanResult.correctTrip.vehiclePlate}</strong>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

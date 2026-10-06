@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -193,20 +193,38 @@ export function SeatPickerModal({
   }
   const vehiclePlate = selectedTrip?.vehiclePlate || '20B-999.88'
 
-  const basePrice = selectedTrip ? Number(selectedTrip.basePrice) : 10000
+  const basePrice = useMemo(() => (selectedTrip ? Number(selectedTrip.basePrice) : 10000), [selectedTrip])
   const isStudent = user?.role === 'STUDENT' || Boolean(user?.studentId) || true // Mặc định hỗ trợ SV
-  const studentPrice = selectedTrip ? Number(selectedTrip.studentPrice) : 5000
+  const studentPrice = useMemo(() => (selectedTrip ? Number(selectedTrip.studentPrice) : 5000), [selectedTrip])
   const effectivePrice = isStudent ? studentPrice : basePrice
-  const totalPrice = selectedSeats.length * effectivePrice
-  const totalStandardPrice = selectedSeats.length * basePrice
-  const totalSavings = totalStandardPrice - totalPrice
-  const voucherDiscount = voucherResult?.discountAmount || 0
-  const finalPrice = Math.max(0, totalPrice - voucherDiscount)
 
-  const displaySeats =
-    seatMap?.seats && seatMap.seats.length > 0
+  const { totalPrice, totalStandardPrice, totalSavings, voucherDiscount, finalPrice } = useMemo(() => {
+    const total = selectedSeats.length * effectivePrice
+    const standard = selectedSeats.length * basePrice
+    const savings = standard - total
+    const voucher = voucherResult?.discountAmount || 0
+    const final = Math.max(0, total - voucher)
+    return {
+      totalPrice: total,
+      totalStandardPrice: standard,
+      totalSavings: savings,
+      voucherDiscount: voucher,
+      finalPrice: final,
+    }
+  }, [selectedSeats.length, effectivePrice, basePrice, voucherResult?.discountAmount])
+
+  const displaySeats = useMemo(() => {
+    return seatMap?.seats && seatMap.seats.length > 0
       ? seatMap.seats
       : generateFallbackSeatMap(effectiveTripId).seats
+  }, [seatMap?.seats, effectiveTripId])
+
+  const selectedSeatIds = useMemo(() => selectedSeats.map((s) => s.seatId), [selectedSeats])
+
+  const handleToggleSeat = useCallback((seat: any) => {
+    setSubmitError(null)
+    toggleSeat(seat)
+  }, [toggleSeat])
 
   const handleClose = async () => {
     if (step === 'payment-qr' && bookingResult?.id) {
@@ -474,11 +492,8 @@ export function SeatPickerModal({
               {/* Sơ đồ ghế Component */}
               <BusSeatGrid
                 seats={displaySeats}
-                selectedSeatIds={selectedSeats.map((s) => s.seatId)}
-                onToggleSeat={(seat) => {
-                  setSubmitError(null)
-                  toggleSeat(seat)
-                }}
+                selectedSeatIds={selectedSeatIds}
+                onToggleSeat={handleToggleSeat}
                 conflictedSeatId={conflictedSeatId}
                 isLoading={isSeatMapLoading || isHoldingAction}
               />

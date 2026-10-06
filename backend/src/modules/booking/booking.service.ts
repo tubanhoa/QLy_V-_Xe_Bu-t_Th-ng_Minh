@@ -1219,7 +1219,7 @@ export class BookingService {
   /**
    * API Kiểm tra điều kiện và tính phí hủy/đổi vé theo thời gian
    */
-  async getCancellationPolicy(ticketId: string, userId?: string) {
+  async getCancellationPolicy(ticketId: string, userId?: string, userRole?: string) {
     const ticket = await this.ticketRepository.findOne({
       where: [{ id: ticketId }, { ticketCode: ticketId }],
       relations: {
@@ -1235,7 +1235,13 @@ export class BookingService {
       throw new NotFoundException('Không tìm thấy vé xe trong hệ thống');
     }
 
-    if (userId && ticket.booking.userId !== userId) {
+    const isAdminOrStaff =
+      userRole === Role.ADMIN ||
+      userRole === Role.MANAGER ||
+      userRole === 'admin' ||
+      userRole === 'manager';
+
+    if (userId && ticket.booking.userId !== userId && !isAdminOrStaff) {
       throw new ForbiddenException('Bạn không có quyền xem thông tin vé này');
     }
 
@@ -1255,7 +1261,12 @@ export class BookingService {
    * API Hủy vé: Cập nhật trạng thái vé, giải phóng ghế trống lập tức và tự động hoàn tiền
    * Tích hợp Idempotency Key và Khóa bi quan (Pessimistic Lock / Concurrency Control) ngăn chặn race condition & hoàn tiền kép
    */
-  async cancelTicket(ticketId: string, userId: string, dto?: CancelTicketDto) {
+  async cancelTicket(
+    ticketId: string,
+    userId: string,
+    dto?: CancelTicketDto,
+    userRole?: string,
+  ) {
     // 1. Kiểm tra Idempotency Key: Nếu request trùng lặp đã xử lý thành công, trả về kết quả đã lưu ngay lập tức
     if (dto?.idempotencyKey && this.idempotencyRecords.has(dto.idempotencyKey)) {
       return this.idempotencyRecords.get(dto.idempotencyKey)!.result;
@@ -1286,13 +1297,24 @@ export class BookingService {
         throw new NotFoundException('Không tìm thấy vé xe');
       }
 
-      if (ticket.booking.userId !== userId) {
+      const isAdminOrStaff =
+        userRole === Role.ADMIN ||
+        userRole === Role.MANAGER ||
+        userRole === 'admin' ||
+        userRole === 'manager';
+
+      if (ticket.booking.userId !== userId && !isAdminOrStaff) {
         throw new ForbiddenException('Bạn không có quyền hủy vé này');
       }
 
-      // 3. Ngăn chặn hủy vé đã bị hủy trước đó
+      // 3. Ngăn chặn hủy vé đã bị hủy hoặc đã hoàn tiền trước đó
       if (ticket.status === TicketStatus.CANCELLED || ticket.status === TicketStatus.REFUNDED) {
         throw new BadRequestException('Vé này đã bị hủy hoặc hoàn tiền trước đó');
+      }
+
+      // 4. Ngăn chặn hủy vé khi hành khách đã được soát lên xe (CHECKED_IN)
+      if (ticket.status === TicketStatus.CHECKED_IN) {
+        throw new BadRequestException('Vé đã được soát lên xe (CHECKED_IN), không thể hủy hoặc yêu cầu hoàn tiền!');
       }
 
       const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);
