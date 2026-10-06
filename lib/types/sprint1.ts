@@ -105,10 +105,11 @@ export interface TripSearchResult {
   totalSeats: number
   availableSeats: number
   vehiclePlate: string
-  vehicleType: string
+  vehicleType?: string
   createdAt?: string
   isAdhoc?: boolean
   isNew?: boolean
+  isBookable?: boolean
 }
 
 export interface SearchTripsQuery {

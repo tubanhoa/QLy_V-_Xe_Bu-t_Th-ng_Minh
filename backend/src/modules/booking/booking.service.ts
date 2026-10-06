@@ -185,6 +185,8 @@ export class BookingService {
       const isAdhoc = trip.tripType === 'adhoc' || trip.tripType === 'special';
       const createdTimeMs = trip.createdAt ? new Date(trip.createdAt).getTime() : 0;
       const isNew = isAdhoc || (nowMs - createdTimeMs <= 24 * 60 * 60 * 1000);
+      const isBookable =
+        trip.status === TripStatus.SCHEDULED || trip.status === TripStatus.BOARDING;
 
       return {
         id: trip.id,
@@ -196,6 +198,7 @@ export class BookingService {
         departureTime: trip.departureTime,
         arrivalTime: trip.arrivalTime,
         status: trip.status,
+        isBookable,
         basePrice: Number(trip.route?.basePrice) || 10000,
         studentPrice: Number(trip.route?.studentPrice) || 5000,
         totalSeats: capacity,

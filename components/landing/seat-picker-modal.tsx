@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Armchair,
   ArrowRight,
+  Ban,
   BatteryCharging,
   Bus,
   Check,
@@ -140,6 +141,17 @@ export function SeatPickerModal({
 
   const effectiveTripId = selectedTrip?.id || 'trip-ct01-default'
 
+  // Kiểm tra chuyến xe có sẵn sàng nhận khách hay đã xuất bến/hoàn thành
+  const isTripBookable = useMemo(() => {
+    if (!selectedTrip) return true
+    if (selectedTrip.isBookable !== undefined) return selectedTrip.isBookable
+    return (
+      selectedTrip.status === 'scheduled' ||
+      selectedTrip.status === 'boarding' ||
+      !selectedTrip.status
+    )
+  }, [selectedTrip])
+
   // Tích hợp Hook Realtime Seat Locking & Anti-Race-Condition
   const {
     seatMap,
@@ -267,6 +279,10 @@ export function SeatPickerModal({
   // Xử lý chốt đặt vé & khởi tạo thanh toán đa cổng (POST /api/v1/booking/create + POST /api/v1/payment/create-url)
   const handleConfirmBooking = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    if (!isTripBookable) {
+      setSubmitError('Chuyến xe này đã xuất bến hoặc đã kết thúc lộ trình. Hệ thống không nhận đặt vé mới!')
+      return
+    }
     if (selectedSeats.length === 0) return
 
     setIsSubmitting(true)
@@ -438,6 +454,25 @@ export function SeatPickerModal({
             <span className="font-mono text-xs bg-amber-600/40 text-slate-950 px-2 py-0.5 rounded-md font-black">
               {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, '0')}
             </span>
+          </div>
+        )}
+
+        {/* Banner cảnh báo chuyến xe đã xuất bến hoặc hoàn thành lộ trình */}
+        {!isTripBookable && (
+          <div className="bg-slate-900 text-amber-300 px-4 py-2.5 text-xs font-bold flex items-center justify-between shrink-0 border-b border-amber-500/30 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <Ban size={15} className="text-amber-400 shrink-0" />
+              <span>
+                Chuyến xe này {selectedTrip?.status === 'completed' ? 'đã hoàn thành lộ trình' : 'đã xuất bến'}. Hệ thống tạm dừng nhận đặt vé mới.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="text-[11px] font-black underline hover:text-white px-2 py-0.5 rounded cursor-pointer bg-white/10"
+            >
+              Đổi chuyến khác
+            </button>
           </div>
         )}
 
@@ -859,16 +894,23 @@ export function SeatPickerModal({
               <div className="pt-4">
                 <button
                   type="button"
-                  disabled={selectedSeats.length === 0 || isSubmitting}
+                  disabled={!isTripBookable || selectedSeats.length === 0 || isSubmitting}
                   onClick={() => handleConfirmBooking()}
                   className={cn(
                     'w-full py-3 rounded-xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg transition-all duration-150',
-                    selectedSeats.length > 0 && !isSubmitting
-                      ? 'bg-[#005A36] hover:bg-[#004529] hover:scale-[1.01] active:scale-95 cursor-pointer shadow-emerald-950/20'
-                      : 'bg-slate-300 cursor-not-allowed shadow-none',
+                    !isTripBookable
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none border border-slate-300'
+                      : selectedSeats.length > 0 && !isSubmitting
+                        ? 'bg-[#005A36] hover:bg-[#004529] hover:scale-[1.01] active:scale-95 cursor-pointer shadow-emerald-950/20'
+                        : 'bg-slate-300 cursor-not-allowed shadow-none',
                   )}
                 >
-                  {isSubmitting ? (
+                  {!isTripBookable ? (
+                    <>
+                      <Ban size={18} />
+                      <span>Chuyến đã xuất bến (Không nhận đặt vé)</span>
+                    </>
+                  ) : isSubmitting ? (
                     <>
                       <span className="size-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                       <span>Đang xuất vé an toàn...</span>
@@ -1339,16 +1381,23 @@ export function SeatPickerModal({
               </button>
               <button
                 type="button"
-                disabled={selectedSeats.length === 0 || isSubmitting}
+                disabled={!isTripBookable || selectedSeats.length === 0 || isSubmitting}
                 onClick={() => handleConfirmBooking()}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-black text-white transition-all shadow-md active:scale-95 touch-press',
-                  selectedSeats.length > 0 && !isSubmitting
-                    ? 'bg-[#005A36] cursor-pointer shadow-emerald-950/20'
-                    : 'bg-slate-300 cursor-not-allowed shadow-none',
+                  !isTripBookable
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none border border-slate-300'
+                    : selectedSeats.length > 0 && !isSubmitting
+                      ? 'bg-[#005A36] cursor-pointer shadow-emerald-950/20'
+                      : 'bg-slate-300 cursor-not-allowed shadow-none',
                 )}
               >
-                {isSubmitting ? (
+                {!isTripBookable ? (
+                  <>
+                    <Ban size={15} />
+                    <span>Đã xuất bến</span>
+                  </>
+                ) : isSubmitting ? (
                   <>
                     <span className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                     <span>Đang xuất vé...</span>
