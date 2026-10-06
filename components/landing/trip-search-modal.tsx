@@ -64,14 +64,9 @@ export function TripSearchModal({
   type SortCriteria = 'departure' | 'route' | 'price' | 'seats'
   type SortDirection = 'asc' | 'desc'
 
-  const [filterType, setFilterType] = useState<'all' | 'new' | 'soon' | 'available' | 'ct01' | 'ct02'>('all')
+  const [filterType, setFilterType] = useState<'all' | 'soon' | 'available'>('all')
   const [sortBy, setSortBy] = useState<SortCriteria>('departure')
   const [sortOrder, setSortOrder] = useState<SortDirection>('asc')
-
-  // Đếm số lượng chuyến xe mới tạo hoặc tăng cường
-  const newTripsCount = useMemo(() => {
-    return trips.filter((t) => Boolean(t.isNew || t.isAdhoc)).length
-  }, [trips])
 
   const handleToggleSort = (criteria: SortCriteria) => {
     if (sortBy === criteria) {
@@ -88,9 +83,7 @@ export function TripSearchModal({
   const filteredTrips = useMemo(() => {
     let result = [...trips]
 
-    if (filterType === 'new') {
-      result = result.filter((t) => Boolean(t.isNew || t.isAdhoc))
-    } else if (filterType === 'soon') {
+    if (filterType === 'soon') {
       const now = new Date()
       result = result.filter((t) => {
         const dep = new Date(t.departureTime)
@@ -99,10 +92,6 @@ export function TripSearchModal({
       })
     } else if (filterType === 'available') {
       result = result.filter((t) => Number(t.availableSeats || 0) >= 10)
-    } else if (filterType === 'ct01') {
-      result = result.filter((t) => t.routeCode.includes('01'))
-    } else if (filterType === 'ct02') {
-      result = result.filter((t) => t.routeCode.includes('02'))
     }
 
     // Logic sắp xếp chính xác cho Giờ chạy, Tuyến đường, Giá vé và Ghế trống
@@ -429,37 +418,11 @@ export function TripSearchModal({
                 </span>
               </button>
 
-              {/* Nút lọc nhanh chuyến mới tạo / tăng cường */}
-              <button
-                type="button"
-                onClick={() => setFilterType('new')}
-                className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer',
-                  filterType === 'new'
-                    ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:border-amber-400 hover:bg-amber-50/60',
-                )}
-                title="Lọc các chuyến xe mới khởi tạo hoặc chuyến tăng cường"
-              >
-                <Sparkles size={12} className={filterType === 'new' ? 'text-amber-100 fill-amber-100' : 'text-amber-500 fill-amber-500'} />
-                <span>Mới tạo</span>
-                {newTripsCount > 0 && (
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 py-0.2 text-[10px] font-black',
-                      filterType === 'new' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900',
-                    )}
-                  >
-                    {newTripsCount}
-                  </span>
-                )}
-              </button>
-
               <button
                 type="button"
                 onClick={() => setFilterType('soon')}
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1',
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer',
                   filterType === 'soon'
                     ? 'bg-amber-500 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
@@ -473,7 +436,7 @@ export function TripSearchModal({
                 type="button"
                 onClick={() => setFilterType('available')}
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1',
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer',
                   filterType === 'available'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
@@ -481,32 +444,6 @@ export function TripSearchModal({
               >
                 <Users size={12} className={filterType === 'available' ? 'text-emerald-200' : 'text-emerald-600'} />
                 <span>Còn nhiều chỗ (≥ 10)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterType('ct01')}
-                className={cn(
-                  'shrink-0 rounded-full px-2.5 py-1 font-bold text-xs transition-all',
-                  filterType === 'ct01'
-                    ? 'bg-[#005A36] text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
-                )}
-              >
-                Tuyến CT-01
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterType('ct02')}
-                className={cn(
-                  'shrink-0 rounded-full px-2.5 py-1 font-bold text-xs transition-all',
-                  filterType === 'ct02'
-                    ? 'bg-[#005A36] text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
-                )}
-              >
-                Tuyến CT-02
               </button>
             </div>
 
@@ -615,7 +552,6 @@ export function TripSearchModal({
             <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 font-medium">
               <span>
                 Tìm thấy <strong className="text-slate-900 font-bold">{filteredTrips.length}</strong> chuyến xe phù hợp
-                {filterType === 'new' && <span className="ml-1 text-amber-700 font-bold">(Chuyến mới tạo / tăng cường)</span>}
               </span>
               <div className="flex items-center gap-1.5 text-[11px] text-[#005A36] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60 font-bold">
                 <SlidersHorizontal size={11} />
@@ -731,26 +667,40 @@ export function TripSearchModal({
               return (
                 <div
                   key={trip.id}
-                  className={cn(
-                    'rounded-2xl border p-4 sm:p-5 shadow-xs transition-all group relative overflow-hidden',
-                    trip.isNew || trip.isAdhoc
-                      ? 'border-amber-400/90 bg-gradient-to-r from-amber-50/40 via-white to-white ring-2 ring-amber-300/40 shadow-sm'
-                      : 'border-slate-200/90 bg-white hover:border-[#005A36] hover:shadow-md',
-                  )}
+                  className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs hover:border-[#005A36] hover:shadow-md transition-all group relative overflow-hidden"
                 >
                   {/* Top Header Row */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="rounded-xl bg-[#005A36] px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider">
                           {trip.routeCode}
                         </span>
-                        {(trip.isNew || trip.isAdhoc) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white px-2.5 py-0.5 text-[10px] font-black shadow-xs tracking-tight animate-in fade-in">
-                            <Sparkles size={11} className="fill-white" />
-                            <span>{trip.isAdhoc ? 'TĂNG CƯỜNG' : 'MỚI TẠO'}</span>
+                        {/* Pill trạng thái ghế xe buýt chuyên nghiệp */}
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black border transition-all',
+                            isSoldOut
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : isAlmostFull
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200/70',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'size-1.5 rounded-full animate-pulse',
+                              isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
+                            )}
+                          />
+                          <span>
+                            {isSoldOut
+                              ? 'Hết chỗ'
+                              : isAlmostFull
+                                ? `Còn ${availableSeats}/${totalSeats} chỗ`
+                                : `Còn trống ${availableSeats}/${totalSeats} chỗ`}
                           </span>
-                        )}
+                        </span>
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -762,7 +712,7 @@ export function TripSearchModal({
                           </span>
                         </div>
                         <span className="text-[11px] font-medium text-slate-500">
-                          Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa chuẩn: {totalSeats} chỗ ngồi
+                          Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa: {totalSeats} ghế ngồi
                         </span>
                       </div>
                     </div>
