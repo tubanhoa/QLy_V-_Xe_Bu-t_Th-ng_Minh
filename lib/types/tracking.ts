@@ -29,6 +29,7 @@ export interface SimulatorStatus {
   tripId: string
   currentStep?: number
   totalSteps?: number
+  progressPercent?: number
   speedMultiplier?: number
   currentLat?: number
   currentLng?: number

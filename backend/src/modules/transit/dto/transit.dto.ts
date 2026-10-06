@@ -116,6 +116,16 @@ export class CreateRouteDto {
   @ValidateNested({ each: true })
   @Type(() => RouteStopDto)
   stops?: RouteStopDto[];
+
+  @ApiPropertyOptional({ example: 'uuid-driver-id', description: 'ID tài xế được phân quyền phụ trách tuyến xe' })
+  @IsOptional()
+  @IsString()
+  assignedDriverId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-vehicle-id', description: 'ID phương tiện xe buýt điện chạy tuyến' })
+  @IsOptional()
+  @IsString()
+  assignedVehicleId?: string;
 }
 
 export class UpdateRouteDto {
@@ -365,6 +375,40 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsNumber()
   batteryCapacityKwh?: number;
+}
+
+export class UpdateVehicleStatusDto {
+  @ApiProperty({ enum: ['active', 'maintenance', 'retired'], example: 'maintenance' })
+  @IsNotEmpty()
+  @IsString()
+  status: any;
+}
+
+export class UpdateVehicleDto {
+  @ApiPropertyOptional({ example: 'VinFast eBus 2024' })
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @ApiPropertyOptional({ example: 'electric' })
+  @IsOptional()
+  @IsString()
+  vehicleType?: string;
+
+  @ApiPropertyOptional({ example: 2024 })
+  @IsOptional()
+  @IsNumber()
+  manufactureYear?: number;
+
+  @ApiPropertyOptional({ example: 281.9 })
+  @IsOptional()
+  @IsNumber()
+  batteryCapacityKwh?: number;
+
+  @ApiPropertyOptional({ enum: ['active', 'maintenance', 'retired'] })
+  @IsOptional()
+  @IsString()
+  status?: any;
 }
 
 export class SearchRouteDto {

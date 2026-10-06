@@ -62,12 +62,21 @@ export interface VerifyQrResponse {
   success?: boolean
   valid: boolean
   alreadyCheckedIn?: boolean
+  isWrongTrip?: boolean
+  isMonthlyPass?: boolean
+  category?: string
   message: string
   ticket?: any
   passenger?: string
   seat?: string
   ticketCode?: string
   checkedInAt?: string
+  correctTrip?: {
+    tripId?: string
+    routeName: string
+    departureTime?: string
+    vehiclePlate?: string
+  }
 }
 
 class DriverService {
@@ -168,18 +177,28 @@ class DriverService {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
+        const errPayload = json?.data || json || {}
         return {
           success: false,
-          message: json?.message || 'Vé không hợp lệ hoặc đã hết hạn',
+          message: json?.message || errPayload?.message || 'Vé không hợp lệ hoặc đã hết hạn',
           data: {
             valid: false,
-            message: json?.message || 'Vé không hợp lệ',
+            alreadyCheckedIn: errPayload?.alreadyCheckedIn || false,
+            isWrongTrip: errPayload?.isWrongTrip || false,
+            isMonthlyPass: errPayload?.isMonthlyPass || false,
+            category: errPayload?.category,
+            message: json?.message || errPayload?.message || 'Vé không hợp lệ',
+            passenger: errPayload?.passenger,
+            seat: errPayload?.seat,
+            ticketCode: errPayload?.ticketCode,
+            correctTrip: errPayload?.correctTrip,
           },
         }
       }
+      const data: VerifyQrResponse = json?.data || json || { valid: true, message: 'Vé hợp lệ' }
       return {
         success: true,
-        data: json?.data || json || { valid: true, message: 'Vé hợp lệ' },
+        data,
       }
     } catch (e: any) {
       return {

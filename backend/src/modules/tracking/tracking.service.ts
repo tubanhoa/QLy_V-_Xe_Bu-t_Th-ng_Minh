@@ -114,7 +114,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         port: redisPort,
         password: redisPassword,
         maxRetriesPerRequest: 1,
-        connectTimeout: 2000,
+        connectTimeout: 500,
         lazyConnect: true,
       });
 
@@ -1097,5 +1097,26 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       where: { tripId },
       order: { reportedAt: 'DESC' },
     });
+  }
+
+  async getAllIncidents(status?: string, severity?: string) {
+    const qb = this.incidentRepository
+      .createQueryBuilder('inc')
+      .leftJoinAndSelect('inc.trip', 'trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
+      .leftJoinAndSelect('inc.reportedByUser', 'reportedByUser');
+
+    if (status && status !== 'all') {
+      qb.andWhere('inc.resolutionStatus = :status', { status });
+    }
+
+    if (severity && severity !== 'all') {
+      qb.andWhere('inc.severity = :severity', { severity });
+    }
+
+    qb.orderBy('inc.reportedAt', 'DESC');
+    return qb.getMany();
   }
 }

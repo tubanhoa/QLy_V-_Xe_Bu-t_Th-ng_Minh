@@ -140,6 +140,82 @@ class PromotionService {
       }
     }
   }
+
+  /**
+   * Xem danh sách hồ sơ đăng ký vé tháng (Admin, Manager)
+   * Endpoint: GET /api/v1/admin/monthly-passes
+   */
+  async getAdminMonthlyPasses(query?: {
+    page?: number
+    limit?: number
+    status?: string
+  }): Promise<UnifiedApiResponse<{ items: any[]; meta: any }>> {
+    try {
+      const params = new URLSearchParams()
+      if (query?.page) params.append('page', String(query.page))
+      if (query?.limit) params.append('limit', String(query.limit))
+      if (query?.status) params.append('status', query.status)
+
+      const url = `${this.baseUrl}/admin/monthly-passes${params.toString() ? `?${params.toString()}` : ''}`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải danh sách hồ sơ vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.getAdminMonthlyPasses]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /**
+   * Phê duyệt hoặc từ chối hồ sơ vé tháng (Admin, Manager)
+   * Endpoint: PATCH /api/v1/admin/monthly-passes/:id/review
+   */
+  async reviewMonthlyPass(
+    id: string,
+    status: 'approved' | 'rejected',
+    rejectionReason?: string,
+  ): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/admin/monthly-passes/${id}/review`, {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ status, rejectionReason }),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể duyệt hồ sơ vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.reviewMonthlyPass]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
 }
 
 export const promotionService = new PromotionService()

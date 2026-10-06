@@ -7,35 +7,98 @@ import { LogOut, ShieldAlert, Sparkles, Ticket } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { ROLE_NAV, type Role } from '@/lib/rbac'
+import dynamic from 'next/dynamic'
 import { BottomSheet } from './bottom-sheet'
-import { DriverScanner } from './dashboard/driver-scanner'
-import { DriverManifest } from './dashboard/driver-manifest'
-import { DriverIncident } from './dashboard/driver-incident'
-import { DispatcherGpsMap } from './modules/dispatcher-gps-map'
-import { DispatcherStudentApproval } from './modules/dispatcher-student-approval'
-import { DispatcherSchedule } from './modules/dispatcher-schedule'
-import { DispatcherIncidents } from './modules/dispatcher-incidents'
-import { AdminRoutes } from './modules/admin-routes'
-import { AdminFleet } from './modules/admin-fleet'
-import { AdminPayments } from './modules/admin-payments'
-import { AdminStaff } from './modules/admin-staff'
-import { AdminReports } from './modules/admin-reports'
-import { AdminSettings } from './modules/admin-settings'
 import { ContentSkeleton, ModulePreview } from './dashboard/content-states'
-import { DriverDashboard } from './dashboard/driver-dashboard'
-import { DriverCockpit } from './dashboard/driver-cockpit'
-import { OpsDashboard } from './dashboard/ops-dashboard'
 import { DesktopSider } from './desktop-sider'
 import { DriverBottomNav } from './driver-bottom-nav'
 import { NavMenu } from './nav-menu'
 import { OperatorCard } from './operator-card'
 import { TopHeader } from './top-header'
 
+// Tối ưu hóa hiệu năng Portal: Lazy Load các phân hệ theo Role (Code Splitting)
+const OpsDashboard = dynamic(
+  () => import('./dashboard/ops-dashboard').then((m) => m.OpsDashboard),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverDashboard = dynamic(
+  () => import('./dashboard/driver-dashboard').then((m) => m.DriverDashboard),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverCockpit = dynamic(
+  () => import('./dashboard/driver-cockpit').then((m) => m.DriverCockpit),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverScanner = dynamic(
+  () => import('./dashboard/driver-scanner').then((m) => m.DriverScanner),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverManifest = dynamic(
+  () => import('./dashboard/driver-manifest').then((m) => m.DriverManifest),
+  { loading: () => <ContentSkeleton /> }
+)
+const DriverIncident = dynamic(
+  () => import('./dashboard/driver-incident').then((m) => m.DriverIncident),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherGpsMap = dynamic(
+  () => import('./modules/dispatcher-gps-map').then((m) => m.DispatcherGpsMap),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherStudentApproval = dynamic(
+  () => import('./modules/dispatcher-student-approval').then((m) => m.DispatcherStudentApproval),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherSchedule = dynamic(
+  () => import('./modules/dispatcher-schedule').then((m) => m.DispatcherSchedule),
+  { loading: () => <ContentSkeleton /> }
+)
+const DispatcherIncidents = dynamic(
+  () => import('./modules/dispatcher-incidents').then((m) => m.DispatcherIncidents),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminRoutes = dynamic(
+  () => import('./modules/admin-routes').then((m) => m.AdminRoutes),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminFleet = dynamic(
+  () => import('./modules/admin-fleet').then((m) => m.AdminFleet),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminPayments = dynamic(
+  () => import('./modules/admin-payments').then((m) => m.AdminPayments),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminStaff = dynamic(
+  () => import('./modules/admin-staff').then((m) => m.AdminStaff),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminReports = dynamic(
+  () => import('./modules/admin-reports').then((m) => m.AdminReports),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminSettings = dynamic(
+  () => import('./modules/admin-settings').then((m) => m.AdminSettings),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminVouchers = dynamic(
+  () => import('./modules/admin-vouchers').then((m) => m.AdminVouchers),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminFeedback = dynamic(
+  () => import('./modules/admin-feedback').then((m) => m.AdminFeedback),
+  { loading: () => <ContentSkeleton /> }
+)
+const AdminInvoices = dynamic(
+  () => import('./modules/admin-invoices').then((m) => m.AdminInvoices),
+  { loading: () => <ContentSkeleton /> }
+)
+
 const SKELETON_MS = 550
 
 export function AppShell() {
   const router = useRouter()
-  const { user, role, isAuthenticated, logout, themeMode } = useAuth()
+  const { user, role, isAuthenticated, isLoaded, logout, themeMode } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState('dashboard')
@@ -44,8 +107,10 @@ export function AppShell() {
   const loadingTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/login')
-  }, [isAuthenticated, router])
+    if (isLoaded && !isAuthenticated) {
+      router.replace('/login')
+    }
+  }, [isLoaded, isAuthenticated, router])
 
   useEffect(() => () => clearTimeout(loadingTimer.current), [])
 
@@ -73,6 +138,17 @@ export function AppShell() {
   const handleLogout = () => {
     logout()
     router.replace('/login')
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3 text-white">
+          <div className="size-10 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+          <p className="text-xs font-bold text-slate-400">Đang khởi tạo phiên làm việc...</p>
+        </div>
+      </div>
+    )
   }
 
   if (!user) return null
@@ -161,15 +237,22 @@ export function AppShell() {
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />
+      if (activeItem.key === 'feedback') return <AdminFeedback />
     }
 
     // Phân hệ Super Admin (Quản trị viên)
     if (portalRole === 'admin') {
       if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
+      if (activeItem.key === 'schedule') return <DispatcherSchedule />
+      if (activeItem.key === 'gps') return <DispatcherGpsMap />
+      if (activeItem.key === 'incidents') return <DispatcherIncidents />
       if (activeItem.key === 'routes') return <AdminRoutes />
       if (activeItem.key === 'fleet') return <AdminFleet />
       if (activeItem.key === 'payments') return <AdminPayments />
       if (activeItem.key === 'passes') return <DispatcherStudentApproval />
+      if (activeItem.key === 'vouchers') return <AdminVouchers />
+      if (activeItem.key === 'invoices') return <AdminInvoices />
+      if (activeItem.key === 'feedback') return <AdminFeedback />
       if (activeItem.key === 'staff') return <AdminStaff />
       if (activeItem.key === 'reports') return <AdminReports />
       if (activeItem.key === 'settings') return <AdminSettings />

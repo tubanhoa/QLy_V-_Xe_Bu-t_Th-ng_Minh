@@ -99,4 +99,31 @@ export class VehiclesService {
 
     return this.findById(savedVehicle.id);
   }
+
+  async updateStatus(id: string, status: VehicleStatus) {
+    const vehicle = await this.findById(id);
+    vehicle.status = status;
+    return this.vehicleRepository.save(vehicle);
+  }
+
+  async update(id: string, dto: any) {
+    const vehicle = await this.findById(id);
+    if (dto.model !== undefined) vehicle.model = dto.model;
+    if (dto.vehicleType !== undefined) vehicle.vehicleType = dto.vehicleType;
+    if (dto.manufactureYear !== undefined) vehicle.manufactureYear = dto.manufactureYear;
+    if (dto.batteryCapacityKwh !== undefined) vehicle.batteryCapacityKwh = dto.batteryCapacityKwh;
+    if (dto.status !== undefined) vehicle.status = dto.status;
+    return this.vehicleRepository.save(vehicle);
+  }
+
+  async delete(id: string) {
+    const vehicle = await this.findById(id);
+    // Delete associated seats first
+    await this.seatRepository.delete({ vehicleId: id });
+    await this.vehicleRepository.remove(vehicle);
+    return {
+      success: true,
+      message: `Đã xóa phương tiện biển số ${vehicle.licensePlate} thành công`,
+    };
+  }
 }

@@ -65,6 +65,45 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   paymentMethod?: string;
+
+  @IsOptional()
+  seatIds?: any;
+
+  @IsOptional()
+  totalAmount?: any;
+
+  @IsOptional()
+  originStation?: any;
+
+  @IsOptional()
+  destinationStation?: any;
+
+  @IsOptional()
+  passengerName?: any;
+
+  @IsOptional()
+  passengerPhone?: any;
+
+  @IsOptional()
+  passengerEmail?: any;
+
+  @IsOptional()
+  invoiceEmail?: any;
+
+  @IsOptional()
+  isInvoiceRequested?: any;
+
+  @IsOptional()
+  departureTime?: any;
+
+  @IsOptional()
+  routeCode?: any;
+
+  @IsOptional()
+  routeName?: any;
+
+  @IsOptional()
+  vehiclePlate?: any;
 }
 
 export class SearchTripsDto {
@@ -162,4 +201,29 @@ export class ResendTicketByCodeDto {
   @IsOptional()
   @IsEmail({}, { message: 'Địa chỉ email không đúng định dạng' })
   email?: string;
+}
+
+export class AdminTicketsQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'paid' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: 'vnpay' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @ApiPropertyOptional({ example: 'BK-0745' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

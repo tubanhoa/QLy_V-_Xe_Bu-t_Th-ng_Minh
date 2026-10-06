@@ -20,11 +20,15 @@ import {
   HoldExchangeSeatDto,
   ConfirmExchangeDto,
   ResendTicketByCodeDto,
+  AdminTicketsQueryDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { RateLimitGuard, RateLimit } from '../../common/guards/rate-limit.guard.js';
 
 @ApiTags('Booking & Tickets')
@@ -73,6 +77,15 @@ export class BookingController {
   @ApiOperation({ summary: 'Lịch sử vé đã mua của hành khách' })
   async getMyTickets(@CurrentUser('id') userId: string, @Query() pagination: PaginationDto) {
     return this.bookingService.getMyTickets(userId, pagination);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Get(['admin/tickets', 'admin/bookings'])
+  @ApiOperation({ summary: 'Toàn bộ danh sách vé và giao dịch đặt chỗ dành cho Quản trị viên' })
+  async getAdminTickets(@Query() query: AdminTicketsQueryDto) {
+    return this.bookingService.getAdminTickets(query);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -165,9 +178,9 @@ export class BookingController {
   @ApiOperation({ summary: 'Kiểm tra điều kiện hủy/đổi vé và tính phí theo thời gian thực' })
   async getCancellationPolicy(
     @Param('ticketId') ticketId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: any,
   ) {
-    return this.bookingService.getCancellationPolicy(ticketId, userId);
+    return this.bookingService.getCancellationPolicy(ticketId, user?.id, user?.role);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -177,12 +190,17 @@ export class BookingController {
   async cancelTicket(
     @Param('ticketId') ticketId: string,
     @Body() dto: CancelTicketDto,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: any,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
     @Headers('x-idempotency-key') xIdempotencyKeyHeader?: string,
   ) {
     const key = idempotencyKeyHeader || xIdempotencyKeyHeader || dto?.idempotencyKey;
-    return this.bookingService.cancelTicket(ticketId, userId, { ...dto, idempotencyKey: key });
+    return this.bookingService.cancelTicket(
+      ticketId,
+      user?.id,
+      { ...dto, idempotencyKey: key },
+      user?.role,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

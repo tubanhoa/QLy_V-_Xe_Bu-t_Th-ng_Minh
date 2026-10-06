@@ -66,6 +66,12 @@ export class TripEntity {
   @Column({ type: 'varchar', length: 20, default: TripStatus.SCHEDULED })
   status: TripStatus;
 
+  @Column({ name: 'trip_type', type: 'varchar', length: 20, default: 'regular' })
+  tripType: 'regular' | 'adhoc' | 'special';
+
+  @Column({ type: 'text', nullable: true })
+  note: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

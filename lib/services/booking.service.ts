@@ -137,11 +137,12 @@ class BookingService {
     this.baseUrl = raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`
   }
 
-  private getAuthHeaders(): HeadersInit {
+  /** Lấy Authorization Header từ phiên đăng nhập thực tế của người dùng */
+  private getAuthHeaders(): Record<string, string> {
+    const token = authService.getToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
-    const token = authService.getToken()
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
@@ -155,9 +156,10 @@ class BookingService {
    */
   async getSeatMap(tripId: string): Promise<UnifiedApiResponse<SeatMapData>> {
     try {
+      const headers = await this.getAuthHeaders()
       const response = await fetch(`${this.baseUrl}/trips/${tripId}/seat-map`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers,
         cache: 'no-store',
       })
 
@@ -184,9 +186,10 @@ class BookingService {
    */
   async holdSeats(payload: HoldSeatsPayload): Promise<UnifiedApiResponse<HoldSeatsResult>> {
     try {
+      const headers = await this.getAuthHeaders()
       const response = await fetch(`${this.baseUrl}/booking/hold-seats`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers,
         body: JSON.stringify(payload),
       })
 
@@ -239,9 +242,10 @@ class BookingService {
    */
   async releaseSeats(payload: HoldSeatsPayload): Promise<UnifiedApiResponse<{ message: string }>> {
     try {
+      const headers = await this.getAuthHeaders()
       const response = await fetch(`${this.baseUrl}/booking/release-seats`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers,
         body: JSON.stringify(payload),
       })
 
@@ -262,7 +266,7 @@ class BookingService {
   }
 
   /**
-   * Tạo đơn đặt vé và xuất vé QR (Bypass lock an toàn nếu là người giữ ghế)
+   * Tạo đơn đặt vé và xuất vé QR (Lưu trực tiếp vào Supabase PostgreSQL Cloud)
    * Endpoint: POST /api/v1/booking/create
    */
   async createBooking(payload: CreateBookingPayload): Promise<UnifiedApiResponse<BookingResultData>> {
@@ -271,24 +275,35 @@ class BookingService {
         ? payload.seatIds
         : (payload.passengers || []).map((p) => p.seatId)
     const safeSeatIds = rawSeatIds.length > 0 ? rawSeatIds : ['01B']
-    const effectiveTripId = payload.tripId || 'trip-demo-01'
+    const effectiveTripId = payload.tripId
 
     try {
+      const headers = await this.getAuthHeaders()
+      const cleanBody = {
+        tripId: effectiveTripId,
+        passengers: (payload.passengers || []).map((p) => ({
+          seatId: p.seatId,
+          passengerName: p.passengerName,
+          passengerPhone: p.passengerPhone,
+        })),
+        ...(payload.voucherCode ? { voucherCode: payload.voucherCode } : {}),
+        ...(payload.paymentMethod ? { paymentMethod: payload.paymentMethod } : {}),
+      }
       const response = await fetch(`${this.baseUrl}/booking/create`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(payload),
+        headers,
+        body: JSON.stringify(cleanBody),
       })
 
       const resJson = await response.json().catch(() => null)
 
-      if (response.ok) {
+      if (response.ok && (resJson?.success !== false)) {
         const data: BookingResultData = resJson?.data || resJson
         markSeatsAsBooked(effectiveTripId, safeSeatIds)
 
-        // Cache vé nếu backend trả về danh sách tickets
+        // Cache vé nếu backend trả về danh sách tickets để xem offline
         const currentUser = authService.getUser()
-        const currentUserId = currentUser?.id || currentUser?.email || 'usr_guest'
+        const currentUserId = currentUser?.id || currentUser?.email || 'student.an@ictu.edu.vn'
         if (data.tickets && Array.isArray(data.tickets)) {
           data.tickets.forEach((t) => {
             offlineTicketCache.saveTicket(
@@ -331,100 +346,50 @@ class BookingService {
         return { success: true, data }
       }
 
-      throw new Error(resJson?.message || 'Server error')
-    } catch (error: any) {
-      console.warn('[BookingService.createBooking] Tạo vé dự phòng offline và lưu cache:', error)
-      const bookingId = `bk_${Date.now()}`
-      const bookingCode = `BK-ICTU-${Math.floor(1000 + Math.random() * 9000)}`
-
-      const currentUser = authService.getUser()
-      const currentUserId = currentUser?.id || currentUser?.email || 'usr_guest'
-      const passengerFullName = payload.passengerName || currentUser?.fullName || (currentUser as any)?.name || 'Hành khách ICTU'
-      const passengerPhone = payload.passengerPhone || currentUser?.phoneNumber || '0981234567'
-
-      const tickets: TicketResultItem[] = safeSeatIds.map((s, idx) => {
-        const passenger = payload.passengers?.[idx]
-        const seatNum = s.includes('-') ? s.split('-').pop()! : s
-        const tId = `tkt_${seatNum}_${Date.now()}_${idx}`
-        const tCode = `TK-2026-${seatNum}`
-        return {
-          id: tId,
-          ticketId: tId,
-          ticketCode: tCode,
-          seatNumber: seatNum,
-          passengerName: passenger?.passengerName || passengerFullName,
-          passengerPhone: passenger?.passengerPhone || passengerPhone,
-          price: payload.totalAmount ? Math.round(payload.totalAmount / safeSeatIds.length) : 5000,
-          status: 'PAID',
-          qrCodeData: `ICTU-PASS:${tCode}`,
-        }
-      })
-
-      const totalAmount = payload.totalAmount || safeSeatIds.length * 5000
-
-      const data: BookingResultData = {
-        id: bookingId,
-        bookingId,
-        bookingCode,
-        tickets,
-        totalAmount,
-        discountAmount: 0,
-        finalAmount: totalAmount,
-        paymentStatus: payload.paymentMethod === 'cash' || payload.paymentMethod === 'ictupay' ? 'PAID' : 'PENDING',
-        ticketId: tickets[0]?.ticketId,
-        ticketCode: tickets[0]?.ticketCode,
-        qrCodeUrl: '',
-        qrDataUrl: '',
-        message: 'Đặt vé thành công!',
-      }
-
-      // Lưu TỪNG VÉ vào offline cache và đánh dấu ghế đã đặt
-      try {
-        tickets.forEach((t) => {
-          offlineTicketCache.saveTicket(
-            {
-              ticketId: t.ticketId,
-              id: t.id,
-              ticketCode: t.ticketCode,
-              bookingCode,
-              seatNumber: t.seatNumber,
-              seatType: 'Ghế tiêu chuẩn',
-              routeName:
-                payload.routeName ||
-                (payload.originStation && payload.destinationStation
-                  ? `${payload.originStation} ➔ ${payload.destinationStation}`
-                  : 'Tuyến CT-01: ICTU ↔ Bến Xe Trung Tâm Thái Nguyên'),
-              routeCode: payload.routeCode || 'CT-01',
-              origin: payload.originStation || 'ĐH CNTT & TT Thái Nguyên',
-              destination: payload.destinationStation || 'Bến Xe Trung Tâm Thái Nguyên',
-              departureTime:
-                payload.departureTime ||
-                new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
-              passengerName: t.passengerName,
-              passengerPhone: t.passengerPhone,
-              price: t.price,
-              status: 'PAID',
-              vehiclePlate: payload.vehiclePlate || '20B-012.34',
-              busNumber: payload.routeCode || 'CT-01',
-              qrData: t.qrCodeData || `ICTU-PASS:${t.ticketCode}`,
-              qrDataUrl: '',
-              bookingTime: new Date().toISOString(),
-              userId: currentUserId,
-              tripId: effectiveTripId,
-            } as any,
-            currentUserId,
-          )
-        })
-
-        // ĐÁNH DẤU CÁC GHẾ NÀY LÀ ĐÃ ĐẶT (BOOKED) ĐỂ NGĂN SPAM
-        markSeatsAsBooked(effectiveTripId, safeSeatIds)
-      } catch (e) {
-        console.warn('Cannot save to offline ticket cache', e)
-      }
-
+      // Trả về lỗi chính xác từ database (ví dụ: ghế đã có người đặt)
       return {
-        success: true,
-        data,
+        success: false,
+        message: resJson?.message || 'Không thể tạo đơn đặt vé. Vui lòng kiểm tra lại.',
+        statusCode: response.status,
+      }
+    } catch (error: any) {
+      console.warn('[BookingService.createBooking] Lỗi kết nối khi đặt vé:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ. Vui lòng thử lại sau giây lát.',
+      }
+    }
+  }
+
+  /**
+   * Lấy danh sách vé đã mua của người dùng hiện tại từ Database Supabase
+   * Endpoint: GET /api/v1/booking/my-tickets
+   */
+  async getMyTickets(): Promise<UnifiedApiResponse<any[]>> {
+    try {
+      const headers = await this.getAuthHeaders()
+      const res = await fetch(`${this.baseUrl}/booking/my-tickets`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => null)
+      if (res.ok) {
+        return {
+          success: true,
+          data: Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [],
+        }
+      }
+      return {
+        success: false,
+        message: json?.message || 'Không thể tải danh sách vé của bạn',
+        data: [],
+      }
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e?.message || 'Lỗi kết nối máy chủ',
+        data: [],
       }
     }
   }

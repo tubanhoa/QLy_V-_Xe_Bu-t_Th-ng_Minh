@@ -49,7 +49,9 @@ const columns: TableProps<Trip>['columns'] = [
   { title: 'Trạng thái', dataIndex: 'status', render: (_, trip) => <TripStatusBadge trip={trip} /> },
 ]
 
-export function TripsPanel() {
+export function TripsPanel({ trips }: { trips?: Trip[] }) {
+  const displayTrips = trips && trips.length > 0 ? trips : UPCOMING_TRIPS
+
   return (
     <section className="rounded-2xl border border-border bg-card" aria-labelledby="trips-heading">
       <div className="flex items-center justify-between gap-3 p-5 pb-3">
@@ -65,11 +67,11 @@ export function TripsPanel() {
       </div>
 
       <div className="hidden md:block">
-        <Table<Trip> rowKey="id" columns={columns} dataSource={UPCOMING_TRIPS} pagination={false} size="middle" />
+        <Table<Trip> rowKey="id" columns={columns} dataSource={displayTrips} pagination={false} size="middle" />
       </div>
 
       <ul className="flex flex-col gap-3 px-4 pb-4 md:hidden">
-        {UPCOMING_TRIPS.map((trip) => (
+        {displayTrips.map((trip) => (
           <li key={trip.id}>
             <button
               type="button"

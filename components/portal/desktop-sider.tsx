@@ -47,7 +47,7 @@ export function DesktopSider({ collapsed, user, role, items, activeKey, onNaviga
           </p>
         )}
 
-        <nav aria-label="Điều hướng chính" className="flex-1 overflow-y-auto overflow-x-hidden pb-4">
+        <nav aria-label="Điều hướng chính" className="flex-1 overflow-y-auto overflow-x-hidden pb-4 custom-sidebar-scroll">
           <NavMenu items={items} activeKey={activeKey} onNavigate={onNavigate} theme="dark" />
         </nav>
 

@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: var(--font-be-vietnam-pro), var(--font-jakarta), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-brand-active: var(--brand-active);
@@ -154,15 +154,108 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 90, 54, 0.25) transparent;
+  }
+  .dark * {
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   }
   a,
   a:visited {
     color: inherit;
     text-decoration: none;
   }
-  body {
-    @apply bg-background text-foreground font-sans;
+  html {
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.55;
+    letter-spacing: normal;
+  }
+  /* Cân chỉnh khoảng cách chữ tiếng Việt để dấu thanh không bị đè hoặc dính chữ */
+  h1, h2, h3, h4, h5, h6,
+  .font-bold, .font-extrabold, .font-black {
+    letter-spacing: normal !important;
+  }
+  .tracking-tight,
+  .tracking-tighter {
+    letter-spacing: -0.005em !important;
+  }
+}
+
+/* ==========================================================================
+   THANH CUỘN (SCROLLBAR) HIỆN ĐẠI & TINH TẾ CHO TOÀN BỘ HỆ THỐNG
+   Thay thế thanh cuộn 17px thô màu xám cổ điển bằng thanh bo tròn mỏng 6px
+   ========================================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 90, 54, 0.22);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 90, 54, 0.45);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Thanh cuộn chuyên biệt cho Thanh bên điều hành (Sidebar Sider):
+   Siêu mỏng 5px, hòa vào nền tối #0A131C, không bị chói mắt */
+.custom-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.custom-sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* Ant Design typography synchronization */
+.ant-breadcrumb,
+.ant-breadcrumb ol,
+.ant-breadcrumb li,
+.ant-menu,
+.ant-menu-item,
+.ant-table,
+.ant-btn,
+.ant-input,
+.ant-select {
+  font-family: var(--font-sans) !important;
+  letter-spacing: normal !important;
 }
 
 html body a {

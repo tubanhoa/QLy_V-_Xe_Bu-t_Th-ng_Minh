@@ -2,25 +2,52 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import { AmbientTransitFx } from './ambient-transit-fx'
 import { FloatingSupportBot } from './floating-support-bot'
 import { MainHeader } from './main-header'
 import { QuickAccessBar } from './quick-access-bar'
-import { QuickAccessModals } from './quick-access-modals'
-import { SeatPickerModal } from './seat-picker-modal'
 import { TopUtilityBar } from './top-utility-bar'
-import { TripSearchModal } from './trip-search-modal'
-import { TicketManagementModal } from './ticket-management-modal'
 import { VietcombankHero } from './vietcombank-hero'
-import { AuthPromptModal } from '@/components/auth/auth-prompt-modal'
-import { MonthlyPassModal } from './monthly-pass-modal'
 import { MobileBottomDock } from './mobile-bottom-dock'
 import { useAuth } from '@/lib/auth-context'
 import { BusRoute, TripSearchResult } from '@/lib/types/sprint1'
 import { useNotifications } from '@/hooks/use-notifications'
-import { NotificationCenter } from '@/components/notification/notification-center'
 import { FloatingGeofenceAlert } from '@/components/notification/floating-geofence-alert'
-import { PushPermissionModal } from '@/components/notification/push-permission-modal'
+
+// Tối ưu hóa hiệu năng Landing Page: Lazy load các Modal theo nhu cầu (Code Splitting)
+const TripSearchModal = dynamic(
+  () => import('./trip-search-modal').then((mod) => mod.TripSearchModal),
+  { ssr: false }
+)
+const SeatPickerModal = dynamic(
+  () => import('./seat-picker-modal').then((mod) => mod.SeatPickerModal),
+  { ssr: false }
+)
+const TicketManagementModal = dynamic(
+  () => import('./ticket-management-modal').then((mod) => mod.TicketManagementModal),
+  { ssr: false }
+)
+const MonthlyPassModal = dynamic(
+  () => import('./monthly-pass-modal').then((mod) => mod.MonthlyPassModal),
+  { ssr: false }
+)
+const QuickAccessModals = dynamic(
+  () => import('./quick-access-modals').then((mod) => mod.QuickAccessModals),
+  { ssr: false }
+)
+const AuthPromptModal = dynamic(
+  () => import('@/components/auth/auth-prompt-modal').then((mod) => mod.AuthPromptModal),
+  { ssr: false }
+)
+const NotificationCenter = dynamic(
+  () => import('@/components/notification/notification-center').then((mod) => mod.NotificationCenter),
+  { ssr: false }
+)
+const PushPermissionModal = dynamic(
+  () => import('@/components/notification/push-permission-modal').then((mod) => mod.PushPermissionModal),
+  { ssr: false }
+)
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth()
@@ -234,80 +261,92 @@ export function LandingPage() {
       <FloatingSupportBot />
 
       {/* Interactive Trip Search & Realtime Schedules Modal */}
-      <TripSearchModal
-        open={isTripSearchOpen}
-        onClose={() => setIsTripSearchOpen(false)}
-        initialOrigin={searchOrigin}
-        initialDestination={searchDestination}
-        onSelectTrip={(trip) => {
-          setSelectedTrip(trip)
-          setSearchOrigin(trip.origin)
-          setSearchDestination(trip.destination)
-          setIsTripSearchOpen(false)
+      {isTripSearchOpen && (
+        <TripSearchModal
+          open={isTripSearchOpen}
+          onClose={() => setIsTripSearchOpen(false)}
+          initialOrigin={searchOrigin}
+          initialDestination={searchDestination}
+          onSelectTrip={(trip) => {
+            setSelectedTrip(trip)
+            setSearchOrigin(trip.origin)
+            setSearchDestination(trip.destination)
+            setIsTripSearchOpen(false)
 
-          if (!isAuthenticated) {
-            setPendingTrip(trip)
-            setIsAuthPromptOpen(true)
-          } else {
-            setIsSeatPickerOpen(true)
-          }
-        }}
-      />
+            if (!isAuthenticated) {
+              setPendingTrip(trip)
+              setIsAuthPromptOpen(true)
+            } else {
+              setIsSeatPickerOpen(true)
+            }
+          }}
+        />
+      )}
 
       {/* Auth Prompt Modal (Required for Guests attempting to book) */}
-      <AuthPromptModal
-        open={isAuthPromptOpen}
-        onClose={() => {
-          setIsAuthPromptOpen(false)
-          setPendingTrip(null)
-        }}
-        trip={pendingTrip}
-      />
+      {isAuthPromptOpen && (
+        <AuthPromptModal
+          open={isAuthPromptOpen}
+          onClose={() => {
+            setIsAuthPromptOpen(false)
+            setPendingTrip(null)
+          }}
+          trip={pendingTrip}
+        />
+      )}
 
       {/* Interactive 28-Seat Bus Booking & QR Ticket Modal */}
-      <SeatPickerModal
-        open={isSeatPickerOpen}
-        onClose={() => {
-          setIsSeatPickerOpen(false)
-          setSelectedTrip(null)
-        }}
-        initialOrigin={searchOrigin || 'ĐH CNTT & TT Thái Nguyên'}
-        initialDestination={searchDestination || 'Bến Xe Trung Tâm Thái Nguyên'}
-        selectedTrip={selectedTrip}
-        onViewMyTickets={(tId) => {
-          setSelectedTicketId(tId || null)
-          setIsTicketModalOpen(true)
-        }}
-      />
+      {isSeatPickerOpen && (
+        <SeatPickerModal
+          open={isSeatPickerOpen}
+          onClose={() => {
+            setIsSeatPickerOpen(false)
+            setSelectedTrip(null)
+          }}
+          initialOrigin={searchOrigin || 'ĐH CNTT & TT Thái Nguyên'}
+          initialDestination={searchDestination || 'Bến Xe Trung Tâm Thái Nguyên'}
+          selectedTrip={selectedTrip}
+          onViewMyTickets={(tId) => {
+            setSelectedTicketId(tId || null)
+            setIsTicketModalOpen(true)
+          }}
+        />
+      )}
 
       {/* Cửa sổ nổi (Floating Modal Window): Vé Điện Tử & Mã QR Soát Vé */}
-      <TicketManagementModal
-        open={isTicketModalOpen}
-        onClose={() => {
-          setIsTicketModalOpen(false)
-          setSelectedTicketId(null)
-        }}
-        initialTicketId={selectedTicketId}
-      />
+      {isTicketModalOpen && (
+        <TicketManagementModal
+          open={isTicketModalOpen}
+          onClose={() => {
+            setIsTicketModalOpen(false)
+            setSelectedTicketId(null)
+          }}
+          initialTicketId={selectedTicketId}
+        />
+      )}
 
       {/* Cửa sổ nổi (Floating Modal Window): Đăng Ký & Quản Lý Vé Tháng HSSV */}
-      <MonthlyPassModal
-        open={isMonthlyPassModalOpen}
-        onClose={() => setIsMonthlyPassModalOpen(false)}
-      />
+      {isMonthlyPassModalOpen && (
+        <MonthlyPassModal
+          open={isMonthlyPassModalOpen}
+          onClose={() => setIsMonthlyPassModalOpen(false)}
+        />
+      )}
 
       {/* Interactive Quick Access Modals (Routes, News, Student Pass) */}
-      <QuickAccessModals
-        activeModal={activeModal === 'lookup' || activeModal === 'student-pass' ? null : activeModal}
-        onClose={() => setActiveModal(null)}
-        onBookSeat={(route?: BusRoute) => {
-          if (route) {
-            setSearchOrigin(route.origin)
-            setSearchDestination(route.destination)
-          }
-          setIsTripSearchOpen(true)
-        }}
-      />
+      {activeModal && activeModal !== 'lookup' && activeModal !== 'student-pass' && (
+        <QuickAccessModals
+          activeModal={activeModal}
+          onClose={() => setActiveModal(null)}
+          onBookSeat={(route?: BusRoute) => {
+            if (route) {
+              setSearchOrigin(route.origin)
+              setSearchDestination(route.destination)
+            }
+            setIsTripSearchOpen(true)
+          }}
+        />
+      )}
 
       {/* Cảnh Báo Nổi In-App Geofence Alert (Xe buýt vào bán kính <= 500m) */}
       <FloatingGeofenceAlert
@@ -316,16 +355,18 @@ export function LandingPage() {
       />
 
       {/* Trung Tâm Thông Báo (Notification Center Popover/Drawer) */}
-      <NotificationCenter
-        isOpen={isNotificationCenterOpen}
-        onClose={() => setIsNotificationCenterOpen(false)}
-        notificationController={notifController}
-        isAuthenticated={isAuthenticated}
-        onOpenAuth={() => {
-          setIsNotificationCenterOpen(false)
-          setIsAuthPromptOpen(true)
-        }}
-      />
+      {isNotificationCenterOpen && (
+        <NotificationCenter
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+          notificationController={notifController}
+          isAuthenticated={isAuthenticated}
+          onOpenAuth={() => {
+            setIsNotificationCenterOpen(false)
+            setIsAuthPromptOpen(true)
+          }}
+        />
+      )}
 
       {/* Hộp Thoại Xin Quyền Web Push Notification */}
       <PushPermissionModal />

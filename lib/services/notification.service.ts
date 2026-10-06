@@ -122,8 +122,26 @@ class NotificationService {
     limit: number = 20,
     unreadOnly: boolean = false,
   ): Promise<UnifiedApiResponse<NotificationListResponse>> {
+    const token = authService.getToken()
     const user = authService.getUser()
     const userId = user?.id || 'guest'
+
+    // Nếu chưa đăng nhập, sử dụng ngay bộ đệm thông báo công khai cho khách (tránh gây lỗi 401)
+    if (!token) {
+      const all = this.getLocalCache('guest')
+      const filtered = unreadOnly ? all.filter((n) => !n.isRead) : all
+      const startIndex = (page - 1) * limit
+      return {
+        success: true,
+        data: {
+          notifications: filtered.slice(startIndex, startIndex + limit),
+          total: filtered.length,
+          unreadCount: all.filter((n) => !n.isRead).length,
+          page,
+          limit,
+        },
+      }
+    }
 
     try {
       const url = new URL(`${this.baseUrl}/notifications`)
@@ -137,6 +155,10 @@ class NotificationService {
         headers: this.getAuthHeaders(),
         cache: 'no-store',
       })
+
+      if (res.status === 401 && typeof window !== 'undefined') {
+        authService.clearSession()
+      }
 
       if (res.ok) {
         const json = await res.json()
@@ -179,14 +201,23 @@ class NotificationService {
    * Đếm số lượng thông báo chưa đọc
    */
   async getUnreadCount(): Promise<number> {
+    const token = authService.getToken()
     const user = authService.getUser()
     const userId = user?.id || 'guest'
+
+    if (!token) {
+      const all = this.getLocalCache('guest')
+      return all.filter((n) => !n.isRead).length
+    }
 
     try {
       const res = await fetch(`${this.baseUrl}/notifications/unread-count`, {
         headers: this.getAuthHeaders(),
         cache: 'no-store',
       })
+      if (res.status === 401 && typeof window !== 'undefined') {
+        authService.clearSession()
+      }
       if (res.ok) {
         const json = await res.json()
         const count = json?.data?.unreadCount ?? json?.unreadCount
@@ -287,11 +318,27 @@ class NotificationService {
       emailEnabled: true,
     }
 
+    const token = authService.getToken()
+    if (!token) {
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem(PREFERENCES_CACHE_KEY)
+          if (raw) return JSON.parse(raw)
+        } catch {
+          // ignore
+        }
+      }
+      return defaultPrefs
+    }
+
     try {
       const res = await fetch(`${this.baseUrl}/notifications/preferences`, {
         headers: this.getAuthHeaders(),
         cache: 'no-store',
       })
+      if (res.status === 401 && typeof window !== 'undefined') {
+        authService.clearSession()
+      }
       if (res.ok) {
         const json = await res.json()
         return json?.data || json || defaultPrefs

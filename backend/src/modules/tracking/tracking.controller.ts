@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
   Sse,
   MessageEvent,
@@ -65,7 +66,9 @@ export class TrackingController {
     return this.trackingService.recordLocation(dto);
   }
 
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post('driver/update-location')
   @ApiOperation({
     summary: 'REST fallback để tài xế cập nhật vị trí GPS (hỗ trợ cả REST và WS)',
@@ -128,6 +131,20 @@ export class TrackingController {
     @CurrentUser('id') resolvedBy: string,
   ) {
     return this.trackingService.resolveIncident(incidentId, resolvedBy, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Get(['driver/incidents', 'tracking/incidents', 'admin/incidents'])
+  @ApiOperation({
+    summary: 'Lấy toàn bộ danh sách sự cố trên toàn hệ thống (Admin, Dispatcher)',
+  })
+  async getAllIncidents(
+    @Query('status') status?: string,
+    @Query('severity') severity?: string,
+  ) {
+    return this.trackingService.getAllIncidents(status, severity);
   }
 
   @Public()

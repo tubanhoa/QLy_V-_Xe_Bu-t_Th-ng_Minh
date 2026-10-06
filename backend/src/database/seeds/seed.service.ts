@@ -48,6 +48,18 @@ export class SeedService implements OnApplicationBootstrap {
   }
 
   async runSeed() {
+    // Tối ưu tốc độ khởi động: Nếu tài khoản Admin đã có trong CSDL và không có cờ FORCE_SEED thì bỏ qua
+    const forceSeed = process.env.FORCE_SEED === 'true';
+    if (!forceSeed) {
+      const existingAdmin = await this.userRepo.findOne({
+        where: { email: 'admin@smartbus.ictu.vn' },
+      });
+      if (existingAdmin) {
+        this.logger.log('Dữ liệu CSDL đã sẵn sàng (Admin tồn tại). Bỏ qua Seed data để khởi động siêu tốc.');
+        return;
+      }
+    }
+
     this.logger.log('Checking database seed data...');
 
     // 1. Seed Roles

@@ -30,6 +30,7 @@ import {
   CancelTicketDto,
   HoldExchangeSeatDto,
   ConfirmExchangeDto,
+  AdminTicketsQueryDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { BookingStatus, TicketStatus, TripStatus, PaymentStatus } from '../../common/constants/status.constant.js';
@@ -461,6 +462,10 @@ export class BookingService {
         .andWhere('ticket.status NOT IN (:...excluded)', {
           excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
         })
+        .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+          pendingStatus: BookingStatus.PENDING,
+          now: new Date(),
+        })
         .getMany();
 
       if (existingTickets.length > 0) {
@@ -644,6 +649,70 @@ export class BookingService {
           departureTime: t.booking?.trip?.departureTime,
           refundInfo,
           createdAt: t.createdAt,
+        };
+      }),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getAdminTickets(query: AdminTicketsQueryDto) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const qb = this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoinAndSelect('ticket.booking', 'booking')
+      .leftJoinAndSelect('booking.user', 'user')
+      .leftJoinAndSelect('booking.trip', 'trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('ticket.seat', 'seat')
+      .leftJoinAndSelect('booking.payments', 'payments');
+
+    if (query.status && query.status !== 'all') {
+      qb.andWhere('ticket.status = :status', { status: query.status });
+    }
+
+    if (query.paymentMethod && query.paymentMethod !== 'all') {
+      qb.andWhere('payments.paymentMethod = :method', { method: query.paymentMethod });
+    }
+
+    if (query.search && query.search.trim()) {
+      const s = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(ticket.ticketCode) LIKE :s OR LOWER(booking.bookingCode) LIKE :s OR LOWER(ticket.passengerName) LIKE :s OR LOWER(ticket.passengerPhone) LIKE :s OR LOWER(user.email) LIKE :s)',
+        { s },
+      );
+    }
+
+    qb.orderBy('ticket.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [tickets, total] = await qb.getManyAndCount();
+
+    return {
+      items: tickets.map((t) => {
+        const payment = t.booking?.payments?.[0];
+        return {
+          id: t.id,
+          ticketCode: t.ticketCode,
+          bookingCode: t.booking?.bookingCode || 'N/A',
+          customerName: t.passengerName || t.booking?.user?.fullName || 'Hành khách',
+          phone: t.passengerPhone || t.booking?.user?.phoneNumber || 'N/A',
+          email: t.booking?.user?.email || 'N/A',
+          route: t.booking?.trip?.route?.name || 'Tuyến xe ICTU',
+          seatNumber: t.seat?.seatNumber || 'N/A',
+          amount: Number(t.originalPrice || t.booking?.totalAmount || 10000),
+          paymentMethod: payment?.paymentMethod || 'vnpay',
+          status: t.status,
+          createdAt: t.createdAt,
+          departureTime: t.booking?.trip?.departureTime,
         };
       }),
       meta: {
@@ -1150,7 +1219,7 @@ export class BookingService {
   /**
    * API Kiểm tra điều kiện và tính phí hủy/đổi vé theo thời gian
    */
-  async getCancellationPolicy(ticketId: string, userId?: string) {
+  async getCancellationPolicy(ticketId: string, userId?: string, userRole?: string) {
     const ticket = await this.ticketRepository.findOne({
       where: [{ id: ticketId }, { ticketCode: ticketId }],
       relations: {
@@ -1166,7 +1235,13 @@ export class BookingService {
       throw new NotFoundException('Không tìm thấy vé xe trong hệ thống');
     }
 
-    if (userId && ticket.booking.userId !== userId) {
+    const isAdminOrStaff =
+      userRole === Role.ADMIN ||
+      userRole === Role.MANAGER ||
+      userRole === 'admin' ||
+      userRole === 'manager';
+
+    if (userId && ticket.booking.userId !== userId && !isAdminOrStaff) {
       throw new ForbiddenException('Bạn không có quyền xem thông tin vé này');
     }
 
@@ -1186,7 +1261,12 @@ export class BookingService {
    * API Hủy vé: Cập nhật trạng thái vé, giải phóng ghế trống lập tức và tự động hoàn tiền
    * Tích hợp Idempotency Key và Khóa bi quan (Pessimistic Lock / Concurrency Control) ngăn chặn race condition & hoàn tiền kép
    */
-  async cancelTicket(ticketId: string, userId: string, dto?: CancelTicketDto) {
+  async cancelTicket(
+    ticketId: string,
+    userId: string,
+    dto?: CancelTicketDto,
+    userRole?: string,
+  ) {
     // 1. Kiểm tra Idempotency Key: Nếu request trùng lặp đã xử lý thành công, trả về kết quả đã lưu ngay lập tức
     if (dto?.idempotencyKey && this.idempotencyRecords.has(dto.idempotencyKey)) {
       return this.idempotencyRecords.get(dto.idempotencyKey)!.result;
@@ -1217,13 +1297,24 @@ export class BookingService {
         throw new NotFoundException('Không tìm thấy vé xe');
       }
 
-      if (ticket.booking.userId !== userId) {
+      const isAdminOrStaff =
+        userRole === Role.ADMIN ||
+        userRole === Role.MANAGER ||
+        userRole === 'admin' ||
+        userRole === 'manager';
+
+      if (ticket.booking.userId !== userId && !isAdminOrStaff) {
         throw new ForbiddenException('Bạn không có quyền hủy vé này');
       }
 
-      // 3. Ngăn chặn hủy vé đã bị hủy trước đó
+      // 3. Ngăn chặn hủy vé đã bị hủy hoặc đã hoàn tiền trước đó
       if (ticket.status === TicketStatus.CANCELLED || ticket.status === TicketStatus.REFUNDED) {
         throw new BadRequestException('Vé này đã bị hủy hoặc hoàn tiền trước đó');
+      }
+
+      // 4. Ngăn chặn hủy vé khi hành khách đã được soát lên xe (CHECKED_IN)
+      if (ticket.status === TicketStatus.CHECKED_IN) {
+        throw new BadRequestException('Vé đã được soát lên xe (CHECKED_IN), không thể hủy hoặc yêu cầu hoàn tiền!');
       }
 
       const policy = this.calculateCancellationAndExchangePolicy(ticket, ticket.booking.trip);

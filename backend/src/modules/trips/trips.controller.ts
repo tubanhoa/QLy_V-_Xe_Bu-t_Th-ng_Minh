@@ -7,6 +7,7 @@ import {
   Body,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TripsService } from './trips.service.js';
@@ -15,6 +16,7 @@ import {
   DispatchTripDto,
   UpdateTripStatusDto,
   VerifyQrDto,
+  CreateAdhocTripDto,
 } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
@@ -53,6 +55,15 @@ export class TripsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
+  @Post('adhoc')
+  @ApiOperation({ summary: 'Tạo chuyến xe tăng cường / phát sinh thực tế (Manager, Admin)' })
+  async createAdhoc(@Body() dto: CreateAdhocTripDto) {
+    return this.tripsService.createAdhocTrip(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post('dispatch')
   @ApiOperation({ summary: 'Điều phối: Gán xe + tài xế + phụ xe cho chuyến (Manager, Admin)' })
   async dispatch(@Body() dto: DispatchTripDto) {
@@ -82,7 +93,7 @@ export class TripsController {
   @ApiBearerAuth('JWT')
   @Get(':id/manifest')
   @ApiOperation({ summary: 'Danh sách hành khách (manifest) của chuyến xe (Driver, Manager)' })
-  async getManifest(@Param('id') id: string) {
+  async getManifest(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.tripsService.getManifest(id);
   }
 
@@ -90,17 +101,16 @@ export class TripsController {
   @Get(':id/seat-map')
   @ApiOperation({ summary: 'Lấy sơ đồ ghế và tình trạng đặt chỗ realtime của chuyến' })
   async getSeatMap(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser('id') currentUserId?: string,
   ) {
     return this.tripsService.getSeatMap(id, currentUserId);
   }
 
-
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Xem thông tin chi tiết một chuyến xe' })
-  async findById(@Param('id') id: string) {
+  async findById(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.tripsService.findById(id);
   }
 
@@ -109,7 +119,7 @@ export class TripsController {
   @ApiBearerAuth('JWT')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái chuyến xe (Driver, Manager)' })
-  async updateStatus(@Param('id') id: string, @Body() dto: UpdateTripStatusDto) {
+  async updateStatus(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateTripStatusDto) {
     return this.tripsService.updateStatus(id, dto.status);
   }
 }

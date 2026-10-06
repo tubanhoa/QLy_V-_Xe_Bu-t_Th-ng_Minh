@@ -2,11 +2,12 @@ import * as crypto from 'node:crypto';
 import QRCode from 'qrcode';
 
 export interface TicketQrPayload {
-  ticketCode: string;
-  tripId: string;
-  seatNumber: string;
-  passengerName: string;
-  issuedAt: number;
+  ticketCode?: string;
+  passCode?: string;
+  tripId?: string;
+  seatNumber?: string;
+  passengerName?: string;
+  issuedAt?: number;
   bookingCode?: string;
 }
 

@@ -275,6 +275,40 @@ class TrackingService {
       return { success: false, message: e?.message || 'Lỗi kết nối' }
     }
   }
+
+  /** Lấy toàn bộ sự cố trên toàn hệ thống (Dành cho Quản trị & Điều độ) */
+  async getAllIncidents(
+    status?: string,
+    severity?: string,
+  ): Promise<UnifiedApiResponse<any[]>> {
+    try {
+      const token = authService.getToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const params = new URLSearchParams()
+      if (status) params.append('status', status)
+      if (severity) params.append('severity', severity)
+
+      const url = `${this.baseUrl}/driver/incidents${params.toString() ? `?${params.toString()}` : ''}`
+      const res = await fetch(url, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { success: false, data: [], message: json?.message || 'Không thể tải danh sách sự cố' }
+      }
+      return { success: true, data: json?.data || json || [] }
+    } catch (e: any) {
+      return { success: false, data: [], message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
 }
 
 export const trackingService = new TrackingService()

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -24,6 +25,8 @@ import { TicketStatus, TripStatus } from '../../common/constants/status.constant
 
 @Injectable()
 export class RoutesService {
+  private readonly logger = new Logger(RoutesService.name);
+
   constructor(
     @InjectRepository(RouteEntity)
     private readonly routeRepository: Repository<RouteEntity>,
@@ -206,6 +209,41 @@ export class RoutesService {
         }),
       );
       await this.routeStationRepository.save(stopsToSave);
+    }
+
+    // Tự động kích hoạt lịch chạy 7 ngày liên tiếp (Rolling 7-day schedule) và phân quyền Tài xế + Xe buýt
+    const sampleTimes = ['07:00', '09:30', '13:30', '15:30', '17:30', '19:00'];
+    const durationMin = dto.estimatedDurationMinutes || 40;
+    const tripsToCreate: TripEntity[] = [];
+
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+
+      for (const timeStr of sampleTimes) {
+        const [h, m] = timeStr.split(':').map(Number);
+        const dep = new Date(targetDate);
+        dep.setHours(h, m, 0, 0);
+        const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
+
+        const trip = new TripEntity();
+        trip.routeId = savedRoute.id;
+        if (dto.assignedVehicleId) trip.vehicleId = dto.assignedVehicleId;
+        if (dto.assignedDriverId) trip.driverId = dto.assignedDriverId;
+        trip.departureTime = dep;
+        trip.arrivalTime = arr;
+        trip.status = TripStatus.SCHEDULED;
+        tripsToCreate.push(trip);
+      }
+    }
+
+    try {
+      await this.tripRepository.save(tripsToCreate);
+      this.logger.log(
+        `[RoutesService.create] Đã tự động khởi tạo ${tripsToCreate.length} chuyến xe trong 7 ngày tới cho tuyến: ${savedRoute.routeCode} (${savedRoute.name})`,
+      );
+    } catch (tripErr: any) {
+      this.logger.warn(`[RoutesService.create] Lỗi khi tự động sinh chuyến xe: ${tripErr?.message}`);
     }
 
     return this.findById(savedRoute.id);

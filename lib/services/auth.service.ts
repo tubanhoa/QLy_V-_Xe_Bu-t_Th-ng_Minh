@@ -419,6 +419,15 @@ class AuthService {
 
     sessionStorage.setItem(TOKEN_KEY, data.accessToken)
     sessionStorage.setItem(USER_KEY, JSON.stringify(data.user))
+
+    try {
+      const maxAge = remember ? 7 * 86400 : 86400
+      document.cookie = `auth_token=${encodeURIComponent(data.accessToken)}; path=/; max-age=${maxAge}; SameSite=Lax`
+      const roleStr = typeof data.user?.role === 'string' ? data.user.role : (data.user?.role as any)?.name || 'passenger'
+      document.cookie = `auth_role=${encodeURIComponent(roleStr)}; path=/; max-age=${maxAge}; SameSite=Lax`
+    } catch {
+      // Ignore cookie errors
+    }
   }
 
   /**
@@ -432,6 +441,13 @@ class AuthService {
     sessionStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(REFRESH_TOKEN_KEY)
     sessionStorage.removeItem(USER_KEY)
+
+    try {
+      document.cookie = 'auth_token=; path=/; max-age=0'
+      document.cookie = 'auth_role=; path=/; max-age=0'
+    } catch {
+      // Ignore
+    }
   }
 
   /**

@@ -9,7 +9,15 @@ const SEVERITY = {
   low: 'bg-slate-400',
 } as const
 
-export function RevenueChannelsCard() {
+export interface ChannelItem {
+  channel: string
+  amount: string
+  share: number
+}
+
+export function RevenueChannelsCard({ channels }: { channels?: ChannelItem[] }) {
+  const displayChannels = channels && channels.length > 0 ? channels : REVENUE_CHANNELS
+
   return (
     <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="revenue-heading">
       <div className="flex items-center gap-2">
@@ -18,9 +26,9 @@ export function RevenueChannelsCard() {
           Doanh thu theo kênh
         </h2>
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">Cổng thanh toán hôm nay</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Cổng thanh toán thực tế từ Supabase</p>
       <ul className="mt-5 flex flex-col gap-4">
-        {REVENUE_CHANNELS.map((channel) => (
+        {displayChannels.map((channel) => (
           <li key={channel.channel}>
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-foreground">{channel.channel}</span>
@@ -42,7 +50,8 @@ export function RevenueChannelsCard() {
   )
 }
 
-export function IncidentsCard() {
+export function IncidentsCard({ incidents }: { incidents?: any[] }) {
+  const displayIncidents = incidents && incidents.length > 0 ? incidents : OPEN_INCIDENTS
   return (
     <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="incidents-heading">
       <div className="flex items-center justify-between gap-2">
