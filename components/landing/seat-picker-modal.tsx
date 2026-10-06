@@ -385,10 +385,16 @@ export function SeatPickerModal({
               <Bus size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="rounded-md bg-[#005A36] text-white px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">
                   {routeCode}
                 </span>
+                {(selectedTrip?.isNew || selectedTrip?.isAdhoc) && (
+                  <span className="rounded-md bg-amber-500 text-white px-2 py-0.5 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs animate-in fade-in">
+                    <Sparkles size={10} className="fill-white" />
+                    <span>{selectedTrip?.isAdhoc ? 'TĂNG CƯỜNG' : 'MỚI TẠO'}</span>
+                  </span>
+                )}
                 <span className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[220px] sm:max-w-md">
                   {originName} ➔ {destinationName}
                 </span>
