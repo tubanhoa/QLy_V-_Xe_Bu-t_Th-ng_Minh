@@ -16,6 +16,8 @@ import { UserEntity } from '../src/database/entities/user.entity.js';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter.js';
 import { TransformResponseInterceptor } from '../src/common/interceptors/transform-response.interceptor.js';
 import { IncidentType, IncidentSeverity } from '../src/common/constants/status.constant.js';
+import { Role } from '../src/common/constants/roles.constant.js';
+import { JwtService } from '@nestjs/jwt';
 
 describe('Real-time GPS Tracking, ETA Calculation, Redis Cache & WebSocket/SSE Stream Tests', () => {
   let app: INestApplication;
@@ -29,6 +31,7 @@ describe('Real-time GPS Tracking, ETA Calculation, Redis Cache & WebSocket/SSE S
   let testTripId: string;
   let testRouteStations: RouteStationEntity[];
   let testUserId: string;
+  let driverToken: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -74,19 +77,37 @@ describe('Real-time GPS Tracking, ETA Calculation, Redis Cache & WebSocket/SSE S
     userRepo = moduleFixture.get<Repository<UserEntity>>(getRepositoryToken(UserEntity));
 
     // Lấy một người dùng mẫu trong CSDL để làm reportedBy
-    const user = await userRepo.findOne({ where: {} });
-    if (user) {
-      testUserId = user.id;
+    let user = await userRepo.findOne({ where: {} });
+    if (!user) {
+      user = await userRepo.save(
+        userRepo.create({
+          email: `test.tracking.${Date.now()}@smartbus.ictu.vn`,
+          fullName: 'Tài Xế Tracking Test',
+          passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyz123456',
+        }),
+      );
     }
+    testUserId = user.id;
 
-    // Lấy một chuyến xe mẫu trong CSDL để chạy kiểm thử
+    const jwtService = moduleFixture.get<JwtService>(JwtService);
+    driverToken = await jwtService.signAsync(
+      {
+        sub: testUserId,
+        id: testUserId,
+        role: Role.DRIVER,
+        email: user.email || 'driver@test.com',
+      },
+      { secret: process.env.JWT_SECRET || 'your-super-secret-key-change-in-production' },
+    );
+
+    // Lấy một chuyến xe mẫu trong CSDL để chạy kiểm thử (chọn chuyến từ cuối danh sách để tránh tranh chấp với test khác)
     const trips = await tripRepo.find({
       relations: { route: true },
-      take: 5,
+      take: 10,
     });
 
-    // Tìm chuyến xe có ít nhất 2 trạm
-    for (const t of trips) {
+    // Tìm chuyến xe có ít nhất 2 trạm từ cuối danh sách
+    for (const t of trips.slice().reverse()) {
       if (t.routeId) {
         const rs = await routeStationRepo.find({
           where: { routeId: t.routeId },
@@ -176,33 +197,39 @@ describe('Real-time GPS Tracking, ETA Calculation, Redis Cache & WebSocket/SSE S
     });
 
     it('1.3. Tích hợp độ trễ sự cố (delayMinutesEstimate) vào ETA khi chuyến xe có sự cố chưa xử lý', async () => {
-      // Báo cáo 1 sự cố với độ trễ 12 phút
-      const incident = incidentRepo.create({
-        tripId: testTripId,
-        reportedBy: testUserId,
-        incidentType: IncidentType.TRAFFIC_JAM,
-        severity: IncidentSeverity.HIGH,
-        description: 'Tắc đường cục bộ đường Z115',
-        delayMinutesEstimate: 12,
-        resolutionStatus: 'pending',
-      });
-      await incidentRepo.save(incident);
+      // Dọn dẹp incident cũ của chuyến xe này nếu có
+      await incidentRepo.delete({ tripId: testTripId });
 
-      const firstStation = testRouteStations[0].station;
-      const { stationEtas } = await trackingService.calculateTripEta(
-        testTripId,
-        Number(firstStation.latitude) + 0.01,
-        Number(firstStation.longitude) + 0.01,
-        30,
+      // Báo cáo 1 sự cố với độ trễ 12 phút
+      const incident = await incidentRepo.save(
+        incidentRepo.create({
+          tripId: testTripId,
+          reportedBy: testUserId,
+          incidentType: IncidentType.TRAFFIC_JAM,
+          severity: IncidentSeverity.HIGH,
+          description: 'Tắc đường cục bộ đường Z115',
+          delayMinutesEstimate: 12,
+          resolutionStatus: 'pending',
+        }),
       );
 
-      // ETA phải được cộng thêm độ trễ sự cố 12 phút
-      const nextEta = stationEtas.find((e) => e.isNextStop);
-      expect(nextEta).toBeDefined();
-      expect(nextEta!.etaMinutes).toBeGreaterThanOrEqual(12);
+      try {
+        const firstStation = testRouteStations[0].station;
+        const { stationEtas } = await trackingService.calculateTripEta(
+          testTripId,
+          Number(firstStation.latitude) + 0.01,
+          Number(firstStation.longitude) + 0.01,
+          30,
+        );
 
-      // Dọn dẹp sự cố sau test
-      await incidentRepo.delete({ id: incident.id });
+        // ETA phải được cộng thêm độ trễ sự cố 12 phút
+        const nextEta = stationEtas.find((e) => e.isNextStop);
+        expect(nextEta).toBeDefined();
+        expect(nextEta!.etaMinutes).toBeGreaterThanOrEqual(12);
+      } finally {
+        // Dọn dẹp sự cố sau test
+        await incidentRepo.delete({ id: incident.id });
+      }
     });
   });
 
@@ -450,6 +477,7 @@ describe('Real-time GPS Tracking, ETA Calculation, Redis Cache & WebSocket/SSE S
     it('5.3. POST /api/v1/driver/update-location cập nhật tọa độ fallback qua REST API', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/driver/update-location')
+        .set('Authorization', `Bearer ${driverToken}`)
         .send({
           tripId: testTripId,
           latitude: 21.586,

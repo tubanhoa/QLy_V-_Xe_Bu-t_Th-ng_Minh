@@ -328,27 +328,19 @@ export function CancellationPolicyModal({
               </div>
 
               {/* Bảng quy tắc chính sách thời gian */}
-              <div className="rounded-2xl border border-slate-200/90 bg-white p-3 space-y-2">
-                <div className="text-[11px] font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <Info size={13} className="text-slate-400" />
-                  <span>Quy Định Hủy Vé Theo Khung Giờ (Chính sách ICTU Transit)</span>
+              <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/50 p-3 space-y-2">
+                <div className="text-[11px] font-extrabold text-emerald-900 flex items-center gap-1.5">
+                  <Info size={13} className="text-emerald-600" />
+                  <span>Chính Sách Hỗ Trợ Hủy Vé Linh Hoạt ICTU Transit</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                  <div className={`p-2 rounded-xl border ${policy.hoursUntilDeparture >= 24 ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <div>≥ 24 tiếng</div>
-                    <div>Phí hủy: <strong>0% (Hoàn 100%)</strong></div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="p-2.5 rounded-xl border bg-white border-emerald-200 text-slate-700 space-y-0.5">
+                    <div className="font-bold text-emerald-800">Miễn Phí 100%</div>
+                    <div className="text-slate-500">Hoàn lại <strong>100% tiền vé</strong> khi hủy trước khi lên xe</div>
                   </div>
-                  <div className={`p-2 rounded-xl border ${policy.hoursUntilDeparture >= 12 && policy.hoursUntilDeparture < 24 ? 'bg-amber-50 border-amber-300 font-bold text-amber-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <div>12h đến 24h</div>
-                    <div>Phí hủy: <strong>10% (Hoàn 90%)</strong></div>
-                  </div>
-                  <div className={`p-2 rounded-xl border ${policy.hoursUntilDeparture >= 2 && policy.hoursUntilDeparture < 12 ? 'bg-amber-50 border-amber-300 font-bold text-amber-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <div>2h đến 12h</div>
-                    <div>Phí hủy: <strong>20% (Hoàn 80%)</strong></div>
-                  </div>
-                  <div className={`p-2 rounded-xl border ${policy.hoursUntilDeparture < 2 ? 'bg-rose-50 border-rose-300 font-bold text-rose-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <div>&lt; 2 tiếng / Đã chạy</div>
-                    <div><strong>Từ chối hủy & Không hoàn tiền</strong></div>
+                  <div className="p-2.5 rounded-xl border bg-white border-emerald-200 text-slate-700 space-y-0.5">
+                    <div className="font-bold text-emerald-800">Giải Phóng Ghế Lập Tức</div>
+                    <div className="text-slate-500">Ghế ngồi tự động mở lại cho hành khách khác đặt ngay</div>
                   </div>
                 </div>
               </div>

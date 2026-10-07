@@ -107,8 +107,16 @@ export function TripSearchModal({
       result = result.filter((t) => Number(t.availableSeats || 0) >= 10)
     }
 
-    // Logic sắp xếp chính xác cho Giờ chạy, Tuyến đường, Giá vé và Ghế trống
+    // Logic sắp xếp: Ưu tiên các chuyến của TUYẾN MỚI TẠO lên đầu danh sách để thuận tiện demo cho giảng viên!
     result.sort((a, b) => {
+      // 1. So sánh ngày tạo của tuyến xe (tuyến nào mới tạo hơn được xếp trước)
+      const routeTimeA = a.routeCreatedAt ? new Date(a.routeCreatedAt).getTime() : 0
+      const routeTimeB = b.routeCreatedAt ? new Date(b.routeCreatedAt).getTime() : 0
+      if (routeTimeA !== routeTimeB) {
+        return routeTimeB - routeTimeA
+      }
+
+      // 2. Tiếp theo là tiêu chí sắp xếp người dùng chọn
       if (sortBy === 'departure') {
         const timeA = new Date(a.departureTime).getTime() || 0
         const timeB = new Date(b.departureTime).getTime() || 0
@@ -142,6 +150,31 @@ export function TripSearchModal({
 
     return result
   }, [trips, filterType, sortBy, sortOrder])
+
+  // Lắng nghe sự kiện Admin tạo tuyến mới để đồng bộ tức thì không cần F5
+  useEffect(() => {
+    const handleRouteSync = () => {
+      searchService.clearCache()
+      loadStations()
+      if (open) {
+        handleSearch(origin, destination, date || todayStr)
+      }
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ictu_route_created_ts') {
+        handleRouteSync()
+      }
+    }
+
+    window.addEventListener('ictu:route-created', handleRouteSync)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('ictu:route-created', handleRouteSync)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [open, origin, destination, date, todayStr])
 
   // Khởi tạo và nạp danh sách trạm gợi ý
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../../src/modules/auth/auth.service.js';
@@ -86,11 +86,11 @@ describe('AuthService - Unit Tests', () => {
   // ========================================
   describe('register()', () => {
     const validRegisterDto = {
-      email: 'newuser@ictu.edu.vn',
+      email: 'dtc2151800001@ictu.edu.vn',
       password: 'Password@123',
       fullName: 'Nguyễn Văn Mới',
       phoneNumber: '0987654321',
-      studentId: 'DTC215180099',
+      studentId: 'DTC2151800001',
       faculty: 'Công Nghệ Thông Tin',
       idCardNumber: '012345678901',
     };
@@ -125,8 +125,35 @@ describe('AuthService - Unit Tests', () => {
       expect(result.user.role).toBe(Role.PASSENGER);
     });
 
+    it('should throw BadRequestException when studentId is not DTC + 10 digits', async () => {
+      const invalidDto = {
+        ...validRegisterDto,
+        studentId: 'DTC123', // Sai độ dài (chỉ có 3 số)
+        email: 'dtc123@ictu.edu.vn',
+      };
+      await expect(service.register(invalidDto)).rejects.toThrow(BadRequestException);
+      await expect(service.register(invalidDto)).rejects.toThrow(
+        'Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại',
+      );
+    });
+
+    it('should throw BadRequestException when email does not match studentId@ictu.edu.vn', async () => {
+      const mismatchedDto = {
+        ...validRegisterDto,
+        studentId: 'DTC2151800001',
+        email: 'khacnhau@ictu.edu.vn', // Không khớp studentId
+      };
+      await expect(service.register(mismatchedDto)).rejects.toThrow(BadRequestException);
+      await expect(service.register(mismatchedDto)).rejects.toThrow(
+        'Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại',
+      );
+    });
+
     it('should throw ConflictException when email already exists', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.findOne.mockImplementation(async ({ where }: any) => {
+        if (where?.email) return mockUser;
+        return null;
+      });
 
       await expect(service.register(validRegisterDto)).rejects.toThrow(ConflictException);
       await expect(service.register(validRegisterDto)).rejects.toThrow(
@@ -158,10 +185,10 @@ describe('AuthService - Unit Tests', () => {
     });
 
     it('should lowercase email before saving', async () => {
-      const dtoUpperEmail = { ...validRegisterDto, email: 'TEST@ICTU.EDU.VN' };
+      const dtoUpperEmail = { ...validRegisterDto, email: 'DTC2151800001@ICTU.EDU.VN' };
       userRepository.findOne.mockResolvedValue(null);
       roleRepository.findOne.mockResolvedValue(mockPassengerRole);
-      const savedUser = { ...mockUser, email: 'test@ictu.edu.vn' };
+      const savedUser = { ...mockUser, email: 'dtc2151800001@ictu.edu.vn' };
       userRepository.create.mockReturnValue(savedUser);
       userRepository.save.mockResolvedValue(savedUser);
       jwtService.signAsync.mockResolvedValue('token');
@@ -169,7 +196,7 @@ describe('AuthService - Unit Tests', () => {
       await service.register(dtoUpperEmail);
 
       expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { email: 'test@ictu.edu.vn' },
+        where: { email: 'dtc2151800001@ictu.edu.vn' },
       });
     });
   });

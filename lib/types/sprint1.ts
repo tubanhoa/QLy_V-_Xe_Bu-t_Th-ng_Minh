@@ -107,6 +107,7 @@ export interface TripSearchResult {
   vehiclePlate: string
   vehicleType?: string
   createdAt?: string
+  routeCreatedAt?: string
   isAdhoc?: boolean
   isNew?: boolean
   isBookable?: boolean

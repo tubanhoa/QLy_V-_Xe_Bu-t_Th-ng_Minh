@@ -118,8 +118,10 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
     }
   }, [])
 
-  // Mouse Wheel Scroll listener to cycle 3D cards
+  // Mouse Wheel Scroll listener to cycle 3D cards only when hovering the stack
   useEffect(() => {
+    if (!isStackHovered) return
+
     let timeoutId: NodeJS.Timeout
     let accumulatedDelta = 0
 
@@ -145,7 +147,7 @@ export function VietcombankHero({ onOpenSeatPicker, onSearchRoute }: Vietcombank
       window.removeEventListener('wheel', handleWheel)
       clearTimeout(timeoutId)
     }
-  }, [])
+  }, [isStackHovered])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()

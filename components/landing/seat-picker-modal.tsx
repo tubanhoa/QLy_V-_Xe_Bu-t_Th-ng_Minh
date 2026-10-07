@@ -163,6 +163,7 @@ export function SeatPickerModal({
     successMessage: lockSuccess,
     isExpired: isHoldExpired,
     remainingSeconds,
+    holdExpiresAt,
     toggleSeat,
     releaseAllHeldSeats,
     refreshSeatMap,
@@ -419,7 +420,7 @@ export function SeatPickerModal({
 
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Countdown Timer Pill (Khi đã giữ ít nhất 1 ghế) */}
-            <SeatLockTimer remainingSeconds={remainingSeconds} />
+            <SeatLockTimer expiresAt={holdExpiresAt} />
 
             <button
               type="button"

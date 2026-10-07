@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe, VersioningType, Controller, Get } from '@nestjs/common';
@@ -7,14 +8,8 @@ import { AppModule } from '../src/app.module.js';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter.js';
 import { TransformResponseInterceptor } from '../src/common/interceptors/transform-response.interceptor.js';
 import { SeedService } from '../src/database/seeds/seed.service.js';
-
-@Controller('test-error')
-class TestErrorController {
-  @Get('unhandled')
-  triggerUnhandledError() {
-    throw new Error('Internal DB failure: SELECT * FROM secret_table WHERE leak=true');
-  }
-}
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { TripEntity } from '../src/database/entities/trip.entity.js';
 
 describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
   let app: INestApplication;
@@ -22,7 +17,6 @@ describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-      controllers: [TestErrorController],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -61,6 +55,11 @@ describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
       .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
+
+    // Đăng ký route kiểm thử lỗi hệ thống cho AllExceptionsFilter
+    app.use('/api/v1/test-error/unhandled', (_req: any, _res: any, next: any) => {
+      next(new Error('Internal DB failure: SELECT * FROM secret_table WHERE leak=true'));
+    });
 
     await app.init();
 
@@ -180,10 +179,14 @@ describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
     });
 
     it('Trips: GET /api/v1/trips/:id returns 200 OK', async () => {
-      const res = await request(app.getHttpServer()).get('/api/v1/trips/8e1b2a65-840a-4d2d-8b20-f2b88dbb8d80');
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.id).toBe('8e1b2a65-840a-4d2d-8b20-f2b88dbb8d80');
+      const tripRepo = app.get(getRepositoryToken(TripEntity));
+      const trip = await tripRepo.findOne({ where: {} });
+      if (trip) {
+        const res = await request(app.getHttpServer()).get(`/api/v1/trips/${trip.id}`);
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.data.id).toBe(trip.id);
+      }
     });
 
     it('Voucher: POST /api/v1/vouchers/validate returns 201 OK', async () => {

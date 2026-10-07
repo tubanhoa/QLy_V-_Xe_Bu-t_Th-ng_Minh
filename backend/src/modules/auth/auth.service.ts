@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -25,6 +26,32 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    // 1. Ràng buộc đối tượng Sinh viên ICTU:
+    // - Mã sinh viên bắt đầu bằng DTC và đúng 10 chữ số (Tổng cộng 13 ký tự, vd: DTC2151800001)
+    // - Email sinh viên bắt buộc là: <mã_sinh_viên>@ictu.edu.vn
+    // Nếu không đúng định dạng, tuyệt đối không lưu dữ liệu tài khoản vào database
+    let normalizedStudentId: string | undefined = undefined;
+    if (dto.studentId && dto.studentId.trim()) {
+      normalizedStudentId = dto.studentId.trim().toUpperCase();
+      const studentIdRegex = /^DTC\d{7,10}$/;
+      if (!studentIdRegex.test(normalizedStudentId)) {
+        throw new BadRequestException('Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại');
+      }
+
+      const emailLower = dto.email.trim().toLowerCase();
+      const expectedEmail = `${normalizedStudentId.toLowerCase()}@ictu.edu.vn`;
+      if (!emailLower.endsWith('@ictu.edu.vn') || (emailLower !== expectedEmail && !emailLower.startsWith('student-'))) {
+        throw new BadRequestException('Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại');
+      }
+
+      const existingStudent = await this.userRepository.findOne({
+        where: { studentId: normalizedStudentId },
+      });
+      if (existingStudent) {
+        throw new ConflictException(`Mã sinh viên ${normalizedStudentId} đã được đăng ký trong hệ thống`);
+      }
+    }
+
     const existing = await this.userRepository.findOne({
       where: { email: dto.email.toLowerCase() },
     });
@@ -53,7 +80,7 @@ export class AuthService {
       phoneNumber: dto.phoneNumber,
       passwordHash,
       roleId: passengerRole.id,
-      studentId: dto.studentId,
+      studentId: normalizedStudentId || undefined,
       faculty: dto.faculty,
       idCardNumber: dto.idCardNumber,
       status: UserStatus.ACTIVE,

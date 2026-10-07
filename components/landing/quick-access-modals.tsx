@@ -80,9 +80,34 @@ export function QuickAccessModals({ activeModal, onClose, onBookSeat }: QuickAcc
 
   useEffect(() => {
     if (activeModal === 'routes') {
+      searchService.clearCache()
       loadRoutes()
     }
   }, [activeModal])
+
+  // Lắng nghe sự kiện tạo tuyến mới từ Admin Dashboard để đồng bộ tức thì
+  useEffect(() => {
+    const handleRouteSync = () => {
+      searchService.clearCache()
+      if (activeModal === 'routes') {
+        loadRoutes(routeSearchKeyword)
+      }
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ictu_route_created_ts') {
+        handleRouteSync()
+      }
+    }
+
+    window.addEventListener('ictu:route-created', handleRouteSync)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('ictu:route-created', handleRouteSync)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [activeModal, routeSearchKeyword])
 
   const loadRoutes = async (keyword?: string) => {
     setRoutesLoading(true)

@@ -37,14 +37,20 @@ export async function POST(request: Request) {
       )
     }
 
-    if (body.userType === 'student' && !body.studentId) {
-      return NextResponse.json<RegisterResponse>(
-        {
-          success: false,
-          message: 'Đối tượng sinh viên bắt buộc phải cung cấp Mã sinh viên ICTU.',
-        },
-        { status: 400 },
-      )
+    if (body.userType === 'student') {
+      const studentId = body.studentId?.toUpperCase().trim() || ''
+      const studentIdRegex = /^DTC\d{10}$/
+      const expectedEmail = `${studentId.toLowerCase()}@ictu.edu.vn`
+
+      if (!studentId || !studentIdRegex.test(studentId) || body.email.toLowerCase().trim() !== expectedEmail) {
+        return NextResponse.json<RegisterResponse>(
+          {
+            success: false,
+            message: 'Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại',
+          },
+          { status: 400 },
+        )
+      }
     }
 
     // 3. Mock thành công (Backend thay bằng logic INSERT vào DB)

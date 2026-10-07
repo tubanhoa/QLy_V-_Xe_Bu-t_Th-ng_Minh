@@ -81,35 +81,26 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     }
   }, [tripId, enabled, fetchSeatMap])
 
-  // 3. Đếm ngược thời gian giữ chỗ
+  // 3. Quản lý thời hạn giữ chỗ (Tự động hết hạn chính xác qua setTimeout mà không re-render component cha mỗi giây)
   useEffect(() => {
     if (!holdExpiresAt || selectedSeats.length === 0) {
-      setRemainingSeconds(0)
-      if (timerRef.current) clearInterval(timerRef.current)
+      if (timerRef.current) clearTimeout(timerRef.current)
       return
     }
 
-    const updateTimer = () => {
-      const diff = Math.max(0, Math.floor((holdExpiresAt - Date.now()) / 1000))
-      setRemainingSeconds(diff)
-
-      if (diff <= 0) {
-        // Hết thời gian giữ chỗ
-        if (timerRef.current) clearInterval(timerRef.current)
-        setHoldExpiresAt(null)
-        setSelectedSeats([])
-        setIsExpired(true)
-        setSuccessMessage(null)
-        setErrorMessage('Thời gian giữ chỗ (10 phút) đã hết. Ghế đã được tự động mở lại cho người khác.')
-        fetchSeatMap(false)
-      }
-    }
-
-    updateTimer()
-    timerRef.current = setInterval(updateTimer, 1000)
+    const timeoutMs = Math.max(0, holdExpiresAt - Date.now())
+    timerRef.current = setTimeout(() => {
+      // Hết thời gian giữ chỗ
+      setHoldExpiresAt(null)
+      setSelectedSeats([])
+      setIsExpired(true)
+      setSuccessMessage(null)
+      setErrorMessage('Thời gian giữ chỗ (10 phút) đã hết. Ghế đã được tự động mở lại cho người khác.')
+      fetchSeatMap(false)
+    }, timeoutMs)
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+      if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [holdExpiresAt, selectedSeats.length, fetchSeatMap])
 
@@ -296,3 +287,34 @@ export function useSeatLock({ tripId, enabled = true }: UseSeatLockProps) {
     refreshSeatMap,
   }
 }
+
+/**
+ * Hook đếm ngược cô lập - chỉ re-render component lá tiêu thụ nó, bảo vệ toàn bộ component cha khỏi việc diff cây DOM liên tục
+ */
+export function useSeatHoldCountdown(expiresAt: number | null): string {
+  const [remaining, setRemaining] = useState<string>('')
+
+  useEffect(() => {
+    if (!expiresAt) {
+      setRemaining('')
+      return
+    }
+    const update = () => {
+      const diff = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+      if (diff <= 0) {
+        setRemaining('')
+        return
+      }
+      const m = Math.floor(diff / 60)
+      const s = diff % 60
+      setRemaining(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [expiresAt])
+
+  return remaining
+}
+
+
