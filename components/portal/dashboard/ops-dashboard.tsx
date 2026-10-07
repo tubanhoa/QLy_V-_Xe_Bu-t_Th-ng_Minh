@@ -12,6 +12,9 @@ import {
   Database,
   Clock,
   UserCheck,
+  Calendar,
+  CalendarDays,
+  Filter,
 } from 'lucide-react'
 import type { Role } from '@/lib/rbac'
 import type { Trip, TripStatus } from '@/lib/mock-data'
@@ -27,6 +30,7 @@ import { TripsPanel } from './trips-panel'
 import { AnalyticsCharts } from './analytics-charts'
 import { AuditLogDrawer } from './audit-log-drawer'
 import { SessionTimeoutModal } from './session-timeout-modal'
+import { DailyRevenueModal } from './daily-revenue-modal'
 
 const COPY = {
   admin: {
@@ -49,7 +53,23 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date())
   const [isAuditOpen, setIsAuditOpen] = useState(false)
   const [isSessionLocked, setIsSessionLocked] = useState(false)
+  const [isDailyModalOpen, setIsDailyModalOpen] = useState(false)
+
+  // Quản lý bộ lọc doanh thu theo ngày
+  const [activePreset, setActivePreset] = useState<'all' | 'today' | '7days' | 'custom'>('all')
+  const [customDate, setCustomDate] = useState<string>('')
+  const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({})
+  const dateRangeRef = useRef<{ start?: string; end?: string }>({})
+
   const currentUser = authService.getUser()
+
+  // Định dạng ngày theo lịch địa phương YYYY-MM-DD
+  const formatLocalDate = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   // Inactivity timeout watchdog (Tự động khóa phiên sau 15 phút không tương tác để bảo vệ bàn điều hành)
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -85,11 +105,13 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
     }
   }, [resetInactivityTimer])
 
-  // Tải dữ liệu Dashboard từ Backend Supabase
-  const loadDashboardData = useCallback(async (isSilent = false) => {
+  // Tải dữ liệu Dashboard từ Backend Supabase (hỗ trợ lọc linh hoạt theo ngày)
+  const loadDashboardData = useCallback(async (isSilent = false, start?: string, end?: string) => {
     if (!isSilent) setRefreshing(true)
+    const effectiveStart = start !== undefined ? start : dateRangeRef.current.start
+    const effectiveEnd = end !== undefined ? end : dateRangeRef.current.end
     try {
-      const summary = await analyticsService.getAdminDashboardSummary()
+      const summary = await analyticsService.getAdminDashboardSummary(effectiveStart, effectiveEnd)
       setData(summary)
       setLastSyncTime(new Date())
     } catch (err) {
@@ -99,6 +121,44 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
       setRefreshing(false)
     }
   }, [])
+
+  const handlePresetChange = (preset: 'all' | 'today' | '7days') => {
+    setActivePreset(preset)
+    setCustomDate('')
+    let start: string | undefined = undefined
+    let end: string | undefined = undefined
+
+    if (preset === 'today') {
+      const todayStr = formatLocalDate(new Date())
+      start = todayStr
+      end = todayStr
+    } else if (preset === '7days') {
+      const now = new Date()
+      const past = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
+      start = formatLocalDate(past)
+      end = formatLocalDate(now)
+    }
+
+    dateRangeRef.current = { start, end }
+    setDateRange({ start, end })
+    loadDashboardData(false, start, end)
+  }
+
+  const handleCustomDateChange = (dateVal: string) => {
+    if (!dateVal) {
+      handlePresetChange('all')
+      return
+    }
+    setActivePreset('custom')
+    setCustomDate(dateVal)
+    dateRangeRef.current = { start: dateVal, end: dateVal }
+    setDateRange({ start: dateVal, end: dateVal })
+    loadDashboardData(false, dateVal, dateVal)
+  }
+
+  const handleSelectDateFromModal = (dateVal: string) => {
+    handleCustomDateChange(dateVal)
+  }
 
   useEffect(() => {
     loadDashboardData()
@@ -242,6 +302,105 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
         </div>
       </div>
 
+      {/* THANH ĐIỀU KHIỂN LỌC DOANH THU THEO NGÀY & ĐỐI SOÁT */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mr-1">
+            <Calendar size={14} className="text-emerald-500" />
+            Kỳ Báo Cáo Doanh Thu:
+          </span>
+          <button
+            type="button"
+            onClick={() => handlePresetChange('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+              activePreset === 'all'
+                ? 'bg-emerald-500 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            Toàn Kỳ (Tổng Hợp)
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePresetChange('today')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+              activePreset === 'today'
+                ? 'bg-emerald-500 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            Hôm Nay
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePresetChange('7days')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+              activePreset === '7days'
+                ? 'bg-emerald-500 text-white shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            7 Ngày Gần Nhất
+          </button>
+
+          {/* Chọn ngày cụ thể */}
+          <div className="flex items-center gap-1.5 pl-2 sm:border-l border-slate-200 dark:border-slate-700">
+            <span className="text-[11px] text-slate-400 font-medium">Chọn ngày:</span>
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => handleCustomDateChange(e.target.value)}
+              className="px-2.5 py-1 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+              title="Chọn ngày cụ thể để xem số liệu doanh thu"
+            />
+            {activePreset === 'custom' && (
+              <button
+                type="button"
+                onClick={() => handlePresetChange('all')}
+                className="text-[11px] text-rose-500 hover:underline font-semibold cursor-pointer"
+              >
+                Xóa lọc
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Nút Mở Bảng Kê Đối Soát Từng Ngày */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsDailyModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-all cursor-pointer shadow-xs"
+          >
+            <CalendarDays size={15} />
+            <span>Bảng Kê Chi Tiết Từng Ngày</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-800 text-[10px] font-mono">
+              {data?.dailyBreakdown?.length ?? 0} ngày
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Thông báo nếu lọc hôm nay mà chưa có thanh toán phát sinh */}
+      {activePreset === 'today' && (data?.kpis.totalRevenue ?? 0) === 0 && (
+        <div className="px-4 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              Hôm nay ({formatLocalDate(new Date())}) chưa phát sinh thanh toán thành công mới. 
+              Các số liệu hiển thị là 0 đ theo đúng thực tế cơ sở dữ liệu.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsDailyModalOpen(true)}
+            className="font-bold underline hover:opacity-80 shrink-0 ml-2 cursor-pointer"
+          >
+            Xem bảng kê các ngày trước →
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards Hàng Ngang (Real Data Driven) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {dynamicKpis.map((kpi) => (
@@ -262,11 +421,12 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
         <div className="xl:col-span-2">
           <TripsPanel trips={mappedTrips} />
         </div>
-        {role === 'admin' ? (
-          <RevenueChannelsCard channels={data?.revenueByChannel} />
-        ) : (
-          <IncidentsCard />
-        )}
+        <div className="flex flex-col gap-6">
+          <IncidentsCard incidents={data?.activeIncidentsList} />
+          {role === 'admin' && (
+            <RevenueChannelsCard channels={data?.revenueByChannel} />
+          )}
+        </div>
       </div>
 
       {/* DRAWER NHẬT KÝ KIỂM TOÁN AN NINH (AUDIT TRAIL) */}
@@ -286,6 +446,14 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
         }}
         adminName={currentUser?.fullName || 'Quản trị viên Hệ thống'}
         adminEmail={currentUser?.email || 'admin@smartbus.ictu.vn'}
+      />
+
+      {/* MODAL BẢNG KÊ ĐỐI SOÁT DOANH THU TỪNG NGÀY */}
+      <DailyRevenueModal
+        isOpen={isDailyModalOpen}
+        onClose={() => setIsDailyModalOpen(false)}
+        data={data?.dailyBreakdown || []}
+        onSelectDate={handleSelectDateFromModal}
       />
     </div>
   )

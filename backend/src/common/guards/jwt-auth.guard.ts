@@ -28,7 +28,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
-    if (process.env.NODE_ENV === 'test') {
+    const req = context.switchToHttp().getRequest();
+    const path = req.path || req.url || '';
+
+    // Danh sách các route nhạy cảm yêu cầu bảo mật nghiêm ngặt (chặn tuyệt đối 401 nếu thiếu hoặc sai token)
+    const isSensitiveRoute =
+      path.includes('/reports') ||
+      path.includes('/admin') ||
+      path.includes('/driver/update-location') ||
+      path.includes('/driver/incidents') ||
+      path.includes('/users');
+
+    if (process.env.NODE_ENV === 'test' || isSensitiveRoute) {
       return super.canActivate(context) as Promise<boolean>;
     }
 
@@ -36,9 +47,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       const result = await (super.canActivate(context) as Promise<boolean>);
       return result;
     } catch {
-      // Demo / Development Bypass: Không chặn người dùng bằng lỗi hết hạn phiên
-      // Tự động fallback sang tài khoản Quản Trị Viên (Admin) với đầy đủ quyền hạn
-      const req = context.switchToHttp().getRequest();
+      // Demo / Development Bypass nhẹ cho các route phụ trợ:
+      // Tự động fallback sang tài khoản Quản Trị Viên (Admin)
       req.user = {
         id: '00000000-0000-0000-0000-000000000001',
         sub: '00000000-0000-0000-0000-000000000001',
@@ -58,7 +68,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     info: Error | undefined,
     context?: ExecutionContext,
   ): T {
-    if (process.env.NODE_ENV === 'test') {
+    const req = context?.switchToHttp().getRequest();
+    const path = req?.path || req?.url || '';
+    const isSensitiveRoute =
+      path.includes('/reports') ||
+      path.includes('/admin') ||
+      path.includes('/driver/update-location') ||
+      path.includes('/driver/incidents') ||
+      path.includes('/users');
+
+    if (process.env.NODE_ENV === 'test' || isSensitiveRoute) {
       if (err || !user) {
         throw (
           err ||
@@ -74,7 +93,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return user;
     }
 
-    // Demo Mode Fallback: Loại bỏ triệt để thông báo "Phiên đăng nhập không hợp lệ hoặc đã hết hạn"
+    // Demo Mode Fallback: Chỉ áp dụng cho các route xem thông tin thông thường
     const fallbackUser = {
       id: '00000000-0000-0000-0000-000000000001',
       sub: '00000000-0000-0000-0000-000000000001',
@@ -85,8 +104,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       studentId: null,
     };
 
-    if (context) {
-      const req = context.switchToHttp().getRequest();
+    if (req) {
       req.user = fallbackUser;
     }
 

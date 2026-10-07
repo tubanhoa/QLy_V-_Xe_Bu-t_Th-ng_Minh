@@ -21,14 +21,31 @@ export class ReportsService {
     const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(Date.now() - 30 * 86400000);
     const end = endDate ? new Date(`${endDate}T23:59:59.999`) : new Date();
 
-    const bookings = await this.bookingRepository
+    const qb = this.bookingRepository
       .createQueryBuilder('booking')
       .innerJoinAndSelect('booking.trip', 'trip')
       .innerJoinAndSelect('trip.route', 'route')
       .leftJoinAndSelect('booking.payments', 'payment')
-      .where('booking.status = :status', { status: BookingStatus.PAID })
-      .andWhere('booking.bookingTime BETWEEN :start AND :end', { start, end })
-      .getMany();
+      .where('LOWER(booking.status) IN (:...statuses)', { statuses: ['paid', 'confirmed'] });
+
+    if (startDate || endDate) {
+      qb.andWhere('booking.bookingTime BETWEEN :start AND :end', { start, end });
+    }
+
+    let bookings = await qb.getMany();
+
+    // Nếu không truyền startDate cụ thể và trong khoảng 30 ngày chưa có thì lấy dữ liệu thực tế gần nhất
+    if (bookings.length === 0 && !startDate) {
+      bookings = await this.bookingRepository
+        .createQueryBuilder('booking')
+        .innerJoinAndSelect('booking.trip', 'trip')
+        .innerJoinAndSelect('trip.route', 'route')
+        .leftJoinAndSelect('booking.payments', 'payment')
+        .where('LOWER(booking.status) IN (:...statuses)', { statuses: ['paid', 'confirmed'] })
+        .orderBy('booking.bookingTime', 'DESC')
+        .take(300)
+        .getMany();
+    }
 
     let totalRevenue = 0;
     let totalDiscount = 0;
@@ -42,6 +59,21 @@ export class ReportsService {
       vietqr: 'Mã VietQR Pro',
       cash: 'Tiền mặt tại trạm',
     };
+
+    const dailyBreakdownMap = new Map<
+      string,
+      {
+        date: string;
+        revenue: number;
+        ticketCount: number;
+        routeCT01: number;
+        routeCT02: number;
+        vnpay: number;
+        momo: number;
+        vietqr: number;
+        cash: number;
+      }
+    >();
 
     for (const b of bookings) {
       const amount = Number(b.finalAmount);
@@ -66,6 +98,30 @@ export class ReportsService {
       const rawMethod = b.payments?.[0]?.paymentMethod?.toLowerCase() || 'vnpay';
       const channelLabel = CHANNEL_LABELS[rawMethod] || 'Cổng thanh toán điện tử';
       revenueByChannelMap.set(channelLabel, (revenueByChannelMap.get(channelLabel) || 0) + amount);
+
+      // Cập nhật Bảng kê chi tiết theo ngày
+      const dayItem = dailyBreakdownMap.get(dateStr) || {
+        date: dateStr,
+        revenue: 0,
+        ticketCount: 0,
+        routeCT01: 0,
+        routeCT02: 0,
+        vnpay: 0,
+        momo: 0,
+        vietqr: 0,
+        cash: 0,
+      };
+      dayItem.revenue += amount;
+      dayItem.ticketCount += 1;
+      if (routeCode === 'CT-01') dayItem.routeCT01 += amount;
+      else if (routeCode === 'CT-02') dayItem.routeCT02 += amount;
+
+      if (rawMethod === 'vnpay') dayItem.vnpay += amount;
+      else if (rawMethod === 'momo') dayItem.momo += amount;
+      else if (rawMethod === 'vietqr') dayItem.vietqr += amount;
+      else if (rawMethod === 'cash') dayItem.cash += amount;
+
+      dailyBreakdownMap.set(dateStr, dayItem);
     }
 
     const revenueByChannel = Array.from(revenueByChannelMap.entries()).map(([channel, amount]) => ({
@@ -74,6 +130,10 @@ export class ReportsService {
       rawAmount: amount,
       share: totalRevenue > 0 ? Math.round((amount / totalRevenue) * 100) : 0,
     }));
+
+    const dailyBreakdown = Array.from(dailyBreakdownMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
 
     return {
       totalRevenue,
@@ -85,6 +145,7 @@ export class ReportsService {
         revenue,
       })),
       revenueByChannel,
+      dailyBreakdown,
     };
   }
 
