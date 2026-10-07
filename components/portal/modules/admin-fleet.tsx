@@ -574,7 +574,10 @@ export function AdminFleet() {
               )}
 
               <div className="rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                <p className="font-semibold">⚡ Cấu hình sơ đồ 28 ghế tự động:</p>
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Zap size={14} className="shrink-0" />
+                  <span>Cấu hình sơ đồ 28 ghế tự động:</span>
+                </p>
                 <p className="mt-0.5 text-[11px] opacity-90">
                   Hệ thống sẽ tự động khởi tạo 7 hàng ghế x 4 cột (01A - 07D), với hàng đầu tiên là ghế ưu tiên cho người già, phụ nữ mang thai và người khuyết tật.
                 </p>

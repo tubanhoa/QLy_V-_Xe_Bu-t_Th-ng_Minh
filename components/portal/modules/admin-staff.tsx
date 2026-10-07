@@ -448,20 +448,21 @@ export function AdminStaff() {
           </div>
           {[
             { key: 'all', label: `Tất cả (${users.length})` },
-            { key: 'official', label: `🟢 Tài khoản chính thức (${officialCount})` },
-            { key: 'test', label: `🟡 Dữ liệu kiểm thử / Test (${testCount})` },
+            { key: 'official', label: `Tài khoản chính thức (${officialCount})`, dot: 'bg-emerald-500' },
+            { key: 'test', label: `Dữ liệu kiểm thử (${testCount})`, dot: 'bg-amber-500' },
           ].map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setClassificationFilter(tab.key as any)}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 classificationFilter === tab.key
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60'
               }`}
             >
-              {tab.label}
+              {tab.dot && <span className={`h-2 w-2 rounded-full ${tab.dot}`} />}
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
@@ -505,10 +506,10 @@ export function AdminStaff() {
                 }}
                 className="h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
               >
-                <option value="role-desc">Sắp xếp: Vai trò (Cao ➔ Thấp)</option>
-                <option value="role-asc">Sắp xếp: Vai trò (Thấp ➔ Cao)</option>
-                <option value="fullName-asc">Sắp xếp: Họ tên (A ➔ Z)</option>
-                <option value="fullName-desc">Sắp xếp: Họ tên (Z ➔ A)</option>
+                <option value="role-desc">Sắp xếp: Vai trò (Cao đến Thấp)</option>
+                <option value="role-asc">Sắp xếp: Vai trò (Thấp đến Cao)</option>
+                <option value="fullName-asc">Sắp xếp: Họ tên (A - Z)</option>
+                <option value="fullName-desc">Sắp xếp: Họ tên (Z - A)</option>
                 <option value="createdAt-desc">Sắp xếp: Ngày tạo (Mới nhất)</option>
                 <option value="createdAt-asc">Sắp xếp: Ngày tạo (Cũ nhất)</option>
               </select>
@@ -540,8 +541,8 @@ export function AdminStaff() {
                 <span className="hidden sm:inline">
                   {sortField === 'role'
                     ? sortOrder === 'desc'
-                      ? 'Cao ➔ Thấp'
-                      : 'Thấp ➔ Cao'
+                      ? 'Cao đến Thấp'
+                      : 'Thấp đến Cao'
                     : 'Đảo chiều'}
                 </span>
               </button>
