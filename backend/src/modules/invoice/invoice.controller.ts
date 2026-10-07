@@ -14,7 +14,11 @@ import type { Response } from 'express';
 import { InvoiceService } from './invoice.service.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 
+import { IsEmail, IsOptional } from 'class-validator';
+
 export class ResendEmailDto {
+  @IsOptional()
+  @IsEmail({}, { message: 'Địa chỉ email không đúng định dạng' })
   email?: string;
 }
 

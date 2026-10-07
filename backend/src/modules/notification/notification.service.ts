@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import nodemailer, { type Transporter } from 'nodemailer';
+import dotenv from 'dotenv';
 
 export interface EmailAttachment {
   filename: string;
@@ -111,6 +112,7 @@ export class NotificationService {
   }
 
   private initTransporter() {
+    dotenv.config({ path: '.env', override: true });
     const user = process.env.SMTP_USER?.trim();
     const pass = process.env.SMTP_PASS?.replace(/\s+/g, '');
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -134,6 +136,7 @@ export class NotificationService {
         this.transporter = null;
       }
     } else {
+      this.transporter = null;
       this.logger.log(`[NotificationService] Chưa cấu hình SMTP_USER / SMTP_PASS trong .env -> Chạy chế độ fallback (Mock/Log mode)`);
     }
   }
@@ -836,6 +839,7 @@ export class NotificationService {
    * Gửi email chung qua Nodemailer SMTP hoặc Mock logger
    */
   async sendMail(options: SendMailOptions): Promise<boolean> {
+    this.initTransporter();
     const fromAddress =
       process.env.SMTP_FROM ||
       `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;

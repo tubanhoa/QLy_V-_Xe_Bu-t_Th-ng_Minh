@@ -435,19 +435,10 @@ export function TicketManagementModal({
   const handleResendEmail = async () => {
     if (!ticketDetail) return
 
-    // 3.1: Chặn lỗi đỏ khi người dùng bấm gửi trên Vé Mẫu / Vé Offline
     const isDemoTicket =
       !ticketDetail.ticketId ||
       ticketDetail.ticketCode?.startsWith('TK-2026-') ||
       ticketDetail.ticketId?.startsWith('tkt_')
-
-    if (isDemoTicket) {
-      setEmailNotice({
-        type: 'warning',
-        text: '⚠️ Đây là vé mẫu mô phỏng trên trình duyệt. Vui lòng đăng nhập tài khoản thực và đặt vé trực tuyến để lưu vào hệ thống và gửi email tự động.',
-      })
-      return
-    }
 
     if (resendCooldown > 0) {
       setEmailNotice({
@@ -460,10 +451,19 @@ export function TicketManagementModal({
     setSendingEmail(true)
     setEmailNotice(null)
 
-    const res = await ticketService.resendTicketEmail(
-      ticketDetail.ticketId,
-      customEmail.trim() || undefined,
-    )
+    let res
+    if (isDemoTicket) {
+      const codeToSend = ticketDetail.bookingCode || ticketDetail.ticketCode || 'BK-ICTU-8866'
+      res = await ticketService.resendTicketEmailByCode(
+        codeToSend,
+        customEmail.trim() || undefined,
+      )
+    } else {
+      res = await ticketService.resendTicketEmail(
+        ticketDetail.ticketId,
+        customEmail.trim() || undefined,
+      )
+    }
     setSendingEmail(false)
 
     const cooldownKey = `resend_cooldown_${ticketDetail.ticketId}`

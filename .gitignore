@@ -38,5 +38,10 @@ next-env.d.ts
 # Temporary git clone
 .temp_git_clone
 
+# Scratch and legacy local backups
+frontend/
+backend/scratch/
+scratch/
+
 # Editor
 .vscode/
