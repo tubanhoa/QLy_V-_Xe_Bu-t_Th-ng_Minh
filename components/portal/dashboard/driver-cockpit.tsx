@@ -51,6 +51,8 @@ import {
   Loader2,
   Send,
   ShieldAlert,
+  User,
+  Users,
 } from 'lucide-react'
 import { driverHardware } from '@/lib/utils/driver-hardware'
 import { driverService, DriverTripItem, ManifestPassenger } from '@/lib/services/driver.service'
@@ -150,6 +152,17 @@ const THAI_NGUYEN_STOPS: StationStop[] = [
   },
 ]
 
+/** Sơ đồ cấu trúc 28 ghế tiêu chuẩn xe buýt điện thông minh ICTU (7 hàng x 4 ghế) */
+const SEAT_ROWS_28 = [
+  { row: 1, label: '01', left: ['01A', '01B'], right: ['01C', '01D'] },
+  { row: 2, label: '02', labelDesc: 'Hàng 2', left: ['02A', '02B'], right: ['02C', '02D'] },
+  { row: 3, label: '03', labelDesc: 'Hàng 3', left: ['03A', '03B'], right: ['03C', '03D'] },
+  { row: 4, label: '04', labelDesc: 'Hàng 4', left: ['04A', '04B'], right: ['04C', '04D'] },
+  { row: 5, label: '05', labelDesc: 'Hàng 5', left: ['05A', '05B'], right: ['05C', '05D'] },
+  { row: 6, label: '06', labelDesc: 'Hàng 6', left: ['06A', '06B'], right: ['06C', '06D'] },
+  { row: 7, label: '07', labelDesc: 'Hàng 7', left: ['07A', '07B'], right: ['07C', '07D'] },
+]
+
 type SidePanelTab = 'none' | 'scanner' | 'manifest' | 'incident'
 
 /** Đồng hồ độc lập ngăn toàn bộ buồng lái 1200 dòng re-render mỗi giây */
@@ -218,17 +231,20 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     }
   } | null>(null)
 
-  // 6. Trạng thái Manifest Hành khách
+  // 6. Trạng thái Manifest & Sơ đồ ghế
   const [manifestList, setManifestList] = useState<ManifestPassenger[]>([])
   const [manifestSearch, setManifestSearch] = useState('')
   const [isLoadingManifest, setIsLoadingManifest] = useState(false)
+  const [manifestSubTab, setManifestSubTab] = useState<'seatmap' | 'list'>('seatmap')
+  const [selectedSeatNo, setSelectedSeatNo] = useState<string | null>(null)
 
-  // 7. Trạng thái Báo sự cố SOS
+  // 7. Trạng thái Báo sự cố SOS & Điểm danh
   const [selectedIncidentType, setSelectedIncidentType] = useState<IncidentType>('traffic_jam')
   const [delayMinutes, setDelayMinutes] = useState(15)
   const [incidentDescription, setIncidentDescription] = useState('')
   const [isSubmittingIncident, setIsSubmittingIncident] = useState(false)
   const [incidentSuccessNotice, setIncidentSuccessNotice] = useState<string | null>(null)
+  const [manifestNotice, setManifestNotice] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
 
 
@@ -305,6 +321,32 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       loadManifest()
     }
   }, [activeTab, loadManifest])
+
+  // Điểm danh vé thủ công bằng ID vé / mã ghế
+  const handleQuickCheckIn = useCallback(async (ticketId: string) => {
+    if (!activeTrip?.id) return
+    const res = await driverService.quickCheckInTicket(activeTrip.id, ticketId)
+    if (res.success) {
+      setManifestNotice({ text: res.message || 'Đã điểm danh hành khách lên xe!', type: 'success' })
+      loadManifest()
+    } else {
+      setManifestNotice({ text: res.message || 'Không thể điểm danh vé này', type: 'error' })
+    }
+    setTimeout(() => setManifestNotice(null), 4000)
+  }, [activeTrip?.id, loadManifest])
+
+  // Hoàn tác điểm danh (nếu ấn nhầm)
+  const handleUndoCheckIn = useCallback(async (ticketId: string) => {
+    if (!activeTrip?.id) return
+    const res = await driverService.undoCheckInTicket(activeTrip.id, ticketId)
+    if (res.success) {
+      setManifestNotice({ text: res.message || 'Đã hoàn tác điểm danh!', type: 'info' })
+      loadManifest()
+    } else {
+      setManifestNotice({ text: res.message || 'Không thể hoàn tác điểm danh', type: 'error' })
+    }
+    setTimeout(() => setManifestNotice(null), 4000)
+  }, [activeTrip?.id, loadManifest])
 
   // Mô phỏng di chuyển xe buýt thời gian thực giữa các trạm dừng
   useEffect(() => {

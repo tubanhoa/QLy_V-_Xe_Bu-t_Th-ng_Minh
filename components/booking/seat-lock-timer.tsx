@@ -1,23 +1,57 @@
 'use client'
 
-import React from 'react'
-import { AlertCircle, Clock, Flame, ShieldAlert } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { AlertCircle, Clock, Flame } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SeatLockTimerProps {
-  remainingSeconds: number
+  expiresAt?: number | null
+  remainingSeconds?: number
   className?: string
+  onExpired?: () => void
 }
 
-export function SeatLockTimer({ remainingSeconds, className }: SeatLockTimerProps) {
-  if (remainingSeconds <= 0) return null
+function SeatLockTimerComponent({
+  expiresAt,
+  remainingSeconds: initialSeconds,
+  className,
+  onExpired,
+}: SeatLockTimerProps) {
+  const [secondsLeft, setSecondsLeft] = useState<number>(() => {
+    if (expiresAt) {
+      return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+    }
+    return initialSeconds ?? 0
+  })
 
-  const minutes = Math.floor(remainingSeconds / 60)
-  const seconds = remainingSeconds % 60
+  useEffect(() => {
+    if (expiresAt) {
+      const calc = () => Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+      setSecondsLeft(calc())
+
+      const timer = setInterval(() => {
+        const left = calc()
+        setSecondsLeft(left)
+        if (left <= 0) {
+          clearInterval(timer)
+          onExpired?.()
+        }
+      }, 1000)
+
+      return () => clearInterval(timer)
+    } else if (initialSeconds !== undefined) {
+      setSecondsLeft(initialSeconds)
+    }
+  }, [expiresAt, initialSeconds, onExpired])
+
+  if (secondsLeft <= 0) return null
+
+  const minutes = Math.floor(secondsLeft / 60)
+  const seconds = secondsLeft % 60
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 
-  const isUrgent = remainingSeconds < 60
-  const isWarning = remainingSeconds >= 60 && remainingSeconds < 180
+  const isUrgent = secondsLeft < 60
+  const isWarning = secondsLeft >= 60 && secondsLeft < 180
 
   return (
     <div
@@ -46,3 +80,5 @@ export function SeatLockTimer({ remainingSeconds, className }: SeatLockTimerProp
     </div>
   )
 }
+
+export const SeatLockTimer = React.memo(SeatLockTimerComponent)

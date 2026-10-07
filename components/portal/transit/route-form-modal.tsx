@@ -19,7 +19,17 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Navigation,
+  Compass,
+  Search,
+  Zap,
+  ChevronDown,
 } from 'lucide-react'
+import {
+  searchAvailablePlaces,
+  calculateRouteMetrics,
+  PlaceItem,
+} from '@/lib/services/maps.service'
 import { transitService } from '@/lib/services/transit.service'
 import { vehicleService, Vehicle } from '@/lib/services/vehicle.service'
 import { userService } from '@/lib/services/user.service'
@@ -232,7 +242,117 @@ export function RouteFormModal({
     setErrorMessage(null)
   }, [route, isOpen])
 
-  if (!isOpen) return null
+  // Danh sách gợi ý địa điểm / trạm dừng thông minh & Tự động tính toán
+  const [originPlace, setOriginPlace] = useState<PlaceItem | null>(null)
+  const [destPlace, setDestPlace] = useState<PlaceItem | null>(null)
+  const [isOriginOpen, setIsOriginOpen] = useState(false)
+  const [isDestOpen, setIsDestOpen] = useState(false)
+  const [originSearch, setOriginSearch] = useState('')
+  const [destSearch, setDestSearch] = useState('')
+
+  const originSuggestions = React.useMemo(() => {
+    return searchAvailablePlaces(originSearch, availableStations)
+  }, [originSearch, availableStations])
+
+  const destSuggestions = React.useMemo(() => {
+    return searchAvailablePlaces(destSearch, availableStations)
+  }, [destSearch, availableStations])
+
+  const applyRouteMetrics = (from: PlaceItem, to: PlaceItem) => {
+    const metrics = calculateRouteMetrics(from, to, Math.max(0, selectedStops.length - 2))
+    setDistanceKm(metrics.distanceKm)
+    setEstimatedDurationMinutes(metrics.estimatedDurationMinutes)
+    setBasePrice(metrics.suggestedBasePrice)
+    setStudentPrice(metrics.suggestedStudentPrice)
+    setName(`${from.name.replace(/^Trạm\s+/i, '')} ↔ ${to.name.replace(/^Trạm\s+/i, '')}`)
+
+    // Tự động đồng bộ điểm xuất phát và điểm đến vào Lộ trình đón/trả khách (Stop 1 & Stop cuối)
+    const originStation = availableStations.find(
+      (s) => s.id === from.id || s.name.toLowerCase() === from.name.toLowerCase(),
+    )
+    const destStation = availableStations.find(
+      (s) => s.id === to.id || s.name.toLowerCase() === to.name.toLowerCase(),
+    )
+
+    if (originStation && destStation && originStation.id !== destStation.id) {
+      const intermediates = selectedStops.filter(
+        (s) => s.stationId !== originStation.id && s.stationId !== destStation.id,
+      )
+      const newStops: SelectedStop[] = [
+        {
+          stationId: originStation.id,
+          name: originStation.name,
+          address: originStation.address,
+          stopOrder: 1,
+          distanceFromOriginKm: 0,
+          estimatedMinutes: 0,
+        },
+        ...intermediates.map((item, idx) => ({
+          ...item,
+          stopOrder: idx + 2,
+        })),
+        {
+          stationId: destStation.id,
+          name: destStation.name,
+          address: destStation.address,
+          stopOrder: intermediates.length + 2,
+          distanceFromOriginKm: metrics.distanceKm,
+          estimatedMinutes: metrics.estimatedDurationMinutes,
+        },
+      ]
+      setSelectedStops(newStops)
+    }
+  }
+
+  const handleSelectOrigin = (p: PlaceItem) => {
+    setOrigin(p.name)
+    setOriginPlace(p)
+    setIsOriginOpen(false)
+    setOriginSearch('')
+
+    if (destPlace) {
+      applyRouteMetrics(p, destPlace)
+    } else if (destination) {
+      const matchDest = availableStations.find((s) => s.name === destination)
+      if (matchDest) {
+        const destP: PlaceItem = {
+          id: matchDest.id,
+          name: matchDest.name,
+          address: matchDest.address || '',
+          latitude: Number(matchDest.latitude) || 21.58,
+          longitude: Number(matchDest.longitude) || 105.83,
+          source: 'station',
+        }
+        setDestPlace(destP)
+        applyRouteMetrics(p, destP)
+      }
+    }
+  }
+
+  const handleSelectDest = (p: PlaceItem) => {
+    setDestination(p.name)
+    setDestPlace(p)
+    setIsDestOpen(false)
+    setDestSearch('')
+
+    if (originPlace) {
+      applyRouteMetrics(originPlace, p)
+    } else if (origin) {
+      const matchOrigin = availableStations.find((s) => s.name === origin)
+      if (matchOrigin) {
+        const origP: PlaceItem = {
+          id: matchOrigin.id,
+          name: matchOrigin.name,
+          address: matchOrigin.address || '',
+          latitude: Number(matchOrigin.latitude) || 21.58,
+          longitude: Number(matchOrigin.longitude) || 105.83,
+          source: 'station',
+        }
+        setOriginPlace(origP)
+        applyRouteMetrics(origP, p)
+      }
+    }
+  }
 
   // Khi chọn trạm để thêm vào lộ trình
   const handleAddStop = () => {
@@ -412,10 +532,12 @@ export function RouteFormModal({
     }
   }
 
+  if (!isOpen) return null
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-5xl xl:max-w-6xl max-h-[94vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
       >
@@ -511,32 +633,292 @@ export function RouteFormModal({
                 />
               </div>
 
-              {/* Điểm đầu & Điểm cuối */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1">
-                    Điểm xuất phát <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Điểm đầu"
-                    value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-medium text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
+              {/* Điểm xuất phát & Điểm đến thông minh với gợi ý POI / Trạm Thái Nguyên & Auto Calculation */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Navigation size={13} className="text-emerald-600" />
+                    <span>2 Đầu Bến Toàn Tuyến (Điểm Đón / Trả Chính)</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <Zap size={11} className="fill-emerald-600 text-emerald-600" />
+                    Tự động tính cự ly & thời gian
+                  </span>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1">
-                    Điểm đến <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Điểm cuối"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-medium text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Ô Điểm Xuất Phát */}
+                  <div className="relative">
+                    <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1">
+                      Điểm xuất phát (Đầu bến 1) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <MapPin size={15} className="absolute left-3 text-emerald-600 z-10 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Chọn trạm hoặc tìm địa điểm..."
+                        value={origin}
+                        readOnly={false}
+                        onChange={(e) => {
+                          setOrigin(e.target.value)
+                          setOriginSearch(e.target.value)
+                          setIsOriginOpen(true)
+                          setIsDestOpen(false)
+                        }}
+                        onFocus={() => {
+                          setIsOriginOpen(true)
+                          setIsDestOpen(false)
+                        }}
+                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-16 text-xs font-bold text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none transition-all"
+                      />
+                      <div className="absolute right-2 flex items-center gap-1">
+                        {origin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrigin('')
+                              setOriginSearch('')
+                              setIsOriginOpen(true)
+                            }}
+                            title="Xóa để chọn trạm khác"
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOriginOpen(!isOriginOpen)
+                            setIsDestOpen(false)
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                        >
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${isOriginOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dropdown Gợi ý Trạm / POI Điểm xuất phát */}
+                    {isOriginOpen && (
+                      <div className="absolute z-30 left-0 right-0 mt-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden text-xs animate-in fade-in zoom-in-95 duration-150">
+                        {/* Thanh tìm kiếm nhanh bên trong Dropdown */}
+                        <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80">
+                          <div className="relative flex items-center">
+                            <Search size={13} className="absolute left-2.5 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Tìm nhanh tên trạm, trường ĐH, bến xe..."
+                              value={originSearch}
+                              onChange={(e) => setOriginSearch(e.target.value)}
+                              className="w-full h-8 pl-8 pr-7 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                              autoFocus
+                            />
+                            {originSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setOriginSearch('')}
+                                className="absolute right-2 text-slate-400 hover:text-slate-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1 px-1 text-[10px] text-slate-400">
+                            <span>Có {originSuggestions.length} địa điểm sẵn có</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsOriginOpen(false)}
+                              className="text-emerald-600 font-bold hover:underline cursor-pointer"
+                            >
+                              Đóng
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Danh sách cuộn trạm dừng */}
+                        <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                          {originSuggestions.length === 0 ? (
+                            <div className="p-4 text-slate-400 text-center">Không tìm thấy trạm phù hợp từ khóa &quot;{originSearch}&quot;</div>
+                          ) : (
+                            originSuggestions.map((place) => {
+                              const isSelected = origin === place.name
+                              return (
+                                <button
+                                  key={place.id}
+                                  type="button"
+                                  onClick={() => handleSelectOrigin(place)}
+                                  className={`w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-slate-800/80 flex items-start gap-2.5 transition-colors cursor-pointer ${
+                                    isSelected ? 'bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100' : ''
+                                  }`}
+                                >
+                                  <MapPin size={15} className={`shrink-0 mt-0.5 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-slate-900 dark:text-white">{place.name}</span>
+                                      {place.isHub && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                                          ★ Hub
+                                        </span>
+                                      )}
+                                      {isSelected && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-600 text-white">
+                                          Đang chọn
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{place.address}</p>
+                                  </div>
+                                </button>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ô Điểm Đến */}
+                  <div className="relative">
+                    <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1">
+                      Điểm đến (Đầu bến 2) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <MapPin size={15} className="absolute left-3 text-rose-500 z-10 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Chọn trạm hoặc tìm địa điểm..."
+                        value={destination}
+                        readOnly={false}
+                        onChange={(e) => {
+                          setDestination(e.target.value)
+                          setDestSearch(e.target.value)
+                          setIsDestOpen(true)
+                          setIsOriginOpen(false)
+                        }}
+                        onFocus={() => {
+                          setIsDestOpen(true)
+                          setIsOriginOpen(false)
+                        }}
+                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-16 text-xs font-bold text-slate-900 dark:text-white focus:border-rose-500 focus:outline-none transition-all"
+                      />
+                      <div className="absolute right-2 flex items-center gap-1">
+                        {destination && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDestination('')
+                              setDestSearch('')
+                              setIsDestOpen(true)
+                            }}
+                            title="Xóa để chọn trạm khác"
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDestOpen(!isDestOpen)
+                            setIsOriginOpen(false)
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                        >
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${isDestOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dropdown Gợi ý Trạm / POI Điểm đến */}
+                    {isDestOpen && (
+                      <div className="absolute z-30 left-0 right-0 mt-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden text-xs animate-in fade-in zoom-in-95 duration-150">
+                        {/* Thanh tìm kiếm nhanh bên trong Dropdown */}
+                        <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80">
+                          <div className="relative flex items-center">
+                            <Search size={13} className="absolute left-2.5 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Tìm nhanh tên trạm, trường ĐH, bến xe..."
+                              value={destSearch}
+                              onChange={(e) => setDestSearch(e.target.value)}
+                              className="w-full h-8 pl-8 pr-7 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"
+                              autoFocus
+                            />
+                            {destSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setDestSearch('')}
+                                className="absolute right-2 text-slate-400 hover:text-slate-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1 px-1 text-[10px] text-slate-400">
+                            <span>Có {destSuggestions.length} địa điểm sẵn có</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsDestOpen(false)}
+                              className="text-rose-600 font-bold hover:underline cursor-pointer"
+                            >
+                              Đóng
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Danh sách cuộn trạm dừng */}
+                        <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                          {destSuggestions.length === 0 ? (
+                            <div className="p-4 text-slate-400 text-center">Không tìm thấy trạm phù hợp từ khóa &quot;{destSearch}&quot;</div>
+                          ) : (
+                            destSuggestions.map((place) => {
+                              const isSelected = destination === place.name
+                              return (
+                                <button
+                                  key={place.id}
+                                  type="button"
+                                  onClick={() => handleSelectDest(place)}
+                                  className={`w-full text-left px-3.5 py-2.5 hover:bg-rose-50 dark:hover:bg-slate-800/80 flex items-start gap-2.5 transition-colors cursor-pointer ${
+                                    isSelected ? 'bg-rose-50/70 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100' : ''
+                                  }`}
+                                >
+                                  <MapPin size={15} className={`shrink-0 mt-0.5 ${isSelected ? 'text-rose-500' : 'text-slate-400'}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-slate-900 dark:text-white">{place.name}</span>
+                                      {place.isHub && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                                          ★ Hub
+                                        </span>
+                                      )}
+                                      {isSelected && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-600 text-white">
+                                          Đang chọn
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{place.address}</p>
+                                  </div>
+                                </button>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Badge thông tin cự ly & thời gian tự động tính */}
+                {distanceKm > 0 && (
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300">
+                    <Compass size={13} className="text-emerald-600 shrink-0" />
+                    <span>
+                      Khoảng cách đo đạc: <strong className="text-emerald-700 dark:text-emerald-400 font-black">{distanceKm} km</strong> · Thời gian chạy ước tính: <strong className="text-slate-900 dark:text-white font-black">{estimatedDurationMinutes} phút</strong> (tốc độ xe buýt 26 km/h)
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Cự ly & Thời gian dự kiến */}

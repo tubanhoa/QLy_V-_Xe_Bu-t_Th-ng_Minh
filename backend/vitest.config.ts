@@ -5,6 +5,15 @@ export default defineConfig({
   // Resolves the path aliases declared in tsconfig.json, including the ones
   // added by `nest g library`.
   plugins: [tsconfigPaths()],
+  esbuild: {
+    target: 'es2022',
+    tsconfigRaw: {
+      compilerOptions: {
+        experimentalDecorators: true,
+        useDefineForClassFields: false,
+      },
+    },
+  },
   test: {
     globals: true,
     root: './',

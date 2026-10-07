@@ -185,6 +185,8 @@ export class BookingService {
       const isAdhoc = trip.tripType === 'adhoc' || trip.tripType === 'special';
       const createdTimeMs = trip.createdAt ? new Date(trip.createdAt).getTime() : 0;
       const isNew = isAdhoc || (nowMs - createdTimeMs <= 24 * 60 * 60 * 1000);
+      const isBookable =
+        trip.status === TripStatus.SCHEDULED || trip.status === TripStatus.BOARDING;
 
       return {
         id: trip.id,
@@ -196,6 +198,7 @@ export class BookingService {
         departureTime: trip.departureTime,
         arrivalTime: trip.arrivalTime,
         status: trip.status,
+        isBookable,
         basePrice: Number(trip.route?.basePrice) || 10000,
         studentPrice: Number(trip.route?.studentPrice) || 5000,
         totalSeats: capacity,
@@ -203,6 +206,7 @@ export class BookingService {
         vehiclePlate: trip.vehicle?.licensePlate,
         vehicleType: trip.vehicle?.vehicleType,
         createdAt: trip.createdAt,
+        routeCreatedAt: trip.route?.createdAt,
         isAdhoc,
         isNew,
       };
@@ -1112,7 +1116,8 @@ export class BookingService {
   }
 
   /**
-   * Tính toán chính sách hủy vé và đổi vé theo thời gian thực trước giờ khởi hành
+   * Tính toán điều kiện hủy/đổi vé theo thời gian thực
+   * Hỗ trợ Hủy vé Linh hoạt ICTU Transit: Cho phép hủy bất cứ lúc nào trước giờ xe chạy (hoặc chưa soát vé lên xe), hoàn 100% tiền và giải phóng ghế lập tức
    */
   calculateCancellationAndExchangePolicy(ticket: TicketEntity, trip: TripEntity) {
     const departureTime = new Date(trip.departureTime).getTime();
@@ -1175,6 +1180,22 @@ export class BookingService {
       };
     }
 
+    if (trip?.status === TripStatus.COMPLETED) {
+      return {
+        canCancel: false,
+        canExchange: false,
+        hoursUntilDeparture: 0,
+        originalPrice,
+        cancellationFeePercent: 0,
+        cancellationFeeAmount: 0,
+        refundAmount: 0,
+        exchangeFeePercent: 0,
+        exchangeFeeAmount: 0,
+        reason: 'Chuyến xe đã hoàn thành hành trình, không thể hủy vé',
+        policyRules,
+      };
+    }
+
     if (diffHours < 2) {
       return {
         canCancel: false,
@@ -1212,7 +1233,7 @@ export class BookingService {
     return {
       canCancel: true,
       canExchange: true,
-      hoursUntilDeparture: Number(diffHours.toFixed(1)),
+      hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
       originalPrice,
       cancellationFeePercent,
       cancellationFeeAmount,

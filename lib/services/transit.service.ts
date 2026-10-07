@@ -6,6 +6,7 @@
  */
 
 import { authService } from './auth.service'
+import { searchService } from './search.service'
 import type {
   TransitRoute,
   TransitStation,
@@ -131,9 +132,23 @@ class TransitService {
         }
       }
 
+      const createdRoute = json?.data || json
+
+      if (typeof window !== 'undefined') {
+        searchService.clearCache()
+        window.dispatchEvent(
+          new CustomEvent('ictu:route-created', {
+            detail: createdRoute,
+          }),
+        )
+        try {
+          localStorage.setItem('ictu_route_created_ts', Date.now().toString())
+        } catch {}
+      }
+
       return {
         success: true,
-        data: json?.data || json,
+        data: createdRoute,
         message: 'Tạo tuyến xe buýt thành công!',
       }
     } catch (e: any) {

@@ -6,11 +6,12 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'nguyen.van.a@ictu.edu.vn', description: 'Email đăng ký' })
+  @ApiProperty({ example: 'dtc2151800001@ictu.edu.vn', description: 'Email đăng ký' })
   @IsEmail({}, { message: 'Email không hợp lệ' })
   @IsNotEmpty({ message: 'Email không được để trống' })
   @MaxLength(150, { message: 'Email không được vượt quá 150 ký tự' })
@@ -40,10 +41,13 @@ export class RegisterDto {
   })
   phoneNumber?: string;
 
-  @ApiPropertyOptional({ example: 'DTC215180001', description: 'Mã sinh viên ICTU' })
+  @ApiPropertyOptional({ example: 'DTC2151800001', description: 'Mã sinh viên ICTU (bắt đầu bằng DTC + 10 chữ số)' })
   @IsOptional()
   @IsString()
-  @MaxLength(50, { message: 'Mã sinh viên không được vượt quá 50 ký tự' })
+  @ValidateIf((o) => typeof o.studentId === 'string' && o.studentId.trim().length > 0)
+  @Matches(/^DTC\d{7,10}$/i, {
+    message: 'Thông tin sinh viên ICTU không đúng định dạng quy định, vui lòng kiểm tra lại',
+  })
   studentId?: string;
 
   @ApiPropertyOptional({ example: 'Công Nghệ Thông Tin', description: 'Khoa/Viện' })

@@ -87,12 +87,13 @@ describe('Search Hardening Tests (VIỆC A & VIỆC B)', () => {
 
   describe('VIỆC B: Sắp xếp theo giờ khởi hành tăng dần (ORDER BY departureTime ASC)', () => {
     it('kết quả tìm kiếm chuyến xe phải được sắp xếp tăng dần theo giờ khởi hành', async () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
       const res = await request(app.getHttpServer())
         .get('/api/v1/booking/search')
         .query({
           origin: 'ĐH CNTT & TT Thái Nguyên',
           destination: 'Bến Xe Trung Tâm Thái Nguyên',
-          date: '2026-09-26',
+          date: todayStr,
         });
 
       expect(res.status).toBe(200);

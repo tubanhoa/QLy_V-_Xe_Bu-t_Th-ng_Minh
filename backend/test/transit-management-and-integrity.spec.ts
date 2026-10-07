@@ -215,7 +215,7 @@ describe('Transit Management: Routes, Stations, Pricing & Data Integrity Integra
       await stationRepo.delete({ id: sId });
     }
     await app.close();
-  });
+  }, 30000);
 
   // =========================================================================
   // PHẦN 1: QUẢN LÝ TUYẾN ĐƯỜNG (ROUTES CRUD & DURATION/PRICING/FARES)

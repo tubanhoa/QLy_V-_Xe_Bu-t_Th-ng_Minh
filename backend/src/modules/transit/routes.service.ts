@@ -68,7 +68,8 @@ export class RoutesService {
         .leftJoinAndSelect('route.routeStations', 'routeStations')
         .leftJoinAndSelect('routeStations.station', 'station')
         .where('route.status = :status', { status: 'active' })
-        .orderBy('route.routeCode', 'ASC')
+        .orderBy('route.createdAt', 'DESC')
+        .addOrderBy('route.routeCode', 'ASC')
         .addOrderBy('routeStations.stopOrder', 'ASC')
         .getMany();
     } else {
@@ -139,7 +140,8 @@ export class RoutesService {
         .leftJoinAndSelect('route.routeStations', 'routeStations')
         .leftJoinAndSelect('routeStations.station', 'station')
         .where('route.id IN (:...matchingIds)', { matchingIds })
-        .orderBy('route.routeCode', 'ASC')
+        .orderBy('route.createdAt', 'DESC')
+        .addOrderBy('route.routeCode', 'ASC')
         .addOrderBy('routeStations.stopOrder', 'ASC')
         .getMany();
     }
@@ -212,18 +214,46 @@ export class RoutesService {
     }
 
     // Tự động kích hoạt lịch chạy 7 ngày liên tiếp (Rolling 7-day schedule) và phân quyền Tài xế + Xe buýt
-    const sampleTimes = ['07:00', '09:30', '13:30', '15:30', '17:30', '19:00'];
+    // Sinh chuyến chính xác theo giờ mở tuyến (operatingStart), giờ đóng tuyến (operatingEnd), và tần suất (frequencyMinutes)
+    const startStr = dto.operatingStart || '06:00:00';
+    const endStr = dto.operatingEnd || '21:00:00';
+    const [startH, startM] = startStr.split(':').map((v) => parseInt(v, 10) || 0);
+    const [endH, endM] = endStr.split(':').map((v) => parseInt(v, 10) || 0);
+    const freqMin = dto.frequencyMinutes && dto.frequencyMinutes > 0 ? dto.frequencyMinutes : 60;
+
+    let startTotalMin = startH * 60 + startM;
+    let endTotalMin = endH * 60 + endM;
+
+    // Hỗ trợ trường hợp giờ chạy mở lúc 00:00 hoặc chạy đêm
+    if (endTotalMin <= startTotalMin) {
+      endTotalMin = 24 * 60;
+    }
+
+    const dailyTimeSlots: Array<{ h: number; m: number }> = [];
+    let curMin = startTotalMin;
+    while (curMin < endTotalMin && dailyTimeSlots.length < 24) {
+      const h = Math.floor(curMin / 60) % 24;
+      const m = curMin % 60;
+      dailyTimeSlots.push({ h, m });
+      curMin += freqMin;
+    }
+
+    // Đảm bảo luôn có ít nhất mốc giờ mở tuyến (kể cả khi nhập 00:00:00)
+    if (dailyTimeSlots.length === 0) {
+      dailyTimeSlots.push({ h: startH, m: startM });
+    }
+
     const durationMin = dto.estimatedDurationMinutes || 40;
     const tripsToCreate: TripEntity[] = [];
+    const now = new Date();
 
     for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
       const targetDate = new Date();
       targetDate.setDate(targetDate.getDate() + dayOffset);
 
-      for (const timeStr of sampleTimes) {
-        const [h, m] = timeStr.split(':').map(Number);
+      for (const slot of dailyTimeSlots) {
         const dep = new Date(targetDate);
-        dep.setHours(h, m, 0, 0);
+        dep.setHours(slot.h, slot.m, 0, 0);
         const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
 
         const trip = new TripEntity();
@@ -232,9 +262,33 @@ export class RoutesService {
         if (dto.assignedDriverId) trip.driverId = dto.assignedDriverId;
         trip.departureTime = dep;
         trip.arrivalTime = arr;
-        trip.status = TripStatus.SCHEDULED;
+        // Nếu chuyến đã quá khứ hơn 30 phút thì đánh dấu COMPLETED, ngược lại là SCHEDULED
+        trip.status =
+          dep.getTime() < now.getTime() - 30 * 60 * 1000
+            ? TripStatus.COMPLETED
+            : TripStatus.SCHEDULED;
         tripsToCreate.push(trip);
       }
+    }
+
+    // ĐẶC BIỆT DÀNH CHO DEMO: Đảm bảo ngày hôm nay luôn có ít nhất 1 chuyến khởi hành sắp tới (sau 20 phút)
+    const hasUpcomingToday = tripsToCreate.some(
+      (t) =>
+        t.departureTime.toDateString() === now.toDateString() &&
+        t.departureTime.getTime() > now.getTime() + 10 * 60 * 1000,
+    );
+
+    if (!hasUpcomingToday) {
+      const demoDep = new Date(now.getTime() + 20 * 60 * 1000); // 20 phút tới
+      const demoArr = new Date(demoDep.getTime() + durationMin * 60 * 1000);
+      const demoTrip = new TripEntity();
+      demoTrip.routeId = savedRoute.id;
+      if (dto.assignedVehicleId) demoTrip.vehicleId = dto.assignedVehicleId;
+      if (dto.assignedDriverId) demoTrip.driverId = dto.assignedDriverId;
+      demoTrip.departureTime = demoDep;
+      demoTrip.arrivalTime = demoArr;
+      demoTrip.status = TripStatus.SCHEDULED;
+      tripsToCreate.push(demoTrip);
     }
 
     try {
@@ -288,7 +342,25 @@ export class RoutesService {
   async delete(id: string) {
     await this.findById(id);
 
-    // 1. RÀNG BUỘC TOÀN VẸN VỚI CHUYẾN XE (TripEntity)
+    // 1. RÀNG BUỘC TOÀN VẸN VỚI VÉ XE (TicketEntity qua Booking -> Trip)
+    // Không cho phép xóa nếu đã phát sinh vé chưa hủy
+    const activeTicketsCount = await this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoin('ticket.booking', 'booking')
+      .innerJoin('booking.trip', 'trip')
+      .where('trip.routeId = :routeId', { routeId: id })
+      .andWhere('ticket.status NOT IN (:...cancelledStatuses)', {
+        cancelledStatuses: [TicketStatus.CANCELLED, TicketStatus.REFUNDED],
+      })
+      .getCount();
+
+    if (activeTicketsCount > 0) {
+      throw new ConflictException(
+        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Vui lòng chuyển trạng thái sang tạm ngưng (inactive) thay vì xóa.',
+      );
+    }
+
+    // 2. RÀNG BUỘC TOÀN VẸN VỚI CHUYẾN XE (TripEntity)
     // Không cho phép xóa nếu có chuyến xe ở trạng thái scheduled, in_progress, hoặc delayed
     const activeTripsCount = await this.tripRepository.count({
       where: {
@@ -305,24 +377,6 @@ export class RoutesService {
 
     if (activeTripsCount > 0) {
       throw new ConflictException('Tuyến đường đang có chuyến xe hoạt động hoặc đã lên lịch chạy.');
-    }
-
-    // 2. RÀNG BUỘC TOÀN VẸN VỚI VÉ XE (TicketEntity qua Booking -> Trip)
-    // Không cho phép xóa nếu đã phát sinh vé chưa hủy
-    const activeTicketsCount = await this.ticketRepository
-      .createQueryBuilder('ticket')
-      .innerJoin('ticket.booking', 'booking')
-      .innerJoin('booking.trip', 'trip')
-      .where('trip.routeId = :routeId', { routeId: id })
-      .andWhere('ticket.status NOT IN (:...cancelledStatuses)', {
-        cancelledStatuses: [TicketStatus.CANCELLED, TicketStatus.REFUNDED],
-      })
-      .getCount();
-
-    if (activeTicketsCount > 0) {
-      throw new ConflictException(
-        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Vui lòng chuyển trạng thái sang tạm ngưng (inactive) thay vì xóa.',
-      );
     }
 
     // Thực hiện soft delete

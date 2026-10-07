@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
+  Ban,
   BatteryCharging,
   Bus,
   Calendar,
@@ -64,9 +65,16 @@ export function TripSearchModal({
   type SortCriteria = 'departure' | 'route' | 'price' | 'seats'
   type SortDirection = 'asc' | 'desc'
 
-  const [filterType, setFilterType] = useState<'all' | 'soon' | 'available'>('all')
+  const [filterType, setFilterType] = useState<'bookable' | 'all' | 'soon' | 'available'>('bookable')
   const [sortBy, setSortBy] = useState<SortCriteria>('departure')
   const [sortOrder, setSortOrder] = useState<SortDirection>('asc')
+
+  const bookableTripsCount = useMemo(() => {
+    return trips.filter((t) => {
+      if (t.isBookable !== undefined) return t.isBookable
+      return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+    }).length
+  }, [trips])
 
   const handleToggleSort = (criteria: SortCriteria) => {
     if (sortBy === criteria) {
@@ -83,7 +91,12 @@ export function TripSearchModal({
   const filteredTrips = useMemo(() => {
     let result = [...trips]
 
-    if (filterType === 'soon') {
+    if (filterType === 'bookable') {
+      result = result.filter((t) => {
+        if (t.isBookable !== undefined) return t.isBookable
+        return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+      })
+    } else if (filterType === 'soon') {
       const now = new Date()
       result = result.filter((t) => {
         const dep = new Date(t.departureTime)
@@ -94,8 +107,16 @@ export function TripSearchModal({
       result = result.filter((t) => Number(t.availableSeats || 0) >= 10)
     }
 
-    // Logic sắp xếp chính xác cho Giờ chạy, Tuyến đường, Giá vé và Ghế trống
+    // Logic sắp xếp: Ưu tiên các chuyến của TUYẾN MỚI TẠO lên đầu danh sách để thuận tiện demo cho giảng viên!
     result.sort((a, b) => {
+      // 1. So sánh ngày tạo của tuyến xe (tuyến nào mới tạo hơn được xếp trước)
+      const routeTimeA = a.routeCreatedAt ? new Date(a.routeCreatedAt).getTime() : 0
+      const routeTimeB = b.routeCreatedAt ? new Date(b.routeCreatedAt).getTime() : 0
+      if (routeTimeA !== routeTimeB) {
+        return routeTimeB - routeTimeA
+      }
+
+      // 2. Tiếp theo là tiêu chí sắp xếp người dùng chọn
       if (sortBy === 'departure') {
         const timeA = new Date(a.departureTime).getTime() || 0
         const timeB = new Date(b.departureTime).getTime() || 0
@@ -129,6 +150,31 @@ export function TripSearchModal({
 
     return result
   }, [trips, filterType, sortBy, sortOrder])
+
+  // Lắng nghe sự kiện Admin tạo tuyến mới để đồng bộ tức thì không cần F5
+  useEffect(() => {
+    const handleRouteSync = () => {
+      searchService.clearCache()
+      loadStations()
+      if (open) {
+        handleSearch(origin, destination, date || todayStr)
+      }
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ictu_route_created_ts') {
+        handleRouteSync()
+      }
+    }
+
+    window.addEventListener('ictu:route-created', handleRouteSync)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('ictu:route-created', handleRouteSync)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [open, origin, destination, date, todayStr])
 
   // Khởi tạo và nạp danh sách trạm gợi ý
   useEffect(() => {
@@ -397,25 +443,42 @@ export function TripSearchModal({
               <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mr-1 hidden sm:inline shrink-0">
                 Lọc nhanh:
               </span>
+              {/* Nút lọc mặc định: Có thể đặt vé */}
+              <button
+                type="button"
+                onClick={() => setFilterType('bookable')}
+                className={cn(
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer',
+                  filterType === 'bookable'
+                    ? 'bg-[#005A36] text-white shadow-xs ring-2 ring-emerald-300/80 font-black'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
+                )}
+                title="Lọc các chuyến xe sẵn sàng nhận khách"
+              >
+                <Check size={12} className={filterType === 'bookable' ? 'text-white' : 'text-emerald-600'} />
+                <span>Có thể đặt</span>
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.2 text-[10px] font-black',
+                    filterType === 'bookable' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-800',
+                  )}
+                >
+                  {bookableTripsCount}
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setFilterType('all')}
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1.5',
+                  'shrink-0 rounded-full px-3 py-1 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer',
                   filterType === 'all'
-                    ? 'bg-[#005A36] text-white shadow-xs'
+                    ? 'bg-slate-800 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/60',
                 )}
+                title="Hiện tất cả các chuyến trong ngày (kể cả đã xuất bến)"
               >
-                <span>Tất cả</span>
-                <span
-                  className={cn(
-                    'rounded-full px-1.5 py-0.2 text-[10px] font-black',
-                    filterType === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600',
-                  )}
-                >
-                  {trips.length}
-                </span>
+                <span>Tất cả ({trips.length})</span>
               </button>
 
               <button
@@ -664,43 +727,72 @@ export function TripSearchModal({
               const isAlmostFull = availableSeats > 0 && availableSeats <= 5
               const isSoldOut = availableSeats === 0
 
+              const isTripBookable =
+                trip.isBookable !== undefined
+                  ? trip.isBookable
+                  : trip.status === 'scheduled' || trip.status === 'boarding' || !trip.status
+
               return (
                 <div
                   key={trip.id}
-                  className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs hover:border-[#005A36] hover:shadow-md transition-all group relative overflow-hidden"
+                  className={cn(
+                    'rounded-2xl border p-4 sm:p-5 shadow-xs transition-all group relative overflow-hidden',
+                    !isTripBookable
+                      ? 'border-slate-200 bg-slate-50/70 opacity-85'
+                      : 'border-slate-200/90 bg-white hover:border-[#005A36] hover:shadow-md',
+                  )}
                 >
                   {/* Top Header Row */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="rounded-xl bg-[#005A36] px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider">
-                          {trip.routeCode}
-                        </span>
-                        {/* Pill trạng thái ghế xe buýt chuyên nghiệp */}
                         <span
                           className={cn(
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black border transition-all',
-                            isSoldOut
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : isAlmostFull
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-800 border-emerald-200/70',
+                            'rounded-xl px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider',
+                            !isTripBookable ? 'bg-slate-500' : 'bg-[#005A36]',
                           )}
                         >
+                          {trip.routeCode}
+                        </span>
+
+                        {/* Pill trạng thái ghế hoặc trạng thái xuất bến */}
+                        {!isTripBookable ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
+                            <span className="size-1.5 rounded-full bg-slate-400" />
+                            <span>
+                              {trip.status === 'completed'
+                                ? '🏁 Đã hoàn thành lộ trình'
+                                : trip.status === 'cancelled'
+                                  ? '❌ Đã hủy chuyến'
+                                  : '🚌 Đã xuất bến'}
+                            </span>
+                          </span>
+                        ) : (
                           <span
                             className={cn(
-                              'size-1.5 rounded-full animate-pulse',
-                              isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black border transition-all',
+                              isSoldOut
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : isAlmostFull
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200/70',
                             )}
-                          />
-                          <span>
-                            {isSoldOut
-                              ? 'Hết chỗ'
-                              : isAlmostFull
-                                ? `Còn ${availableSeats}/${totalSeats} chỗ`
-                                : `Còn trống ${availableSeats}/${totalSeats} chỗ`}
+                          >
+                            <span
+                              className={cn(
+                                'size-1.5 rounded-full animate-pulse',
+                                isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
+                              )}
+                            />
+                            <span>
+                              {isSoldOut
+                                ? 'Hết chỗ'
+                                : isAlmostFull
+                                  ? `Còn ${availableSeats}/${totalSeats} chỗ`
+                                  : `Còn trống ${availableSeats}/${totalSeats} chỗ`}
+                            </span>
                           </span>
-                        </span>
+                        )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -764,21 +856,44 @@ export function TripSearchModal({
                     <div className="flex justify-end pt-1 sm:pt-0 shrink-0 w-full sm:w-auto">
                       <button
                         type="button"
-                        disabled={isSoldOut}
+                        disabled={!isTripBookable || isSoldOut}
                         onClick={() => {
+                          if (!isTripBookable) return
                           onClose()
                           onSelectTrip?.(trip)
                         }}
                         className={cn(
-                          'w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-black shadow-md transition-all active:scale-95',
-                          isSoldOut
-                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                            : 'bg-[#005A36] text-white hover:bg-[#004529] hover:shadow-emerald-900/20',
+                          'w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-black shadow-md transition-all',
+                          !isTripBookable
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none border border-slate-300'
+                            : isSoldOut
+                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                              : 'bg-[#005A36] text-white hover:bg-[#004529] hover:shadow-emerald-900/20 active:scale-95 cursor-pointer',
                         )}
                       >
-                        <Ticket size={15} />
-                        <span>{isSoldOut ? 'Hết Chỗ' : 'Chọn Ghế & Đặt Vé'}</span>
-                        {!isSoldOut && <ArrowRight size={14} />}
+                        {!isTripBookable ? (
+                          <>
+                            <Ban size={15} />
+                            <span>
+                              {trip.status === 'completed'
+                                ? 'Đã Hoàn Thành'
+                                : trip.status === 'cancelled'
+                                  ? 'Đã Hủy Chuyến'
+                                  : 'Đã Xuất Bến'}
+                            </span>
+                          </>
+                        ) : isSoldOut ? (
+                          <>
+                            <Ticket size={15} />
+                            <span>Hết Chỗ</span>
+                          </>
+                        ) : (
+                          <>
+                            <Ticket size={15} />
+                            <span>Chọn Ghế & Đặt Vé</span>
+                            <ArrowRight size={14} />
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

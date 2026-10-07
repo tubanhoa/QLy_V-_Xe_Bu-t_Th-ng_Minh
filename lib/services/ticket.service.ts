@@ -392,25 +392,19 @@ class TicketService {
       let canExchange = true
       let reason: string | undefined
 
-      if (diffHours <= 0) {
+      if (cached?.status === 'CHECKED_IN') {
         canCancel = false
         canExchange = false
-        reason = 'Chuyến xe đã khởi hành, không thể hủy hoặc đổi vé'
-      } else if (diffHours < 0.25) {
-        cancellationFeePercent = 50
-        exchangeFeePercent = 25
-      } else if (diffHours < 2) {
-        cancellationFeePercent = 30
-        exchangeFeePercent = 15
-      } else if (diffHours >= 24) {
+        reason = 'Vé đã được soát lên xe (CHECKED_IN), không thể hủy hoặc đổi chuyến'
+      } else if (cached?.status === 'CANCELLED') {
+        canCancel = false
+        canExchange = false
+        reason = 'Vé đã ở trạng thái đã hủy (CANCELLED)'
+      } else {
+        canCancel = true
+        canExchange = true
         cancellationFeePercent = 0
         exchangeFeePercent = 0
-      } else if (diffHours >= 12) {
-        cancellationFeePercent = 10
-        exchangeFeePercent = 5
-      } else {
-        cancellationFeePercent = 20
-        exchangeFeePercent = 10
       }
 
       const cancellationFeeAmount = Math.round((originalPrice * cancellationFeePercent) / 100)

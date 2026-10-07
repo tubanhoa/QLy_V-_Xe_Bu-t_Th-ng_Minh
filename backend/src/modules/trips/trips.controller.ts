@@ -101,7 +101,7 @@ export class TripsController {
   @Get(':id/seat-map')
   @ApiOperation({ summary: 'Lấy sơ đồ ghế và tình trạng đặt chỗ realtime của chuyến' })
   async getSeatMap(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('id') id: string,
     @CurrentUser('id') currentUserId?: string,
   ) {
     return this.tripsService.getSeatMap(id, currentUserId);
@@ -110,7 +110,7 @@ export class TripsController {
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Xem thông tin chi tiết một chuyến xe' })
-  async findById(@Param('id', new ParseUUIDPipe()) id: string) {
+  async findById(@Param('id') id: string) {
     return this.tripsService.findById(id);
   }
 
@@ -119,7 +119,7 @@ export class TripsController {
   @ApiBearerAuth('JWT')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái chuyến xe (Driver, Manager)' })
-  async updateStatus(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateTripStatusDto) {
+  async updateStatus(@Param('id') id: string, @Body() dto: UpdateTripStatusDto) {
     return this.tripsService.updateStatus(id, dto.status);
   }
 }

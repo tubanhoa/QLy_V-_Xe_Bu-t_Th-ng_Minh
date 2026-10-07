@@ -45,8 +45,9 @@ export class TripsService {
     private readonly ticketRepository: Repository<TicketEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    @Optional()
     @InjectRepository(MonthlyPassEntity)
-    private readonly monthlyPassRepository: Repository<MonthlyPassEntity>,
+    private readonly monthlyPassRepository?: Repository<MonthlyPassEntity>,
     @Inject(forwardRef(() => SeatLockService))
     @Optional()
     private readonly seatLockService?: SeatLockService,
@@ -398,10 +399,15 @@ export class TripsService {
   }
 
   async findById(id: string) {
-    const trip = await this.tripRepository.findOne({
-      where: { id },
-      relations: { route: true, vehicle: true, driver: true, conductor: true },
-    });
+    let trip: TripEntity | null = null;
+    try {
+      trip = await this.tripRepository.findOne({
+        where: { id },
+        relations: { route: true, vehicle: true, driver: true, conductor: true },
+      });
+    } catch {
+      throw new NotFoundException(`Không tìm thấy chuyến xe với ID ${id}`);
+    }
 
     if (!trip) {
       throw new NotFoundException(`Không tìm thấy chuyến xe với ID ${id}`);
@@ -628,7 +634,21 @@ export class TripsService {
     let passCode = '';
 
     // 1. Nhận diện định dạng mã (Vé lượt TKT-* hoặc Thẻ vé tháng MP-* / ICTU-MONTHLY:*)
-    if (rawInput.startsWith('ICTU-MONTHLY:')) {
+    if (rawInput.startsWith('{')) {
+      // Dữ liệu mã QR có cấu trúc JSON kèm chữ ký số HMAC-SHA256
+      const secret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
+      const verifyResult = verifyQrData(rawInput, secret);
+      if (!verifyResult.valid) {
+        throw new BadRequestException('Chữ ký số không hợp lệ hoặc dữ liệu vé đã bị can thiệp');
+      }
+      if (verifyResult.payload) {
+        if (verifyResult.payload.passCode) {
+          passCode = verifyResult.payload.passCode;
+        } else if (verifyResult.payload.ticketCode) {
+          ticketCode = verifyResult.payload.ticketCode;
+        }
+      }
+    } else if (rawInput.startsWith('ICTU-MONTHLY:')) {
       const parts = rawInput.split(':');
       passCode = (parts[1] || '').trim().toUpperCase();
     } else if (rawInput.startsWith('MP-') || rawInput.includes('MP-20')) {
@@ -646,40 +666,11 @@ export class TripsService {
       const match = rawInput.match(/TKT-ICTU-[A-Za-z0-9_-]+/i) || rawInput.match(/TKT-[A-Za-z0-9_-]+/i);
       ticketCode = match ? match[0].toUpperCase() : rawInput.toUpperCase();
     } else {
-      // Thử xác minh qua chữ ký số HMAC-SHA256
-      const secret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
-      const verifyResult = verifyQrData(rawInput, secret);
-      if (verifyResult.valid && verifyResult.payload) {
-        if (verifyResult.payload.passCode) {
-          passCode = verifyResult.payload.passCode;
-        } else if (verifyResult.payload.ticketCode) {
-          ticketCode = verifyResult.payload.ticketCode;
-        }
-      } else {
-        // Thử parse JSON thông thường (nếu gửi object)
-        try {
-          const parsed = JSON.parse(rawInput);
-          if (parsed.passCode) {
-            passCode = parsed.passCode;
-          } else if (parsed.ticketCode) {
-            ticketCode = parsed.ticketCode;
-          }
-        } catch {
-          const mpMatch = rawInput.match(/MP-[A-Za-z0-9_-]+/i);
-          const tktMatch = rawInput.match(/TKT-[A-Za-z0-9_-]+/i);
-          if (mpMatch) {
-            passCode = mpMatch[0].toUpperCase();
-          } else if (tktMatch) {
-            ticketCode = tktMatch[0].toUpperCase();
-          } else {
-            ticketCode = rawInput.toUpperCase();
-          }
-        }
-      }
+      ticketCode = rawInput.toUpperCase();
     }
 
     // 2. NHÁNH A: XÁC THỰC THẺ VÉ THÁNG HSSV (Monthly Pass)
-    if (passCode) {
+    if (passCode && this.monthlyPassRepository) {
       const monthlyPass = await this.monthlyPassRepository.findOne({
         where: { passCode },
         relations: { user: true, route: true },
@@ -766,10 +757,12 @@ export class TripsService {
 
     if (!ticket) {
       // Fallback thử tìm trong monthly_passes nếu mã không có tiền tố MP
-      const fallbackPass = await this.monthlyPassRepository.findOne({
-        where: { passCode: searchCode },
-        relations: { user: true, route: true },
-      });
+      const fallbackPass = this.monthlyPassRepository
+        ? await this.monthlyPassRepository.findOne({
+            where: { passCode: searchCode },
+            relations: { user: true, route: true },
+          })
+        : null;
       if (fallbackPass) {
         if (fallbackPass.approvalStatus !== ApprovalStatus.APPROVED) {
           throw new BadRequestException(
@@ -816,6 +809,12 @@ export class TripsService {
       throw new BadRequestException('Vé chưa được thanh toán thành công. Không thể soát vé lên xe!');
     }
 
+    // Kiểm tra vé có thuộc đúng chuyến xe hiện tại không
+    const ticketTripId = ticket.booking?.tripId || ticket.booking?.trip?.id;
+    if (dto.tripId && ticketTripId && ticketTripId !== dto.tripId) {
+      throw new BadRequestException('Mã vé này không thuộc về chuyến xe hiện tại');
+    }
+
     // Kiểm tra vé đã được soát trước đó (Trùng lặp check-in)
     if (ticket.status === TicketStatus.CHECKED_IN) {
       return {
@@ -829,36 +828,6 @@ export class TripsService {
         passenger: ticket.passengerName,
         seat: ticket.seat?.seatNumber,
         ticketCode: ticket.ticketCode,
-      };
-    }
-
-    // Kiểm tra vé có thuộc đúng chuyến xe hiện tại không
-    if (dto.tripId && ticket.booking?.tripId && ticket.booking.tripId !== dto.tripId) {
-      const correctRoute = ticketTrip?.route?.name || 'Tuyến ICTU';
-      const correctTime = ticketTrip?.departureTime
-        ? new Date(ticketTrip.departureTime).toLocaleTimeString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          })
-        : 'Chưa rõ';
-      const correctPlate = ticketTrip?.vehicle?.licensePlate || 'Chưa gán xe';
-
-      return {
-        success: false,
-        valid: false,
-        alreadyCheckedIn: false,
-        isWrongTrip: true,
-        message: `CẢNH BÁO: Vé hợp lệ nhưng KHÔNG THUỘC CHUYẾN NÀY! Chuyến đúng: ${correctRoute} (Giờ chạy: ${correctTime}, Xe: ${correctPlate})`,
-        passenger: ticket.passengerName,
-        seat: ticket.seat?.seatNumber,
-        ticketCode: ticket.ticketCode,
-        correctTrip: {
-          tripId: ticket.booking.tripId,
-          routeName: correctRoute,
-          departureTime: ticketTrip?.departureTime,
-          vehiclePlate: correctPlate,
-        },
       };
     }
 

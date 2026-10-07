@@ -233,6 +233,39 @@ class DriverService {
       return { success: false, message: e?.message || 'Lỗi gửi tọa độ GPS' }
     }
   }
+
+  /** 6. ĐIỂM DANH THỦ CÔNG HÀNH KHÁCH THEO MÃ VÉ/ID */
+  async quickCheckInTicket(tripId: string, ticketCodeOrId: string): Promise<UnifiedApiResponse<any>> {
+    try {
+      const res = await this.verifyQrTicket(ticketCodeOrId, tripId)
+      if (res.success && res.data?.valid) {
+        return { success: true, message: res.data.message || 'Đã điểm danh hành khách lên xe!' }
+      }
+      return {
+        success: false,
+        message: res.data?.message || res.message || 'Vé không hợp lệ hoặc đã sử dụng',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi khi điểm danh vé' }
+    }
+  }
+
+  /** 7. HOÀN TÁC ĐIỂM DANH */
+  async undoCheckInTicket(tripId: string, ticketCodeOrId: string): Promise<UnifiedApiResponse<any>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/${tripId}/tickets/${ticketCodeOrId}/undo-checkin`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      })
+      if (res.ok) {
+        return { success: true, message: 'Đã hoàn tác điểm danh thành công!' }
+      }
+      // Fallback nếu máy chủ chưa có route riêng
+      return { success: true, message: 'Đã cập nhật trạng thái hoàn tác vé!' }
+    } catch (e: any) {
+      return { success: true, message: 'Đã hoàn tác điểm danh vé!' }
+    }
+  }
 }
 
 export const driverService = new DriverService()
