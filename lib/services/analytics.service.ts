@@ -10,6 +10,18 @@ import { authService } from './auth.service'
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
 
+export interface DailyBreakdownItem {
+  date: string
+  revenue: number
+  ticketCount: number
+  routeCT01: number
+  routeCT02: number
+  vnpay: number
+  momo: number
+  vietqr: number
+  cash: number
+}
+
 export interface RevenueStatsResponse {
   totalRevenue: number
   totalDiscount: number
@@ -29,6 +41,7 @@ export interface RevenueStatsResponse {
     amount: string
     share: number
   }>
+  dailyBreakdown?: DailyBreakdownItem[]
 }
 
 export interface OccupancyTripItem {
@@ -79,6 +92,36 @@ export interface LiveTripItem {
   bookedSeatsCount?: number
 }
 
+export interface IncidentReportItem {
+  id: string
+  tripId: string
+  incidentType: string
+  severity: 'low' | 'medium' | 'high'
+  description: string
+  delayMinutesEstimate?: number
+  resolutionStatus: 'pending' | 'resolved' | 'acknowledged'
+  reportedAt: string
+  reportedByUser?: {
+    id: string
+    fullName: string
+    phoneNumber?: string
+  }
+  trip?: {
+    id: string
+    route?: {
+      routeCode: string
+      name: string
+    }
+    vehicle?: {
+      licensePlate: string
+    }
+    driver?: {
+      fullName: string
+      phoneNumber?: string
+    }
+  }
+}
+
 export interface AdminDashboardData {
   kpis: {
     totalRevenue: number
@@ -95,6 +138,8 @@ export interface AdminDashboardData {
   occupancyTrips: OccupancyTripItem[]
   liveTrips: LiveTripItem[]
   recentAuditLogs: ActivityLogItem[]
+  activeIncidentsList: IncidentReportItem[]
+  dailyBreakdown: DailyBreakdownItem[]
 }
 
 class AnalyticsService {
@@ -233,14 +278,34 @@ class AnalyticsService {
     }
   }
 
+  /** Lấy danh sách sự cố thực tế do tài xế báo cáo từ Supabase */
+  async getActiveIncidents(status = 'all'): Promise<{ success: boolean; data: IncidentReportItem[]; message?: string }> {
+    try {
+      const url =
+        status && status !== 'all'
+          ? `${this.baseUrl}/tracking/incidents?status=${status}`
+          : `${this.baseUrl}/tracking/incidents`
+      const res = await this.fetchWithAuth(url, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { success: false, data: [], message: json?.message || 'Không thể tải danh sách sự cố' }
+      }
+      const raw = json?.data || json || []
+      return { success: true, data: Array.isArray(raw) ? raw : [] }
+    } catch (e: any) {
+      return { success: false, data: [], message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
   /** Tổng hợp toàn bộ dữ liệu thật 100% cho Admin Dashboard từ Supabase Cloud */
-  async getAdminDashboardSummary(): Promise<AdminDashboardData> {
-    const [revRes, occRes, tripsRes, vehRes, auditRes] = await Promise.allSettled([
-      this.getRevenueStats(),
-      this.getOccupancyStats(),
+  async getAdminDashboardSummary(startDate?: string, endDate?: string): Promise<AdminDashboardData> {
+    const [revRes, occRes, tripsRes, vehRes, auditRes, incRes] = await Promise.allSettled([
+      this.getRevenueStats(startDate, endDate),
+      this.getOccupancyStats(startDate),
       this.getLiveTrips(),
       this.getVehicles(),
       this.getAuditLogs(),
+      this.getActiveIncidents('all'),
     ])
 
     const revData: RevenueStatsResponse =
@@ -253,6 +318,7 @@ class AnalyticsService {
             revenueByRoute: [],
             revenueByDate: [],
             revenueByChannel: [],
+            dailyBreakdown: [],
           }
 
     const occupancyTrips =
@@ -275,6 +341,16 @@ class AnalyticsService {
         ? auditRes.value.data
         : []
 
+    const activeIncidentsList =
+      incRes.status === 'fulfilled' && incRes.value.success && incRes.value.data
+        ? incRes.value.data
+        : []
+
+    // Đếm số sự cố đang mở (pending) do tài xế báo cáo thực tế
+    const pendingIncidentsCount = activeIncidentsList.filter(
+      (i) => i.resolutionStatus === 'pending',
+    ).length
+
     // Tính toán tỷ lệ lấp đầy trung bình từ các chuyến xe thực tế
     const avgRate =
       occupancyTrips.length > 0
@@ -287,10 +363,7 @@ class AnalyticsService {
           : 0
 
     // Số xe thực tế từ đội xe đã đăng ký trong cơ sở dữ liệu Supabase
-    const realVehicleCount = vehiclesList.length > 0 ? vehiclesList.length : 3
-
-    // Đếm số sự cố hoặc chuyến xe bị chậm
-    const delayedCount = liveTrips.filter((t) => t.status === 'DELAYED').length
+    const realVehicleCount = vehiclesList.length
 
     // Tính toán tỷ lệ tăng trưởng doanh thu so với ngày hôm trước
     let revenueGrowth = 0
@@ -303,23 +376,16 @@ class AnalyticsService {
     }
 
     // Kênh thanh toán thực tế từ Supabase
-    const channels = revData.revenueByChannel && revData.revenueByChannel.length > 0
-      ? revData.revenueByChannel
-      : [
-          { channel: 'Ví điện tử VNPAY', amount: `${Math.round(revData.totalRevenue * 0.45).toLocaleString('vi-VN')} đ`, share: 45 },
-          { channel: 'Ví MoMo', amount: `${Math.round(revData.totalRevenue * 0.25).toLocaleString('vi-VN')} đ`, share: 25 },
-          { channel: 'Mã VietQR Pro', amount: `${Math.round(revData.totalRevenue * 0.20).toLocaleString('vi-VN')} đ`, share: 20 },
-          { channel: 'Tiền mặt tại trạm', amount: `${Math.round(revData.totalRevenue * 0.10).toLocaleString('vi-VN')} đ`, share: 10 },
-        ]
+    const channels = revData.revenueByChannel || []
 
     return {
       kpis: {
         totalRevenue: revData.totalRevenue,
         totalRevenueGrowth: revenueGrowth,
         totalTicketsSold: revData.totalPaidBookings,
-        ticketsGrowth: 8.5,
+        ticketsGrowth: revenueGrowth,
         averageOccupancyRate: avgRate,
-        activeIncidentsCount: delayedCount,
+        activeIncidentsCount: pendingIncidentsCount,
         activeVehiclesCount: realVehicleCount,
       },
       revenueTrend: revData.revenueByDate,
@@ -328,6 +394,8 @@ class AnalyticsService {
       occupancyTrips,
       liveTrips,
       recentAuditLogs,
+      activeIncidentsList,
+      dailyBreakdown: revData.dailyBreakdown || [],
     }
   }
 }

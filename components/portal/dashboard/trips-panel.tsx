@@ -2,7 +2,7 @@
 
 import { Progress, Table, type TableProps } from 'antd'
 import { Bus, Clock } from 'lucide-react'
-import { UPCOMING_TRIPS, type Trip } from '@/lib/mock-data'
+import type { Trip } from '@/lib/mock-data'
 import { TripStatusBadge } from './trip-status-badge'
 
 const columns: TableProps<Trip>['columns'] = [
@@ -50,7 +50,7 @@ const columns: TableProps<Trip>['columns'] = [
 ]
 
 export function TripsPanel({ trips }: { trips?: Trip[] }) {
-  const displayTrips = trips && trips.length > 0 ? trips : UPCOMING_TRIPS
+  const displayTrips = trips && trips.length > 0 ? trips : []
 
   return (
     <section className="rounded-2xl border border-border bg-card" aria-labelledby="trips-heading">
@@ -67,11 +67,18 @@ export function TripsPanel({ trips }: { trips?: Trip[] }) {
       </div>
 
       <div className="hidden md:block">
-        <Table<Trip> rowKey="id" columns={columns} dataSource={displayTrips} pagination={false} size="middle" />
+        <Table<Trip>
+          rowKey="id"
+          columns={columns}
+          dataSource={displayTrips}
+          pagination={false}
+          size="middle"
+          locale={{ emptyText: 'Chưa có chuyến xe nào xuất bến trong khung giờ này' }}
+        />
       </div>
 
       <ul className="flex flex-col gap-3 px-4 pb-4 md:hidden">
-        {displayTrips.map((trip) => (
+        {displayTrips.map((trip: Trip) => (
           <li key={trip.id}>
             <button
               type="button"
