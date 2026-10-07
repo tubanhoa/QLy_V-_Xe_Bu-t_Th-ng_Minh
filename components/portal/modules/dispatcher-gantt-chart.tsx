@@ -18,6 +18,8 @@ import {
   Sunset,
   SunMedium,
   Crosshair,
+  Wrench,
+  Lock,
 } from 'lucide-react'
 import type { TripItem } from '@/lib/services/trip.service'
 import type { Vehicle } from '@/lib/services/vehicle.service'
@@ -478,8 +480,9 @@ export function GanttTimelineChart({
                     )}
 
                     {isMaintenance ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-[11px] font-medium text-muted-foreground italic">
-                        🔧 Xe đang bảo dưỡng định kỳ - Ngừng điều phối
+                      <div className="absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-foreground italic">
+                        <Wrench size={13} className="text-muted-foreground shrink-0" />
+                        <span>Xe đang bảo dưỡng định kỳ - Tạm dừng điều phối</span>
                       </div>
                     ) : (
                       vehicleTrips.map((t) => {
@@ -582,8 +585,9 @@ export function GanttTimelineChart({
                     )}
 
                     {isLocked ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-[11px] font-medium text-muted-foreground italic">
-                        ⛔ Tài khoản tài xế đang bị tạm khóa
+                      <div className="absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-foreground italic">
+                        <Lock size={13} className="text-muted-foreground shrink-0" />
+                        <span>Tài khoản tài xế đang bị tạm khóa</span>
                       </div>
                     ) : (
                       driverTrips.map((t) => {
@@ -653,7 +657,10 @@ export function GanttTimelineChart({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="size-3 rounded-md bg-rose-500/20 border border-rose-500 ring-1 ring-rose-500/50" />
-            <span className="font-bold text-rose-600 dark:text-rose-400">⚠️ Xung đột lịch trình</span>
+            <span className="font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1">
+              <AlertTriangle size={12} />
+              <span>Xung đột lịch trình</span>
+            </span>
           </div>
         </div>
 

@@ -30,6 +30,7 @@ import {
   CheckCheck,
   Bell,
   ShieldAlert,
+  FileText,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
@@ -224,7 +225,7 @@ export function DispatcherSchedule() {
 
     vehicles.forEach((v) => {
       if (v.status === 'maintenance') {
-        busyVehicles.push({ v, reason: '🛠️ Đang bảo dưỡng kỹ thuật' })
+        busyVehicles.push({ v, reason: 'Đang bảo dưỡng kỹ thuật' })
         return
       }
       const conflictTrip = trips.find(
@@ -243,7 +244,7 @@ export function DispatcherSchedule() {
           hour: '2-digit',
           minute: '2-digit',
         })
-        busyVehicles.push({ v, reason: `⚠️ Trùng ca lúc ${timeStr} (${conflictTrip.route?.routeCode || 'Tuyến'})` })
+        busyVehicles.push({ v, reason: `Trùng ca lúc ${timeStr} (${conflictTrip.route?.routeCode || 'Tuyến'})` })
       } else {
         availableVehicles.push(v)
       }
@@ -255,7 +256,7 @@ export function DispatcherSchedule() {
 
     drivers.forEach((d) => {
       if (d.status === 'locked') {
-        busyDrivers.push({ d, reason: '🔒 Tài khoản đang tạm khóa' })
+        busyDrivers.push({ d, reason: 'Tài khoản đang tạm khóa' })
         return
       }
       const conflictTrip = trips.find(
@@ -274,7 +275,7 @@ export function DispatcherSchedule() {
           hour: '2-digit',
           minute: '2-digit',
         })
-        busyDrivers.push({ d, reason: `⚠️ Trùng ca lúc ${timeStr}` })
+        busyDrivers.push({ d, reason: `Trùng ca lúc ${timeStr}` })
       } else {
         availableDrivers.push(d)
       }
@@ -286,7 +287,7 @@ export function DispatcherSchedule() {
 
     conductors.forEach((c) => {
       if (c.status === 'locked') {
-        busyConductors.push({ c, reason: '🔒 Tài khoản đang tạm khóa' })
+        busyConductors.push({ c, reason: 'Tài khoản đang tạm khóa' })
         return
       }
       const conflictTrip = trips.find(
@@ -305,7 +306,7 @@ export function DispatcherSchedule() {
           hour: '2-digit',
           minute: '2-digit',
         })
-        busyConductors.push({ c, reason: `⚠️ Trùng ca lúc ${timeStr}` })
+        busyConductors.push({ c, reason: `Trùng ca lúc ${timeStr}` })
       } else {
         availableConductors.push(c)
       }
@@ -338,7 +339,7 @@ export function DispatcherSchedule() {
     if (suggestedCnd) setSelectedConductorId(suggestedCnd.id)
 
     showToast(
-      `⚡ Đã gợi ý tự động: Xe ${suggestedVeh?.licensePlate || '(chưa có)'} & Tài xế ${suggestedDrv?.fullName || '(chưa có)'}`,
+      `Đã gợi ý tự động: Xe ${suggestedVeh?.licensePlate || '(chưa có)'} & Tài xế ${suggestedDrv?.fullName || '(chưa có)'}`,
       'success'
     )
   }
@@ -718,7 +719,7 @@ export function DispatcherSchedule() {
               title="Kích hoạt tự động sinh khung giờ cố định"
             >
               <Sparkles size={14} className="shrink-0" />
-              <span>⚙️ Lập Lịch Khung Giờ</span>
+              <span>Lập Lịch Khung Giờ</span>
             </button>
 
             {/* Nút Refresh */}
@@ -1046,25 +1047,25 @@ export function DispatcherSchedule() {
             </button>
             <button
               onClick={() => setTripTypeFilter('regular')}
-              className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 tripTypeFilter === 'regular'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20'
               }`}
             >
-              <Zap size={12} />
-              ⚡ Định kỳ tự động ({regularCount})
+              <Zap size={12} className="shrink-0" />
+              <span>Định kỳ tự động ({regularCount})</span>
             </button>
             <button
               onClick={() => setTripTypeFilter('adhoc')}
-              className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 tripTypeFilter === 'adhoc'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
               }`}
             >
-              <Flame size={12} />
-              🔥 Tăng cường thực tế ({adhocCount})
+              <Flame size={12} className="shrink-0" />
+              <span>Tăng cường thực tế ({adhocCount})</span>
             </button>
           </div>
 
@@ -1085,23 +1086,25 @@ export function DispatcherSchedule() {
             </button>
             <button
               onClick={() => setAssignmentFilter('unassigned')}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 assignmentFilter === 'unassigned'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
               }`}
             >
-              ⚠️ Chưa gán Xe/Tài xế ({unassignedCount})
+              <AlertTriangle size={12} className="shrink-0" />
+              <span>Chưa gán Xe/Tài xế ({unassignedCount})</span>
             </button>
             <button
               onClick={() => setAssignmentFilter('assigned')}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 assignmentFilter === 'assigned'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20'
               }`}
             >
-              ✅ Đã gán đầy đủ ({totalCount - unassignedCount})
+              <CheckCircle2 size={12} className="shrink-0" />
+              <span>Đã gán đầy đủ ({totalCount - unassignedCount})</span>
             </button>
           </div>
         </div>
@@ -1285,8 +1288,9 @@ export function DispatcherSchedule() {
 
                   {/* GHI CHÚ NẾU CÓ */}
                   {item.note && (
-                    <div className="mt-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:text-amber-300">
-                      📝 {item.note}
+                    <div className="mt-2 flex items-center gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                      <FileText size={12} className="shrink-0" />
+                      <span className="line-clamp-1">{item.note}</span>
                     </div>
                   )}
 
@@ -1439,7 +1443,7 @@ export function DispatcherSchedule() {
                   title="Tự động chọn xe & tài xế đang trống lịch tốt nhất"
                 >
                   <Sparkles size={13} className="text-amber-500 fill-amber-500" />
-                  <span>⚡ Gợi Ý Nhanh</span>
+                  <span>Gợi Ý Nhanh</span>
                 </button>
                 <button
                   onClick={() => setDispatchingTrip(null)}
@@ -1521,7 +1525,7 @@ export function DispatcherSchedule() {
                   required
                 >
                   <option value="">-- Chọn phương tiện xe buýt --</option>
-                  <optgroup label="✅ Phương tiện sẵn sàng (Khả dụng)">
+                  <optgroup label="Phương tiện sẵn sàng (Khả dụng)">
                     {resourceAvailability.availableVehicles.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.licensePlate} ({v.model} - {v.seatCapacity} chỗ) - Sẵn sàng
@@ -1529,7 +1533,7 @@ export function DispatcherSchedule() {
                     ))}
                   </optgroup>
                   {resourceAvailability.busyVehicles.length > 0 && (
-                    <optgroup label="⚠️ Đang bận / Trùng ca / Bảo dưỡng">
+                    <optgroup label="Đang bận / Trùng ca / Bảo dưỡng">
                       {resourceAvailability.busyVehicles.map((item) => (
                         <option key={item.v.id} value={item.v.id}>
                           {item.v.licensePlate} ({item.v.model}) - {item.reason}
@@ -1540,7 +1544,7 @@ export function DispatcherSchedule() {
                 </select>
                 {dispatchConflict?.vehicleConflictTrip && (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
-                    ⚠️ Xe đang trùng lịch chạy ở chuyến khác!
+                    Xe đang trùng lịch chạy ở chuyến khác!
                   </span>
                 )}
               </div>
@@ -1566,7 +1570,7 @@ export function DispatcherSchedule() {
                   required
                 >
                   <option value="">-- Chọn tài xế đủ điều kiện --</option>
-                  <optgroup label="✅ Tài xế sẵn sàng (Khả dụng)">
+                  <optgroup label="Tài xế sẵn sàng (Khả dụng)">
                     {resourceAvailability.availableDrivers.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.fullName} (SĐT: {d.phoneNumber || 'N/A'}) - Sẵn sàng
@@ -1574,7 +1578,7 @@ export function DispatcherSchedule() {
                     ))}
                   </optgroup>
                   {resourceAvailability.busyDrivers.length > 0 && (
-                    <optgroup label="⚠️ Đang bận / Trùng ca / Khóa">
+                    <optgroup label="Đang bận / Trùng ca / Khóa">
                       {resourceAvailability.busyDrivers.map((item) => (
                         <option key={item.d.id} value={item.d.id}>
                           {item.d.fullName} - {item.reason}
@@ -1585,7 +1589,7 @@ export function DispatcherSchedule() {
                 </select>
                 {dispatchConflict?.driverConflictTrip ? (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
-                    ⚠️ Tài xế đang có ca chạy trùng khung giờ này!
+                    Tài xế đang có ca chạy trùng khung giờ này!
                   </span>
                 ) : (
                   <span className="text-[11px] text-muted-foreground mt-1 block">
@@ -1612,7 +1616,7 @@ export function DispatcherSchedule() {
                   }`}
                 >
                   <option value="">-- Tự động soát vé / Không phân công phụ xe --</option>
-                  <optgroup label="✅ Phụ xe sẵn sàng (Khả dụng)">
+                  <optgroup label="Phụ xe sẵn sàng (Khả dụng)">
                     {resourceAvailability.availableConductors.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.fullName} (SĐT: {c.phoneNumber || 'N/A'}) - Sẵn sàng
@@ -1620,7 +1624,7 @@ export function DispatcherSchedule() {
                     ))}
                   </optgroup>
                   {resourceAvailability.busyConductors.length > 0 && (
-                    <optgroup label="⚠️ Đang bận / Trùng ca">
+                    <optgroup label="Đang bận / Trùng ca">
                       {resourceAvailability.busyConductors.map((item) => (
                         <option key={item.c.id} value={item.c.id}>
                           {item.c.fullName} - {item.reason}
@@ -1631,7 +1635,7 @@ export function DispatcherSchedule() {
                 </select>
                 {dispatchConflict?.conductorConflictTrip && (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
-                    ⚠️ Phụ xe đang trùng ca trực ở chuyến khác!
+                    Phụ xe đang trùng ca trực ở chuyến khác!
                   </span>
                 )}
               </div>
@@ -1641,7 +1645,7 @@ export function DispatcherSchedule() {
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Loại chuyến:</span>
                   <span className="font-bold text-foreground">
-                    {dispatchingTrip.tripType === 'adhoc' ? '🔥 Tăng cường thực tế' : '⚡ Định kỳ tự động'}
+                    {dispatchingTrip.tripType === 'adhoc' ? 'Tăng cường thực tế' : 'Định kỳ tự động'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -1807,7 +1811,7 @@ export function DispatcherSchedule() {
 
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
                 <span className="font-bold">Lưu ý nghiệp vụ:</span> Chuyến xe tăng cường sẽ được gắn nhãn{' '}
-                <strong>[🔥 Tăng cường thực tế]</strong> để đối soát doanh thu vé bán phát sinh ngoài kế hoạch định kỳ.
+                <strong>[Tăng cường thực tế]</strong> để đối soát doanh thu vé bán phát sinh ngoài kế hoạch định kỳ.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
@@ -1944,7 +1948,7 @@ export function DispatcherSchedule() {
 
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
                 <span className="font-bold">Đặc điểm cơ chế Rolling Window:</span> Các chuyến xe tạo ra sẽ mang nhãn{' '}
-                <strong>[⚡ Định kỳ tự động]</strong> ở trạng thái <em>Chưa gán xe/tài xế (Unassigned)</em> để điều độ
+                <strong>[Định kỳ tự động]</strong> ở trạng thái <em>Chưa gán xe/tài xế (Unassigned)</em> để điều độ
                 viên bố trí nguồn lực theo ca làm việc thực tế của đội xe.
               </div>
 
