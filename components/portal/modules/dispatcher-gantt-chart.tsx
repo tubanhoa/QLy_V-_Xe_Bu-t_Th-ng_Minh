@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import {
   Bus,
   User,
@@ -14,6 +14,10 @@ import {
   Layers,
   ChevronRight,
   ShieldAlert,
+  Sunrise,
+  Sunset,
+  SunMedium,
+  Crosshair,
 } from 'lucide-react'
 import type { TripItem } from '@/lib/services/trip.service'
 import type { Vehicle } from '@/lib/services/vehicle.service'
@@ -39,9 +43,19 @@ export function GanttTimelineChart({
   // Trục tung hiển thị: theo Xe ('vehicle') hoặc theo Tài xế ('driver')
   const [rowType, setRowType] = useState<'vehicle' | 'driver'>('vehicle')
 
-  // Timeline bắt đầu từ 05:00 (300 phút) đến 22:00 (1320 phút) -> Tổng 17 tiếng (1020 phút)
-  const START_HOUR = 5
-  const END_HOUR = 22
+  // Phân ca làm việc: 'all' (05:00 - 22:00) | 'morning' (05:00 - 13:00) | 'afternoon' (13:00 - 22:00)
+  const [shiftFilter, setShiftFilter] = useState<'all' | 'morning' | 'afternoon'>('all')
+
+  // Ref container để điều khiển cuộn ngang mượt mà
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Khung giờ động theo Ca làm việc đã chọn
+  const { START_HOUR, END_HOUR } = useMemo(() => {
+    if (shiftFilter === 'morning') return { START_HOUR: 5, END_HOUR: 13 }
+    if (shiftFilter === 'afternoon') return { START_HOUR: 13, END_HOUR: 22 }
+    return { START_HOUR: 5, END_HOUR: 22 }
+  }, [shiftFilter])
+
   const TOTAL_HOURS = END_HOUR - START_HOUR
   const TOTAL_MINUTES = TOTAL_HOURS * 60
 
@@ -64,6 +78,16 @@ export function GanttTimelineChart({
     return Math.min(100, Math.max(0, (passedMinutes / TOTAL_MINUTES) * 100))
   }, [START_HOUR, END_HOUR, TOTAL_MINUTES])
 
+  // Cuộn mượt đến vị trí Giờ Hiện Tại
+  const handleJumpToNow = () => {
+    if (!containerRef.current || currentTimePercentage === null) return
+    const scrollWidth = containerRef.current.scrollWidth
+    const clientWidth = containerRef.current.clientWidth
+    const targetScroll =
+      (currentTimePercentage / 100) * (scrollWidth - 230) - clientWidth / 2 + 230
+    containerRef.current.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' })
+  }
+
   // Thuật toán phát hiện xung đột lịch trình (Conflict Detection Engine)
   const conflictTripIds = useMemo(() => {
     const conflicts = new Set<string>()
@@ -80,7 +104,6 @@ export function GanttTimelineChart({
     })
 
     tripsByVehicle.forEach((vTrips) => {
-      // Sắp xếp theo giờ xuất bến
       vTrips.sort(
         (a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime(),
       )
@@ -168,7 +191,7 @@ export function GanttTimelineChart({
   }, [trips])
 
   // Tính tọa độ vị trí Left (%) và Width (%) của khối chuyến trên timeline
-  const getTripTimelineStyle = (trip: TripItem) => {
+  const getTripTimelineStyle = (trip: TripItem): React.CSSProperties => {
     const dep = new Date(trip.departureTime)
     const depH = dep.getHours()
     const depM = dep.getMinutes()
@@ -182,32 +205,46 @@ export function GanttTimelineChart({
     const startTotalMin = (depH - START_HOUR) * 60 + depM
     const endTotalMin = (arrH - START_HOUR) * 60 + arrM
 
-    const durationMin = Math.max(30, endTotalMin - startTotalMin)
+    // Nếu chuyến hoàn toàn nằm ngoài ca làm việc đang xem
+    if (endTotalMin <= 0 || startTotalMin >= TOTAL_MINUTES) {
+      return { display: 'none' }
+    }
 
-    const leftPercent = Math.max(0, Math.min(100, (startTotalMin / TOTAL_MINUTES) * 100))
+    const durationMin = Math.max(25, endTotalMin - Math.max(0, startTotalMin))
+    const clampStart = Math.max(0, startTotalMin)
+
+    const leftPercent = Math.max(0, Math.min(100, (clampStart / TOTAL_MINUTES) * 100))
     const widthPercent = Math.max(4.5, Math.min(100 - leftPercent, (durationMin / TOTAL_MINUTES) * 100))
 
     return {
       left: `${leftPercent}%`,
       width: `${widthPercent}%`,
+      minWidth: '56px',
     }
   }
 
   return (
     <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-sm overflow-hidden">
-      {/* HEADER & CHUYỂN ĐỔI CHẾ ĐỘ TRỤC TUNG GANTT */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border">
+      {/* HEADER & THANH ĐIỀU KHIỂN GANTT */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-3 border-b border-border">
         <div>
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Layers size={18} className="text-emerald-500" />
-            Lịch Gantt Điều Phối & Trục Thời Gian Vận Hành
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <Layers size={18} className="text-emerald-500" />
+              Lịch Gantt Điều Phối & Trục Thời Gian Vận Hành
+            </h2>
+            {selectedDate && (
+              <span className="font-mono text-[11px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-lg border border-border">
+                {selectedDate}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Trực quan hóa ca chạy từ 05:00 đến 22:00, tự động cảnh báo chồng chéo giờ xe và tài xế
+            Trực quan hóa ca chạy theo thời gian thực, cố định tài nguyên và kiểm soát xung đột
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Cảnh báo tổng số xung đột nếu có */}
           {conflictTripIds.size > 0 && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse">
@@ -215,6 +252,64 @@ export function GanttTimelineChart({
               {conflictTripIds.size} Chuyến Xung Đột
             </span>
           )}
+
+          {/* Nút Cuộn Nhanh Về Giờ Hiện Tại (Jump to Now) */}
+          {currentTimePercentage !== null && (
+            <button
+              type="button"
+              onClick={handleJumpToNow}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+              title="Cuộn timeline đến giờ hiện tại"
+            >
+              <Crosshair size={13} className="animate-spin" />
+              <span>Về Giờ Hiện Tại</span>
+            </button>
+          )}
+
+          {/* Phân Ca Làm Việc (Morning / Afternoon / Full Day) */}
+          <div className="flex items-center rounded-xl bg-muted/50 p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setShiftFilter('morning')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                shiftFilter === 'morning'
+                  ? 'bg-card text-foreground shadow-xs font-bold border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Khung giờ 05:00 - 13:00"
+            >
+              <Sunrise size={12} className={shiftFilter === 'morning' ? 'text-amber-500' : ''} />
+              <span>Ca Sáng</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShiftFilter('afternoon')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                shiftFilter === 'afternoon'
+                  ? 'bg-card text-foreground shadow-xs font-bold border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Khung giờ 13:00 - 22:00"
+            >
+              <Sunset size={12} className={shiftFilter === 'afternoon' ? 'text-indigo-500' : ''} />
+              <span>Ca Chiều</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShiftFilter('all')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                shiftFilter === 'all'
+                  ? 'bg-card text-foreground shadow-xs font-bold border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Toàn ngày 05:00 - 22:00"
+            >
+              <SunMedium size={12} className={shiftFilter === 'all' ? 'text-emerald-500' : ''} />
+              <span>Toàn Ngày</span>
+            </button>
+          </div>
 
           {/* Toggle Trục Tung: Xe Buýt vs Tài Xế */}
           <div className="flex items-center rounded-xl bg-muted/60 p-1 border border-border">
@@ -228,7 +323,7 @@ export function GanttTimelineChart({
               }`}
             >
               <Bus size={13} />
-              <span>Theo Xe Buýt ({vehicles.length})</span>
+              <span>Theo Xe ({vehicles.length})</span>
             </button>
             <button
               type="button"
@@ -246,16 +341,21 @@ export function GanttTimelineChart({
         </div>
       </div>
 
-      {/* BIỂU ĐỒ GANTT CONTAINER (SCROLLABLE NGANG) */}
-      <div className="overflow-x-auto min-h-[450px]">
-        <div className="min-w-[1050px]">
-          {/* DÒNG TIÊU ĐỀ TRỤC THỜI GIAN (TIME AXIS 05:00 -> 22:00) */}
-          <div className="grid grid-cols-[220px_1fr] border-b border-border/80 pb-2">
-            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider pl-2 flex items-center gap-1">
-              <Clock size={13} />
-              <span>Tài Nguyên / Khung Giờ</span>
+      {/* BIỂU ĐỒ GANTT CONTAINER (SCROLLABLE NGANG VỚI CỘT TRÁI STICKY) */}
+      <div ref={containerRef} className="overflow-x-auto min-h-[450px] scroll-smooth">
+        <div className="min-w-[1100px]">
+          {/* DÒNG TIÊU ĐỀ TRỤC THỜI GIAN */}
+          <div className="grid grid-cols-[230px_1fr] border-b border-border/80 pb-2">
+            <div className="sticky left-0 z-20 bg-card pr-3 pl-2 flex items-center justify-between border-r border-border/80 shadow-[3px_0_10px_-3px_rgba(0,0,0,0.12)]">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <Clock size={13} />
+                <span>Tài Nguyên / Khung Giờ</span>
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                {START_HOUR}h - {END_HOUR}h
+              </span>
             </div>
-            <div className="relative flex justify-between pr-2 text-[11px] font-mono font-semibold text-muted-foreground select-none">
+            <div className="relative flex justify-between pr-2 text-[11px] font-mono font-semibold text-muted-foreground select-none pl-2">
               {hourMarks.map((hm) => (
                 <span key={hm} className="shrink-0 -translate-x-1/2">
                   {hm}
@@ -265,8 +365,8 @@ export function GanttTimelineChart({
           </div>
 
           {/* HÀNG 1: CHỜ PHÂN CÔNG (UNASSIGNED POOL) */}
-          <div className="grid grid-cols-[220px_1fr] border-b border-dashed border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors py-2.5">
-            <div className="flex items-center justify-between pr-3 pl-2">
+          <div className="grid grid-cols-[230px_1fr] border-b border-dashed border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors py-2.5">
+            <div className="sticky left-0 z-20 bg-card/95 backdrop-blur-xs pr-3 pl-2 flex items-center justify-between border-r border-amber-500/30 shadow-[3px_0_10px_-3px_rgba(0,0,0,0.12)]">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-amber-500 animate-ping" />
                 <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
@@ -278,7 +378,7 @@ export function GanttTimelineChart({
               </span>
             </div>
 
-            <div className="relative h-10 w-full rounded-xl bg-amber-500/5 border border-amber-500/10">
+            <div className="relative h-10 w-full rounded-xl bg-amber-500/5 border border-amber-500/10 ml-2">
               {/* Vạch giờ hiện tại */}
               {currentTimePercentage !== null && (
                 <div
@@ -300,7 +400,7 @@ export function GanttTimelineChart({
                         ? 'bg-rose-500/20 border-rose-500 text-rose-700 dark:text-rose-300 ring-2 ring-rose-500/40'
                         : 'bg-amber-100 dark:bg-amber-950/70 border-amber-300/80 text-amber-900 dark:text-amber-200'
                     }`}
-                    title={`Chuyến ${t.route?.routeCode || ''} (${new Date(t.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}) - Bấm để phân công xe & tài xế`}
+                    title={`Chuyến ${t.route?.routeCode || ''} (${new Date(t.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}) - Bấm để gán xe & tài xế`}
                   >
                     <div className="flex items-center gap-1 truncate text-[11px] font-bold">
                       {isConflict ? (
@@ -318,7 +418,7 @@ export function GanttTimelineChart({
                     </div>
 
                     <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 shrink-0">
-                      Gán ngay →
+                      Gán →
                     </span>
                   </div>
                 )
@@ -339,12 +439,12 @@ export function GanttTimelineChart({
               return (
                 <div
                   key={v.id}
-                  className={`grid grid-cols-[220px_1fr] border-b border-border/70 py-2.5 transition-colors ${
+                  className={`grid grid-cols-[230px_1fr] border-b border-border/70 py-2.5 transition-colors ${
                     isMaintenance ? 'bg-slate-100/60 dark:bg-slate-900/60 opacity-60' : 'hover:bg-muted/30'
                   }`}
                 >
-                  {/* Cột Tên Xe Buýt */}
-                  <div className="flex items-center justify-between pr-3 pl-2">
+                  {/* Cột Tên Xe Buýt (CỐ ĐỊNH STICKY) */}
+                  <div className="sticky left-0 z-20 bg-card/95 backdrop-blur-xs flex items-center justify-between pr-3 pl-2 border-r border-border/80 shadow-[3px_0_10px_-3px_rgba(0,0,0,0.12)]">
                     <div className="truncate">
                       <div className="flex items-center gap-1.5">
                         <Bus size={13} className="text-emerald-500 shrink-0" />
@@ -368,7 +468,7 @@ export function GanttTimelineChart({
                   </div>
 
                   {/* Cột Timeline Bar */}
-                  <div className="relative h-10 w-full rounded-xl bg-muted/20 border border-border/50">
+                  <div className="relative h-10 w-full rounded-xl bg-muted/20 border border-border/50 ml-2">
                     {/* Vạch giờ hiện tại */}
                     {currentTimePercentage !== null && (
                       <div
@@ -443,12 +543,12 @@ export function GanttTimelineChart({
               return (
                 <div
                   key={d.id}
-                  className={`grid grid-cols-[220px_1fr] border-b border-border/70 py-2.5 transition-colors ${
+                  className={`grid grid-cols-[230px_1fr] border-b border-border/70 py-2.5 transition-colors ${
                     isLocked ? 'bg-slate-100/60 dark:bg-slate-900/60 opacity-60' : 'hover:bg-muted/30'
                   }`}
                 >
-                  {/* Cột Tên Tài Xế */}
-                  <div className="flex items-center justify-between pr-3 pl-2">
+                  {/* Cột Tên Tài Xế (CỐ ĐỊNH STICKY) */}
+                  <div className="sticky left-0 z-20 bg-card/95 backdrop-blur-xs flex items-center justify-between pr-3 pl-2 border-r border-border/80 shadow-[3px_0_10px_-3px_rgba(0,0,0,0.12)]">
                     <div className="truncate">
                       <div className="flex items-center gap-1.5">
                         <User size={13} className="text-indigo-500 shrink-0" />
@@ -472,7 +572,7 @@ export function GanttTimelineChart({
                   </div>
 
                   {/* Cột Timeline Bar */}
-                  <div className="relative h-10 w-full rounded-xl bg-muted/20 border border-border/50">
+                  <div className="relative h-10 w-full rounded-xl bg-muted/20 border border-border/50 ml-2">
                     {/* Vạch giờ hiện tại */}
                     {currentTimePercentage !== null && (
                       <div

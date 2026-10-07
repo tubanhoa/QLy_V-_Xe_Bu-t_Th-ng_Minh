@@ -69,6 +69,36 @@ export function DispatcherSchedule() {
   const [isSubmittingDispatch, setIsSubmittingDispatch] = useState(false)
   const [isNotifyingCrew, setIsNotifyingCrew] = useState<string | null>(null)
 
+  // Hệ thống Toast Notification thay thế triệt để alert
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; type: 'success' | 'error' | 'warning' | 'info'; message: string }>
+  >([])
+
+  // Hộp thoại xác nhận thay thế window.confirm
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    confirmText?: string
+    cancelText?: string
+    variant?: 'primary' | 'danger' | 'warning'
+    onConfirm: () => void
+  } | null>(null)
+
+  const showToast = useCallback(
+    (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+      const id = Math.random().toString(36).slice(2, 9)
+      setToasts((prev) => [...prev, { id, type, message }])
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id))
+      }, 4000)
+    },
+    []
+  )
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
   // Modal Tạo Chuyến Tăng Cường (Ad-hoc)
   const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false)
   const [adhocRouteId, setAdhocRouteId] = useState('')
@@ -175,11 +205,11 @@ export function DispatcherSchedule() {
     if (!dispatchingTrip) return
 
     if (!selectedVehicleId) {
-      alert('Vui lòng chọn xe buýt phục vụ chuyến này!')
+      showToast('Vui lòng chọn xe buýt phục vụ chuyến này!', 'warning')
       return
     }
     if (!selectedDriverId) {
-      alert('Vui lòng phân công tài xế cầm lái!')
+      showToast('Vui lòng phân công tài xế cầm lái!', 'warning')
       return
     }
 
@@ -192,17 +222,16 @@ export function DispatcherSchedule() {
         conductorId: selectedConductorId || undefined,
       })
       if (res.success) {
-        setFeedback(`Đã điều phối thành công xe, tài xế và gửi lịch cho tổ xe!`)
+        showToast('Đã điều phối thành công xe, tài xế và gửi lịch cho tổ xe!', 'success')
         setDispatchingTrip(null)
         await loadTrips()
       } else {
-        alert(res.message || 'Không thể điều phối chuyến này')
+        showToast(res.message || 'Không thể điều phối chuyến này', 'error')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi khi gửi thông tin điều phối')
+      showToast(err.message || 'Lỗi khi gửi thông tin điều phối', 'error')
     } finally {
       setIsSubmittingDispatch(false)
-      setTimeout(() => setFeedback(null), 3500)
     }
   }
 
@@ -212,52 +241,54 @@ export function DispatcherSchedule() {
     try {
       const res = await tripService.notifyCrew(tripId)
       if (res.success) {
-        setFeedback('Đã gửi thông báo & cập nhật lịch trình thành công đến Tổ xe!')
+        showToast('Đã gửi thông báo & cập nhật lịch trình thành công đến Tổ xe!', 'success')
       } else {
-        alert(res.message || 'Không thể gửi thông báo cho tổ xe')
+        showToast(res.message || 'Không thể gửi thông báo cho tổ xe', 'error')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi khi gửi thông báo tổ xe')
+      showToast(err.message || 'Lỗi khi gửi thông báo tổ xe', 'error')
     } finally {
       setIsNotifyingCrew(null)
-      setTimeout(() => setFeedback(null), 3500)
     }
   }
 
-  // Gửi thông báo lịch trình toàn bộ ca làm việc (1-Click Notify All)
+  // Gửi thông báo lịch trình toàn bộ ca làm việc (1-Click Notify All với Hộp thoại xác nhận)
   const handleNotifyAllCrew = async () => {
     const assignedTripIds = trips
       .filter((t) => t.vehicleId || t.driverId || t.vehicle || t.driver)
       .map((t) => t.id)
     if (assignedTripIds.length === 0) {
-      alert('Không có chuyến xe nào đã được phân công để gửi thông báo!')
+      showToast('Không có chuyến xe nào đã được phân công để gửi thông báo!', 'info')
       return
     }
-    if (
-      !confirm(
-        `Bạn có chắc chắn muốn gửi thông báo lịch làm việc đến toàn bộ tổ xe của ${assignedTripIds.length} chuyến đã phân công?`
-      )
-    ) {
-      return
-    }
-    setIsNotifyingCrew('all')
-    try {
-      const res = await tripService.notifyAllCrewForTrips(assignedTripIds)
-      if (res.successCount > 0) {
-        setFeedback(
-          `Đã gửi thông báo thành công cho ${res.successCount}/${assignedTripIds.length} tổ xe ca trực!`
-        )
-      } else {
-        alert(
-          `Không thể gửi thông báo: ${res.errors.join(', ') || 'Vui lòng kiểm tra lại cấu hình thông báo'}`
-        )
-      }
-    } catch (err: any) {
-      alert(err.message || 'Lỗi kết nối khi gửi thông báo toàn ca')
-    } finally {
-      setIsNotifyingCrew(null)
-      setTimeout(() => setFeedback(null), 4000)
-    }
+
+    setConfirmDialog({
+      title: 'Gửi Thông Báo Lịch Trình Toàn Ca',
+      message: `Hệ thống sẽ gửi thông báo đẩy qua ứng dụng và cập nhật lịch trình làm việc đến toàn bộ tổ xe của ${assignedTripIds.length} chuyến đã được phân công. Bạn có chắc chắn muốn gửi ngay?`,
+      confirmText: 'Gửi Toàn Bộ Ngay',
+      variant: 'primary',
+      onConfirm: async () => {
+        setIsNotifyingCrew('all')
+        try {
+          const res = await tripService.notifyAllCrewForTrips(assignedTripIds)
+          if (res.successCount > 0) {
+            showToast(
+              `Đã gửi thông báo thành công cho ${res.successCount}/${assignedTripIds.length} tổ xe ca trực!`,
+              'success'
+            )
+          } else {
+            showToast(
+              `Không thể gửi thông báo: ${res.errors.join(', ') || 'Vui lòng kiểm tra lại cấu hình thông báo'}`,
+              'error'
+            )
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi kết nối khi gửi thông báo toàn ca', 'error')
+        } finally {
+          setIsNotifyingCrew(null)
+        }
+      },
+    })
   }
 
   // Tính toán xung đột lịch trình tức thời (Real-time conflict pre-check)
@@ -314,11 +345,11 @@ export function DispatcherSchedule() {
   const handleCreateAdhocTrip = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!adhocRouteId) {
-      alert('Vui lòng chọn tuyến xe cần tăng cường!')
+      showToast('Vui lòng chọn tuyến xe cần tăng cường!', 'warning')
       return
     }
     if (!adhocDepTime) {
-      alert('Vui lòng chọn thời gian khởi hành!')
+      showToast('Vui lòng chọn thời gian khởi hành!', 'warning')
       return
     }
 
@@ -335,20 +366,19 @@ export function DispatcherSchedule() {
       })
 
       if (res.success) {
-        setFeedback('Đã tạo thành công chuyến xe tăng cường thực tế!')
+        showToast('Đã tạo thành công chuyến xe tăng cường thực tế!', 'success')
         setIsAdhocModalOpen(false)
         setAdhocNote('')
         setAdhocVehicleId('')
         setAdhocDriverId('')
         await loadTrips()
       } else {
-        alert(res.message || 'Không thể tạo chuyến tăng cường')
+        showToast(res.message || 'Không thể tạo chuyến tăng cường', 'error')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi kết nối khi tạo chuyến tăng cường')
+      showToast(err.message || 'Lỗi kết nối khi tạo chuyến tăng cường', 'error')
     } finally {
       setIsSubmittingAdhoc(false)
-      setTimeout(() => setFeedback(null), 3500)
     }
   }
 
@@ -356,11 +386,11 @@ export function DispatcherSchedule() {
   const handleGenerateSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!genRouteId) {
-      alert('Vui lòng chọn tuyến xe cần sinh lịch!')
+      showToast('Vui lòng chọn tuyến xe cần sinh lịch!', 'warning')
       return
     }
     if (!genDate) {
-      alert('Vui lòng chọn ngày áp dụng!')
+      showToast('Vui lòng chọn ngày áp dụng!', 'warning')
       return
     }
 
@@ -372,18 +402,24 @@ export function DispatcherSchedule() {
       const endMinutes = endH * 60 + endM
 
       if (startMinutes >= endMinutes) {
-        alert(`Lỗi thời gian: Giờ bắt đầu ca chạy (${genStartTime}) phải sớm hơn Giờ kết thúc (${genEndTime})!`)
+        showToast(
+          `Giờ bắt đầu ca chạy (${genStartTime}) phải sớm hơn Giờ kết thúc (${genEndTime})!`,
+          'error'
+        )
         return
       }
 
       const totalSpan = endMinutes - startMinutes
       const intervalNum = Number(genInterval) || 30
       if (intervalNum <= 0) {
-        alert('Tần suất chạy xe phải lớn hơn 0 phút!')
+        showToast('Tần suất chạy xe phải lớn hơn 0 phút!', 'warning')
         return
       }
       if (totalSpan < intervalNum) {
-        alert(`Khoảng thời gian vận hành (${totalSpan} phút) không đủ để bố trí tần suất ${intervalNum} phút/chuyến!`)
+        showToast(
+          `Khoảng thời gian vận hành (${totalSpan} phút) không đủ để bố trí tần suất ${intervalNum} phút/chuyến!`,
+          'warning'
+        )
         return
       }
     }
@@ -399,17 +435,19 @@ export function DispatcherSchedule() {
       })
 
       if (res.success) {
-        setFeedback(`Đã sinh tự động ${res.data?.length || 0} chuyến định kỳ (chờ điều xe)!`)
+        showToast(
+          `Đã sinh tự động ${res.data?.length || 0} chuyến định kỳ (chờ điều xe)!`,
+          'success'
+        )
         setIsGenerateModalOpen(false)
         await loadTrips()
       } else {
-        alert(res.message || 'Không thể sinh lịch trình tự động')
+        showToast(res.message || 'Không thể sinh lịch trình tự động', 'error')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi khi kích hoạt sinh lịch trình')
+      showToast(err.message || 'Lỗi khi kích hoạt sinh lịch trình', 'error')
     } finally {
       setIsSubmittingGenerate(false)
-      setTimeout(() => setFeedback(null), 4000)
     }
   }
 
@@ -421,11 +459,12 @@ export function DispatcherSchedule() {
         setTrips((prev) =>
           prev.map((t) => (t.id === tripId ? { ...t, status: status as any } : t))
         )
+        showToast('Đã cập nhật trạng thái chuyến xe!', 'success')
       } else {
-        alert(res.message || 'Không thể cập nhật trạng thái')
+        showToast(res.message || 'Không thể cập nhật trạng thái', 'error')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi khi cập nhật trạng thái chuyến')
+      showToast(err.message || 'Lỗi khi cập nhật trạng thái chuyến', 'error')
     }
   }
 
@@ -1667,6 +1706,90 @@ export function DispatcherSchedule() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING TOAST NOTIFICATIONS */}
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-md w-full px-4">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-start justify-between gap-3 p-4 rounded-2xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 duration-300 ${
+              t.type === 'success'
+                ? 'bg-emerald-950/90 text-emerald-100 border-emerald-500/40 shadow-emerald-950/50'
+                : t.type === 'error'
+                ? 'bg-rose-950/90 text-rose-100 border-rose-500/40 shadow-rose-950/50'
+                : t.type === 'warning'
+                ? 'bg-amber-950/90 text-amber-100 border-amber-500/40 shadow-amber-950/50'
+                : 'bg-slate-900/90 text-slate-100 border-slate-700/60 shadow-slate-950/50'
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              {t.type === 'success' && <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />}
+              {t.type === 'error' && <AlertTriangle size={18} className="text-rose-400 shrink-0 mt-0.5" />}
+              {t.type === 'warning' && <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />}
+              {t.type === 'info' && <Info size={18} className="text-blue-400 shrink-0 mt-0.5" />}
+              <p className="text-xs font-semibold leading-relaxed">{t.message}</p>
+            </div>
+            <button
+              onClick={() => removeToast(t.id)}
+              className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 shrink-0 cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* CONFIRMATION DIALOG MODAL */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-3 rounded-2xl ${
+                  confirmDialog.variant === 'danger'
+                    ? 'bg-red-500/15 text-red-500'
+                    : confirmDialog.variant === 'warning'
+                    ? 'bg-amber-500/15 text-amber-500'
+                    : 'bg-blue-500/15 text-blue-500'
+                }`}
+              >
+                {confirmDialog.variant === 'danger' ? <AlertTriangle size={24} /> : <Send size={24} />}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">{confirmDialog.title}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Xác nhận thao tác điều phối hệ thống</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
+              {confirmDialog.message}
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                {confirmDialog.cancelText || 'Hủy bỏ'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const action = confirmDialog.onConfirm
+                  setConfirmDialog(null)
+                  action()
+                }}
+                className={`rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm cursor-pointer ${
+                  confirmDialog.variant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {confirmDialog.confirmText || 'Xác nhận'}
+              </button>
+            </div>
           </div>
         </div>
       )}
