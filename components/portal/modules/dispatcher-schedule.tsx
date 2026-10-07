@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Bus,
   Calendar,
@@ -24,18 +24,29 @@ import {
   Layers,
   Info,
   SlidersHorizontal,
+  LayoutGrid,
+  Send,
+  Table,
+  CheckCheck,
+  Bell,
+  ShieldAlert,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
 import { userService, type BackendUser } from '@/lib/services/user.service'
 import { transitService } from '@/lib/services/transit.service'
 import type { TransitRoute } from '@/lib/types/transit'
+import { GanttTimelineChart } from './dispatcher-gantt-chart'
+import { RosterGroupedView } from './dispatcher-roster-view'
 
 export function DispatcherSchedule() {
   const [trips, setTrips] = useState<TripItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
+  // Chế độ xem: Lưới Thẻ (Grid) / Lịch Gantt (Timeline) / Bảng Phân Công (Roster)
+  const [viewMode, setViewMode] = useState<'grid' | 'gantt' | 'roster'>('grid')
 
   // Bộ lọc
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -44,16 +55,19 @@ export function DispatcherSchedule() {
   const [routeFilter, setRouteFilter] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState<string>('')
 
-  // Dữ liệu tài nguyên xe, tài xế & tuyến đường
+  // Dữ liệu tài nguyên xe, tài xế, phụ xe & tuyến đường
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [drivers, setDrivers] = useState<BackendUser[]>([])
+  const [conductors, setConductors] = useState<BackendUser[]>([])
   const [routes, setRoutes] = useState<TransitRoute[]>([])
 
-  // Modal Điều Phối Xe & Tài Xế
+  // Modal Điều Phối Xe, Tài Xế & Phụ Xe
   const [dispatchingTrip, setDispatchingTrip] = useState<TripItem | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('')
   const [selectedDriverId, setSelectedDriverId] = useState<string>('')
+  const [selectedConductorId, setSelectedConductorId] = useState<string>('')
   const [isSubmittingDispatch, setIsSubmittingDispatch] = useState(false)
+  const [isNotifyingCrew, setIsNotifyingCrew] = useState<string | null>(null)
 
   // Modal Tạo Chuyến Tăng Cường (Ad-hoc)
   const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false)
@@ -100,13 +114,14 @@ export function DispatcherSchedule() {
     }
   }, [statusFilter, tripTypeFilter, assignmentFilter])
 
-  // Tải tài nguyên phục vụ điều phối (Xe, Tài xế, Tuyến)
+  // Tải tài nguyên phục vụ điều phối (Xe, Tài xế, Phụ xe, Tuyến)
   const loadDispatchResources = useCallback(async () => {
     try {
-      const [vRes, dRes, rRes] = await Promise.all([
+      const [vRes, dRes, rRes, cRes] = await Promise.all([
         vehicleService.getVehicles(),
         userService.getUsers({ role: 'driver', limit: 100 }),
         transitService.getRoutes(),
+        userService.getUsers({ limit: 100 }),
       ])
       if (vRes.success && Array.isArray(vRes.data)) {
         setVehicles(vRes.data.filter((v) => v.status === 'active'))
@@ -116,6 +131,9 @@ export function DispatcherSchedule() {
       }
       if (rRes?.success && Array.isArray(rRes.data)) {
         setRoutes(rRes.data.filter((r) => r.status === 'active'))
+      }
+      if (cRes?.success && cRes.data?.items && Array.isArray(cRes.data.items)) {
+        setConductors(cRes.data.items.filter((u) => u.status === 'active'))
       }
     } catch (err) {
       console.error('Error loading dispatch resources:', err)
@@ -148,9 +166,10 @@ export function DispatcherSchedule() {
     setDispatchingTrip(trip)
     setSelectedVehicleId(trip.vehicleId || trip.vehicle?.id || '')
     setSelectedDriverId(trip.driverId || trip.driver?.id || '')
+    setSelectedConductorId(trip.conductorId || trip.conductor?.id || '')
   }
 
-  // Lưu điều phối xe & tài xế
+  // Lưu điều phối xe, tài xế & phụ xe
   const handleSaveDispatch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!dispatchingTrip) return
@@ -170,9 +189,10 @@ export function DispatcherSchedule() {
         tripId: dispatchingTrip.id,
         vehicleId: selectedVehicleId,
         driverId: selectedDriverId,
+        conductorId: selectedConductorId || undefined,
       })
       if (res.success) {
-        setFeedback(`Đã điều phối thành công xe và tài xế cho chuyến xe!`)
+        setFeedback(`Đã điều phối thành công xe, tài xế và gửi lịch cho tổ xe!`)
         setDispatchingTrip(null)
         await loadTrips()
       } else {
@@ -185,6 +205,110 @@ export function DispatcherSchedule() {
       setTimeout(() => setFeedback(null), 3500)
     }
   }
+
+  // Gửi thông báo lịch trình đến tổ xe của 1 chuyến cụ thể
+  const handleNotifyCrew = async (tripId: string) => {
+    setIsNotifyingCrew(tripId)
+    try {
+      const res = await tripService.notifyCrew(tripId)
+      if (res.success) {
+        setFeedback('Đã gửi thông báo & cập nhật lịch trình thành công đến Tổ xe!')
+      } else {
+        alert(res.message || 'Không thể gửi thông báo cho tổ xe')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi gửi thông báo tổ xe')
+    } finally {
+      setIsNotifyingCrew(null)
+      setTimeout(() => setFeedback(null), 3500)
+    }
+  }
+
+  // Gửi thông báo lịch trình toàn bộ ca làm việc (1-Click Notify All)
+  const handleNotifyAllCrew = async () => {
+    const assignedTripIds = trips
+      .filter((t) => t.vehicleId || t.driverId || t.vehicle || t.driver)
+      .map((t) => t.id)
+    if (assignedTripIds.length === 0) {
+      alert('Không có chuyến xe nào đã được phân công để gửi thông báo!')
+      return
+    }
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn gửi thông báo lịch làm việc đến toàn bộ tổ xe của ${assignedTripIds.length} chuyến đã phân công?`
+      )
+    ) {
+      return
+    }
+    setIsNotifyingCrew('all')
+    try {
+      const res = await tripService.notifyAllCrewForTrips(assignedTripIds)
+      if (res.successCount > 0) {
+        setFeedback(
+          `Đã gửi thông báo thành công cho ${res.successCount}/${assignedTripIds.length} tổ xe ca trực!`
+        )
+      } else {
+        alert(
+          `Không thể gửi thông báo: ${res.errors.join(', ') || 'Vui lòng kiểm tra lại cấu hình thông báo'}`
+        )
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi kết nối khi gửi thông báo toàn ca')
+    } finally {
+      setIsNotifyingCrew(null)
+      setTimeout(() => setFeedback(null), 4000)
+    }
+  }
+
+  // Tính toán xung đột lịch trình tức thời (Real-time conflict pre-check)
+  const dispatchConflict = useMemo(() => {
+    if (!dispatchingTrip) return null
+
+    const depStart = new Date(dispatchingTrip.departureTime).getTime()
+    const depEnd = dispatchingTrip.arrivalTime
+      ? new Date(dispatchingTrip.arrivalTime).getTime()
+      : depStart + 45 * 60 * 1000
+
+    let vehicleConflictTrip: TripItem | null = null
+    let driverConflictTrip: TripItem | null = null
+    let conductorConflictTrip: TripItem | null = null
+
+    for (const t of trips) {
+      if (t.id === dispatchingTrip.id || t.status === 'cancelled') continue
+
+      const tStart = new Date(t.departureTime).getTime()
+      const tEnd = t.arrivalTime ? new Date(t.arrivalTime).getTime() : tStart + 45 * 60 * 1000
+
+      const isOverlap = depStart < tEnd && depEnd > tStart
+      if (!isOverlap) continue
+
+      if (
+        selectedVehicleId &&
+        (t.vehicleId === selectedVehicleId || t.vehicle?.id === selectedVehicleId)
+      ) {
+        vehicleConflictTrip = t
+      }
+      if (
+        selectedDriverId &&
+        (t.driverId === selectedDriverId || t.driver?.id === selectedDriverId)
+      ) {
+        driverConflictTrip = t
+      }
+      if (
+        selectedConductorId &&
+        (t.conductorId === selectedConductorId || t.conductor?.id === selectedConductorId)
+      ) {
+        conductorConflictTrip = t
+      }
+    }
+
+    return {
+      hasConflict: Boolean(vehicleConflictTrip || driverConflictTrip || conductorConflictTrip),
+      vehicleConflictTrip,
+      driverConflictTrip,
+      conductorConflictTrip,
+    }
+  }, [dispatchingTrip, selectedVehicleId, selectedDriverId, selectedConductorId, trips])
 
   // Xử lý tạo Chuyến Tăng Cường (Ad-hoc)
   const handleCreateAdhocTrip = async (e: React.FormEvent) => {
@@ -360,53 +484,120 @@ export function DispatcherSchedule() {
   return (
     <div className="flex flex-col gap-6">
       {/* HEADER CHÍNH */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Lịch Trình Chạy Xe & Điều Phối Tuyến
-            </h1>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              <Zap size={12} className="fill-emerald-500 text-emerald-500" />
-              Rolling Window Active
-            </span>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                Lịch Trình Chạy Xe & Điều Phối Tuyến
+              </h1>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <Zap size={12} className="fill-emerald-500 text-emerald-500" />
+                Rolling Window Active
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Phân loại biểu đồ vận hành giữa các chuyến thực tế, theo dõi lịch Gantt trực quan và kiểm soát phân công tổ xe
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Phân loại biểu đồ vận hành giữa các chuyến thực tế và kiểm soát Cơ chế Lập Lịch Tự Động (Rolling Window Scheduler)
-          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Nút Gửi Lịch Toàn Ca (1-Click Notify All) */}
+            <button
+              onClick={handleNotifyAllCrew}
+              disabled={isNotifyingCrew !== null || loading}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+              title="Gửi thông báo & cập nhật lịch trình làm việc đến toàn bộ tài xế và phụ xe đã phân công"
+            >
+              <Send size={14} className={isNotifyingCrew === 'all' ? 'animate-pulse' : ''} />
+              <span>{isNotifyingCrew === 'all' ? 'Đang gửi thông báo...' : 'Gửi Lịch Toàn Ca (1-Click)'}</span>
+            </button>
+
+            {/* Nút Tạo Chuyến Tăng Cường (Adhoc) */}
+            <button
+              onClick={() => setIsAdhocModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              title="Thêm chuyến phát sinh thực tế / giờ cao điểm"
+            >
+              <Flame size={14} className="shrink-0" />
+              <span>+ Chuyến Tăng Cường</span>
+            </button>
+
+            {/* Nút Sinh Lịch Trình Tự Động (Generate Schedule) */}
+            <button
+              onClick={() => setIsGenerateModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              title="Kích hoạt tự động sinh khung giờ cố định"
+            >
+              <Sparkles size={14} className="shrink-0" />
+              <span>⚙️ Lập Lịch Khung Giờ</span>
+            </button>
+
+            {/* Nút Refresh */}
+            <button
+              onClick={loadTrips}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted/70 transition-colors disabled:opacity-50 cursor-pointer"
+              title="Đồng bộ dữ liệu từ Supabase Cloud DB"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>Đồng bộ DB</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Nút Tạo Chuyến Tăng Cường (Adhoc) */}
-          <button
-            onClick={() => setIsAdhocModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-            title="Thêm chuyến phát sinh thực tế / giờ cao điểm"
-          >
-            <Flame size={14} className="shrink-0" />
-            <span>+ Chuyến Tăng Cường (Thực tế)</span>
-          </button>
+        {/* THANH CHUYỂN ĐỔI CHẾ ĐỘ XEM (VIEW MODE SWITCHER) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 rounded-2xl bg-muted/40 border border-border">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-card text-foreground shadow-sm border border-border'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+              }`}
+            >
+              <LayoutGrid size={14} className={viewMode === 'grid' ? 'text-emerald-600' : ''} />
+              <span>Lưới Thẻ Chuyến</span>
+            </button>
 
-          {/* Nút Sinh Lịch Trình Tự Động (Generate Schedule) */}
-          <button
-            onClick={() => setIsGenerateModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-            title="Kích hoạt tự động sinh khung giờ cố định"
-          >
-            <Sparkles size={14} className="shrink-0" />
-            <span>⚙️ Lập Lịch Khung Giờ</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('gantt')}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'gantt'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+              }`}
+            >
+              <Calendar size={14} />
+              <span>Lịch Gantt (Timeline)</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'gantt' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600'}`}>
+                Trực quan
+              </span>
+            </button>
 
-          {/* Nút Refresh */}
-          <button
-            onClick={loadTrips}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted/70 transition-colors disabled:opacity-50 cursor-pointer"
-            title="Đồng bộ dữ liệu từ Supabase Cloud DB"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Đồng bộ DB</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('roster')}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'roster'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+              }`}
+            >
+              <Users size={14} />
+              <span>Bảng Phân Công (Roster)</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'roster' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600'}`}>
+                Theo Xe / Tài xế
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-2 pr-2">
+            <span>Hiển thị: <strong>{filtered.length}</strong> / {totalCount} chuyến</span>
+          </div>
         </div>
       </div>
 
@@ -734,7 +925,7 @@ export function DispatcherSchedule() {
         </div>
       )}
 
-      {/* DANH SÁCH BIỂU ĐỒ CHUYẾN XE */}
+      {/* NỘI DUNG HIỂN THỊ CHÍNH (GANTT / ROSTER / GRID) */}
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -746,6 +937,23 @@ export function DispatcherSchedule() {
           <p className="font-semibold text-foreground">Không tìm thấy chuyến xe nào phù hợp bộ lọc.</p>
           <p>Thử đổi bộ lọc loại chuyến, trạng thái hoặc bấm &quot;+ Chuyến Tăng Cường&quot; để bổ sung chuyến mới.</p>
         </div>
+      ) : viewMode === 'gantt' ? (
+        <GanttTimelineChart
+          trips={filtered}
+          vehicles={vehicles}
+          drivers={drivers}
+          onOpenDispatch={handleOpenDispatch}
+          onNotifyCrew={handleNotifyCrew}
+          selectedDate={dateFilter}
+        />
+      ) : viewMode === 'roster' ? (
+        <RosterGroupedView
+          trips={filtered}
+          vehicles={vehicles}
+          drivers={drivers}
+          onOpenDispatch={handleOpenDispatch}
+          onNotifyCrew={handleNotifyCrew}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((item) => {
@@ -842,7 +1050,7 @@ export function DispatcherSchedule() {
                     </div>
                   </div>
 
-                  {/* TÀI NGUYÊN ĐÃ GÁN (XE & TÀI XẾ) */}
+                  {/* TÀI NGUYÊN ĐÃ GÁN (XE & TÀI XẾ & PHỤ XE) */}
                   <div className="mt-3 space-y-1.5 text-xs border-t border-border pt-3">
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Xe buýt:</span>
@@ -867,9 +1075,20 @@ export function DispatcherSchedule() {
                     </div>
 
                     <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Phụ xe:</span>
+                      <span className="font-medium text-foreground">
+                        {item.conductor?.fullName || (
+                          <span className="text-[11px] text-muted-foreground">Tự động soát vé</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Ghế khả dụng:</span>
                       <span className="font-mono font-semibold text-emerald-600">
-                        {item.availableSeats !== undefined ? `${item.availableSeats} / 28` : '28 / 28 chỗ'}
+                        {item.availableSeats !== undefined
+                          ? `${item.availableSeats} / ${item.totalSeats || item.vehicle?.seatCapacity || 28}`
+                          : '28 / 28 chỗ'}
                       </span>
                     </div>
 
@@ -884,13 +1103,28 @@ export function DispatcherSchedule() {
 
                 {/* FOOTER ACTIONS */}
                 <div className="mt-5 border-t border-border pt-4 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDispatch(item)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    <Edit2 size={13} /> Điều xe & Phân tài xế
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDispatch(item)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                    >
+                      <Edit2 size={13} /> Điều xe & Phân tài xế
+                    </button>
+
+                    {(item.driverId || item.driver || item.conductorId || item.conductor) && (
+                      <button
+                        type="button"
+                        onClick={() => handleNotifyCrew(item.id)}
+                        disabled={isNotifyingCrew === item.id}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer disabled:opacity-50 ml-1"
+                        title="Gửi thông báo & cập nhật lịch trình cho tổ xe"
+                      >
+                        <Send size={11} className={isNotifyingCrew === item.id ? 'animate-pulse' : ''} />
+                        <span>{isNotifyingCrew === item.id ? 'Đang gửi...' : 'Gửi Lịch'}</span>
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1">
                     {item.status === 'scheduled' && (
@@ -924,15 +1158,15 @@ export function DispatcherSchedule() {
       {/* ========================================================================= */}
       {dispatchingTrip && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-border">
               <div>
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <Bus size={18} className="text-emerald-600" />
-                  Điều Phối Chuyến Xe
+                  Điều Phối & Phân Công Chuyến Xe
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  {dispatchingTrip.route?.name}
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  [{dispatchingTrip.route?.routeCode || 'CT'}] {dispatchingTrip.route?.name}
                 </p>
               </div>
               <button
@@ -943,46 +1177,161 @@ export function DispatcherSchedule() {
               </button>
             </div>
 
+            {/* CẢNH BÁO XUNG ĐỘT TRỰC QUAN (REAL-TIME PRE-CHECK ALERT) */}
+            {dispatchConflict?.hasConflict && (
+              <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-700 dark:text-red-300 space-y-1.5 animate-in fade-in">
+                <div className="flex items-center gap-1.5 font-bold text-red-600 dark:text-red-400">
+                  <ShieldAlert size={16} className="shrink-0" />
+                  <span>CẢNH BÁO XUNG ĐỘT LỊCH TRÌNH VẬN HÀNH:</span>
+                </div>
+                {dispatchConflict.vehicleConflictTrip && (
+                  <p className="text-[11px] leading-relaxed">
+                    • <strong>Trùng lịch xe:</strong> Xe buýt đã được xếp cho chuyến [
+                    {dispatchConflict.vehicleConflictTrip.route?.routeCode || 'CT'}]{' '}
+                    {dispatchConflict.vehicleConflictTrip.route?.name} lúc{' '}
+                    {new Date(dispatchConflict.vehicleConflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    ! Vui lòng chọn xe buýt khác để tránh bị trùng lịch.
+                  </p>
+                )}
+                {dispatchConflict.driverConflictTrip && (
+                  <p className="text-[11px] leading-relaxed">
+                    • <strong>Trùng lịch tài xế:</strong> Tài xế đã có ca chạy trên chuyến [
+                    {dispatchConflict.driverConflictTrip.route?.routeCode || 'CT'}]{' '}
+                    {dispatchConflict.driverConflictTrip.route?.name} lúc{' '}
+                    {new Date(dispatchConflict.driverConflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    !
+                  </p>
+                )}
+                {dispatchConflict.conductorConflictTrip && (
+                  <p className="text-[11px] leading-relaxed">
+                    • <strong>Trùng lịch phụ xe:</strong> Phụ xe đã có ca trực trên chuyến [
+                    {dispatchConflict.conductorConflictTrip.route?.routeCode || 'CT'}]{' '}
+                    {dispatchConflict.conductorConflictTrip.route?.name} lúc{' '}
+                    {new Date(dispatchConflict.conductorConflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    !
+                  </p>
+                )}
+              </div>
+            )}
+
             <form onSubmit={handleSaveDispatch} className="mt-4 flex flex-col gap-4">
+              {/* 1. CHỌN XE BUÝT */}
               <div>
-                <label className="text-xs font-semibold text-foreground">
-                  Chọn Xe Buýt (Đang hoạt động) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground">
+                    Chọn Xe Buýt Phục Vụ <span className="text-red-500">*</span>
+                  </label>
+                  {selectedVehicleId && (
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      Sức chứa:{' '}
+                      {vehicles.find((v) => v.id === selectedVehicleId)?.seatCapacity || 28} chỗ
+                    </span>
+                  )}
+                </div>
                 <select
                   value={selectedVehicleId}
                   onChange={(e) => setSelectedVehicleId(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-emerald-500 focus:outline-none"
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                    dispatchConflict?.vehicleConflictTrip
+                      ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
+                      : 'border-border focus:border-emerald-500'
+                  }`}
                   required
                 >
-                  <option value="">-- Chọn phương tiện --</option>
+                  <option value="">-- Chọn phương tiện xe buýt --</option>
                   {vehicles.map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.licensePlate} ({v.model} - {v.seatCapacity} chỗ - {v.vehicleType})
                     </option>
                   ))}
                 </select>
+                {dispatchConflict?.vehicleConflictTrip && (
+                  <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
+                    ⚠️ Xe đang trùng lịch chạy ở chuyến khác!
+                  </span>
+                )}
               </div>
 
+              {/* 2. CHỌN TÀI XẾ */}
               <div>
-                <label className="text-xs font-semibold text-foreground">
-                  Phân công Tài xế (Đã kiểm tra bằng lái) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground">
+                    Phân công Tài xế Cầm Lái <span className="text-red-500">*</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                    <CheckCircle2 size={12} /> Bằng lái Hạng D/E
+                  </span>
+                </div>
                 <select
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-emerald-500 focus:outline-none"
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                    dispatchConflict?.driverConflictTrip
+                      ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
+                      : 'border-border focus:border-emerald-500'
+                  }`}
                   required
                 >
-                  <option value="">-- Chọn tài xế điều khiển --</option>
+                  <option value="">-- Chọn tài xế đủ điều kiện --</option>
                   {drivers.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.fullName} (SĐT: {d.phoneNumber || 'N/A'})
+                      {d.fullName} (SĐT: {d.phoneNumber || 'Chưa cập nhật'})
                     </option>
                   ))}
                 </select>
+                {dispatchConflict?.driverConflictTrip ? (
+                  <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
+                    ⚠️ Tài xế đang có ca chạy trùng khung giờ này!
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground mt-1 block">
+                    Đã kiểm tra chứng chỉ hành nghề và thời hạn GPLX hợp lệ
+                  </span>
+                )}
               </div>
 
-              <div className="rounded-xl bg-muted/40 p-3 text-xs space-y-1">
+              {/* 3. CHỌN PHỤ XE / SOÁT VÉ */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground">
+                    Phụ xe / Soát vé viên <span className="text-muted-foreground font-normal">(Tùy chọn)</span>
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">Soát vé QR di động</span>
+                </div>
+                <select
+                  value={selectedConductorId}
+                  onChange={(e) => setSelectedConductorId(e.target.value)}
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                    dispatchConflict?.conductorConflictTrip
+                      ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
+                      : 'border-border focus:border-emerald-500'
+                  }`}
+                >
+                  <option value="">-- Tự động soát vé / Không phân công phụ xe --</option>
+                  {conductors.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.fullName} (SĐT: {c.phoneNumber || 'N/A'})
+                    </option>
+                  ))}
+                </select>
+                {dispatchConflict?.conductorConflictTrip && (
+                  <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
+                    ⚠️ Phụ xe đang trùng ca trực ở chuyến khác!
+                  </span>
+                )}
+              </div>
+
+              {/* TÓM TẮT THỜI GIAN VẬN HÀNH */}
+              <div className="rounded-2xl bg-muted/40 border border-border p-3.5 text-xs space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Loại chuyến:</span>
                   <span className="font-bold text-foreground">
@@ -990,31 +1339,47 @@ export function DispatcherSchedule() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Giờ xuất phát:</span>
-                  <span className="font-bold text-foreground">
+                  <span className="text-muted-foreground">Giờ xuất bến:</span>
+                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
                     {new Date(dispatchingTrip.departureTime).toLocaleTimeString('vi-VN')}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Ngày chạy:</span>
-                  <span>{new Date(dispatchingTrip.departureTime).toLocaleDateString('vi-VN')}</span>
+                  <span className="text-muted-foreground">Ngày áp dụng:</span>
+                  <span className="font-medium text-foreground">
+                    {new Date(dispatchingTrip.departureTime).toLocaleDateString('vi-VN')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/50 pt-1.5">
+                  <span className="text-muted-foreground">Tự động thông báo:</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 text-[11px]">
+                    <Send size={11} /> Gửi push app ngay khi xác nhận
+                  </span>
                 </div>
               </div>
 
+              {/* NÚT THAO TÁC */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setDispatchingTrip(null)}
                   className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer"
                 >
-                  Hủy
+                  Hủy bỏ
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingDispatch}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmittingDispatch ? 'Đang lưu...' : 'Xác Nhận Điều Xe'}
+                  {isSubmittingDispatch ? (
+                    'Đang xử lý...'
+                  ) : (
+                    <>
+                      <Send size={13} />
+                      <span>Xác Nhận & Gửi Lịch Tổ Xe</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

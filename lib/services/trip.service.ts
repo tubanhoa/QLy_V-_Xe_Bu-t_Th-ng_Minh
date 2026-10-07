@@ -262,6 +262,63 @@ class TripService {
       }
     }
   }
+
+  /** Gửi thông báo / lịch trình làm việc đến Tài xế và Phụ xe của chuyến xe */
+  async notifyCrew(
+    tripId: string,
+  ): Promise<TripApiResponse<{ tripId: string; notifiedDriverId?: string; notifiedConductorId?: string } | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/${tripId}/notify-crew`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể gửi thông báo cho tổ xe',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /** Gửi thông báo lịch trình làm việc hàng loạt cho các chuyến xe đã được phân công */
+  async notifyAllCrewForTrips(
+    tripIds: string[],
+  ): Promise<{ total: number; successCount: number; failedCount: number; errors: string[] }> {
+    let successCount = 0
+    let failedCount = 0
+    const errors: string[] = []
+
+    for (const tripId of tripIds) {
+      try {
+        const res = await this.notifyCrew(tripId)
+        if (res.success) {
+          successCount++
+        } else {
+          failedCount++
+          if (res.message && !errors.includes(res.message)) {
+            errors.push(res.message)
+          }
+        }
+      } catch (e: any) {
+        failedCount++
+        if (e.message && !errors.includes(e.message)) {
+          errors.push(e.message)
+        }
+      }
+    }
+
+    return { total: tripIds.length, successCount, failedCount, errors }
+  }
 }
 
 export const tripService = new TripService()
