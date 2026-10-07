@@ -68,6 +68,7 @@ export function DispatcherSchedule() {
   const [selectedConductorId, setSelectedConductorId] = useState<string>('')
   const [isSubmittingDispatch, setIsSubmittingDispatch] = useState(false)
   const [isNotifyingCrew, setIsNotifyingCrew] = useState<string | null>(null)
+  const [recentlyDispatchedTripId, setRecentlyDispatchedTripId] = useState<string | null>(null)
 
   // Hệ thống Toast Notification thay thế triệt để alert
   const [toasts, setToasts] = useState<
@@ -199,6 +200,149 @@ export function DispatcherSchedule() {
     setSelectedConductorId(trip.conductorId || trip.conductor?.id || '')
   }
 
+  // Phân loại tài nguyên Sẵn sàng vs Đang bận/Trùng lịch cho chuyến đang chọn
+  const resourceAvailability = useMemo(() => {
+    if (!dispatchingTrip) {
+      return {
+        availableVehicles: [] as Vehicle[],
+        busyVehicles: [] as Array<{ v: Vehicle; reason: string }>,
+        availableDrivers: [] as BackendUser[],
+        busyDrivers: [] as Array<{ d: BackendUser; reason: string }>,
+        availableConductors: [] as BackendUser[],
+        busyConductors: [] as Array<{ c: BackendUser; reason: string }>,
+      }
+    }
+
+    const depStart = new Date(dispatchingTrip.departureTime).getTime()
+    const depEnd = dispatchingTrip.arrivalTime
+      ? new Date(dispatchingTrip.arrivalTime).getTime()
+      : depStart + 45 * 60 * 1000
+
+    // 1. Phân loại xe
+    const availableVehicles: Vehicle[] = []
+    const busyVehicles: Array<{ v: Vehicle; reason: string }> = []
+
+    vehicles.forEach((v) => {
+      if (v.status === 'maintenance') {
+        busyVehicles.push({ v, reason: '🛠️ Đang bảo dưỡng kỹ thuật' })
+        return
+      }
+      const conflictTrip = trips.find(
+        (t) =>
+          t.id !== dispatchingTrip.id &&
+          t.status !== 'cancelled' &&
+          (t.vehicleId === v.id || t.vehicle?.id === v.id) &&
+          (() => {
+            const tStart = new Date(t.departureTime).getTime()
+            const tEnd = t.arrivalTime ? new Date(t.arrivalTime).getTime() : tStart + 45 * 60 * 1000
+            return depStart < tEnd && depEnd > tStart
+          })()
+      )
+      if (conflictTrip) {
+        const timeStr = new Date(conflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        busyVehicles.push({ v, reason: `⚠️ Trùng ca lúc ${timeStr} (${conflictTrip.route?.routeCode || 'Tuyến'})` })
+      } else {
+        availableVehicles.push(v)
+      }
+    })
+
+    // 2. Phân loại tài xế
+    const availableDrivers: BackendUser[] = []
+    const busyDrivers: Array<{ d: BackendUser; reason: string }> = []
+
+    drivers.forEach((d) => {
+      if (d.status === 'locked') {
+        busyDrivers.push({ d, reason: '🔒 Tài khoản đang tạm khóa' })
+        return
+      }
+      const conflictTrip = trips.find(
+        (t) =>
+          t.id !== dispatchingTrip.id &&
+          t.status !== 'cancelled' &&
+          (t.driverId === d.id || t.driver?.id === d.id) &&
+          (() => {
+            const tStart = new Date(t.departureTime).getTime()
+            const tEnd = t.arrivalTime ? new Date(t.arrivalTime).getTime() : tStart + 45 * 60 * 1000
+            return depStart < tEnd && depEnd > tStart
+          })()
+      )
+      if (conflictTrip) {
+        const timeStr = new Date(conflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        busyDrivers.push({ d, reason: `⚠️ Trùng ca lúc ${timeStr}` })
+      } else {
+        availableDrivers.push(d)
+      }
+    })
+
+    // 3. Phân loại phụ xe
+    const availableConductors: BackendUser[] = []
+    const busyConductors: Array<{ c: BackendUser; reason: string }> = []
+
+    conductors.forEach((c) => {
+      if (c.status === 'locked') {
+        busyConductors.push({ c, reason: '🔒 Tài khoản đang tạm khóa' })
+        return
+      }
+      const conflictTrip = trips.find(
+        (t) =>
+          t.id !== dispatchingTrip.id &&
+          t.status !== 'cancelled' &&
+          (t.conductorId === c.id || t.conductor?.id === c.id) &&
+          (() => {
+            const tStart = new Date(t.departureTime).getTime()
+            const tEnd = t.arrivalTime ? new Date(t.arrivalTime).getTime() : tStart + 45 * 60 * 1000
+            return depStart < tEnd && depEnd > tStart
+          })()
+      )
+      if (conflictTrip) {
+        const timeStr = new Date(conflictTrip.departureTime).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        busyConductors.push({ c, reason: `⚠️ Trùng ca lúc ${timeStr}` })
+      } else {
+        availableConductors.push(c)
+      }
+    })
+
+    return {
+      availableVehicles,
+      busyVehicles,
+      availableDrivers,
+      busyDrivers,
+      availableConductors,
+      busyConductors,
+    }
+  }, [dispatchingTrip, vehicles, drivers, conductors, trips])
+
+  // Tính năng Gợi ý Tự Động (Smart Suggest)
+  const handleSmartSuggest = () => {
+    const { availableVehicles, availableDrivers, availableConductors } = resourceAvailability
+    if (availableVehicles.length === 0 && availableDrivers.length === 0) {
+      showToast('Không tìm thấy phương tiện hoặc tài xế nào đang trống lịch trong khung giờ này!', 'warning')
+      return
+    }
+
+    const suggestedVeh = availableVehicles[0]
+    const suggestedDrv = availableDrivers[0]
+    const suggestedCnd = availableConductors[0]
+
+    if (suggestedVeh) setSelectedVehicleId(suggestedVeh.id)
+    if (suggestedDrv) setSelectedDriverId(suggestedDrv.id)
+    if (suggestedCnd) setSelectedConductorId(suggestedCnd.id)
+
+    showToast(
+      `⚡ Đã gợi ý tự động: Xe ${suggestedVeh?.licensePlate || '(chưa có)'} & Tài xế ${suggestedDrv?.fullName || '(chưa có)'}`,
+      'success'
+    )
+  }
+
   // Lưu điều phối xe, tài xế & phụ xe
   const handleSaveDispatch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -222,8 +366,13 @@ export function DispatcherSchedule() {
         conductorId: selectedConductorId || undefined,
       })
       if (res.success) {
+        const savedId = dispatchingTrip.id
         showToast('Đã điều phối thành công xe, tài xế và gửi lịch cho tổ xe!', 'success')
         setDispatchingTrip(null)
+        setRecentlyDispatchedTripId(savedId)
+        setTimeout(() => {
+          setRecentlyDispatchedTripId(null)
+        }, 6000)
         await loadTrips()
       } else {
         showToast(res.message || 'Không thể điều phối chuyến này', 'error')
@@ -672,33 +821,72 @@ export function DispatcherSchedule() {
               <span className="text-[10px] uppercase font-bold text-muted-foreground block">Cửa Sổ Lập Lịch</span>
               <span className="font-mono text-xs font-extrabold text-foreground">3 Ngày Trượt (T+3)</span>
             </div>
-            <div className="rounded-2xl border border-border bg-background/80 px-3 py-2 text-center shadow-xs">
+            <button
+              type="button"
+              onClick={() => setTripTypeFilter(tripTypeFilter === 'regular' ? 'all' : 'regular')}
+              className={`rounded-2xl border px-3 py-2 text-center shadow-xs transition cursor-pointer hover:scale-105 active:scale-95 ${
+                tripTypeFilter === 'regular'
+                  ? 'border-blue-500 bg-blue-500/15 ring-2 ring-blue-500/30'
+                  : 'border-border bg-background/80 hover:border-blue-500/50'
+              }`}
+              title="Nhấp để chỉ xem các chuyến Định Kỳ Tự Động"
+            >
               <span className="text-[10px] uppercase font-bold text-muted-foreground block">Định Kỳ Tự Động</span>
               <span className="font-mono text-xs font-extrabold text-blue-600 dark:text-blue-400">
                 {regularCount} chuyến
               </span>
-            </div>
-            <div className="rounded-2xl border border-border bg-background/80 px-3 py-2 text-center shadow-xs">
+            </button>
+            <button
+              type="button"
+              onClick={() => setTripTypeFilter(tripTypeFilter === 'adhoc' ? 'all' : 'adhoc')}
+              className={`rounded-2xl border px-3 py-2 text-center shadow-xs transition cursor-pointer hover:scale-105 active:scale-95 ${
+                tripTypeFilter === 'adhoc'
+                  ? 'border-amber-500 bg-amber-500/15 ring-2 ring-amber-500/30'
+                  : 'border-border bg-background/80 hover:border-amber-500/50'
+              }`}
+              title="Nhấp để chỉ xem các chuyến Tăng Cường Thực Tế"
+            >
               <span className="text-[10px] uppercase font-bold text-muted-foreground block">Tăng Cường Thực Tế</span>
               <span className="font-mono text-xs font-extrabold text-amber-600 dark:text-amber-400">
                 {adhocCount} chuyến
               </span>
-            </div>
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center shadow-xs">
+            </button>
+            <button
+              type="button"
+              onClick={() => setAssignmentFilter(assignmentFilter === 'unassigned' ? 'all' : 'unassigned')}
+              className={`rounded-2xl border px-3 py-2 text-center shadow-xs transition cursor-pointer hover:scale-105 active:scale-95 ${
+                assignmentFilter === 'unassigned'
+                  ? 'border-amber-500 bg-amber-500/25 ring-2 ring-amber-500/40'
+                  : 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500'
+              }`}
+              title="Nhấp để lọc danh sách chuyến Chưa Gán Xe / Tài Xế"
+            >
               <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-300 block">
                 Cần Điều Phối
               </span>
               <span className="font-mono text-xs font-extrabold text-amber-600 dark:text-amber-400">
                 {unassignedCount} chuyến
               </span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* KPI CARDS VẬN HÀNH */}
+      {/* KPI CARDS VẬN HÀNH (DEEP-LINKING 1-CHẠM) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div
+          onClick={() => {
+            setStatusFilter('all')
+            setTripTypeFilter('all')
+            setAssignmentFilter('all')
+          }}
+          className={`rounded-2xl border p-4 shadow-sm cursor-pointer transition hover:scale-[1.02] active:scale-[0.98] ${
+            statusFilter === 'all' && tripTypeFilter === 'all' && assignmentFilter === 'all'
+              ? 'border-emerald-500 bg-card ring-2 ring-emerald-500/20'
+              : 'border-border bg-card hover:border-emerald-500/50'
+          }`}
+          title="Nhấp để đặt lại tất cả bộ lọc và xem toàn bộ chuyến"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Tổng số chuyến</span>
             <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600">
@@ -706,10 +894,18 @@ export function DispatcherSchedule() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-foreground">{totalCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Biểu đồ đang hiển thị</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Tất cả biểu đồ (Click reset)</p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'scheduled' ? 'all' : 'scheduled')}
+          className={`rounded-2xl border p-4 shadow-sm cursor-pointer transition hover:scale-[1.02] active:scale-[0.98] ${
+            statusFilter === 'scheduled'
+              ? 'border-blue-500 bg-card ring-2 ring-blue-500/20'
+              : 'border-border bg-card hover:border-blue-500/50'
+          }`}
+          title="Nhấp để lọc các chuyến Chờ Xuất Bến"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Chờ xuất bến</span>
             <div className="rounded-lg bg-blue-500/10 p-2 text-blue-600">
@@ -717,10 +913,18 @@ export function DispatcherSchedule() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-blue-600">{scheduledCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Đã lên lịch trình</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Click để xem chuyến chờ</p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
+          className={`rounded-2xl border p-4 shadow-sm cursor-pointer transition hover:scale-[1.02] active:scale-[0.98] ${
+            statusFilter === 'in_progress'
+              ? 'border-emerald-500 bg-card ring-2 ring-emerald-500/20'
+              : 'border-border bg-card hover:border-emerald-500/50'
+          }`}
+          title="Nhấp để lọc các chuyến Đang Lăn Bánh"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Đang lăn bánh</span>
             <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600">
@@ -728,10 +932,18 @@ export function DispatcherSchedule() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-600">{runningCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Trên tuyến đường</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Click để xem chuyến đang chạy</p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+          className={`rounded-2xl border p-4 shadow-sm cursor-pointer transition hover:scale-[1.02] active:scale-[0.98] ${
+            statusFilter === 'completed'
+              ? 'border-gray-500 bg-card ring-2 ring-gray-500/20'
+              : 'border-border bg-card hover:border-gray-500/50'
+          }`}
+          title="Nhấp để lọc các chuyến Đã Hoàn Thành"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Đã về bến</span>
             <div className="rounded-lg bg-gray-500/10 p-2 text-muted-foreground">
@@ -739,7 +951,7 @@ export function DispatcherSchedule() {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-foreground">{completedCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Hoàn thành lộ trình</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Click để xem chuyến hoàn thành</p>
         </div>
       </div>
 
@@ -1001,12 +1213,15 @@ export function DispatcherSchedule() {
             const isRunning = item.status === 'in_progress' || item.status === 'boarding'
             const isAdhoc = item.tripType === 'adhoc' || item.tripType === 'special'
             const isAssigned = Boolean((item.vehicleId || item.vehicle) && (item.driverId || item.driver))
+            const isRecentlyDispatched = item.id === recentlyDispatchedTripId
 
             return (
               <div
                 key={item.id}
                 className={`rounded-3xl border bg-card p-5 shadow-sm flex flex-col justify-between transition-all ${
-                  isAdhoc
+                  isRecentlyDispatched
+                    ? 'border-emerald-500 ring-2 ring-emerald-500 shadow-xl shadow-emerald-500/20 bg-emerald-500/5'
+                    : isAdhoc
                     ? 'border-amber-500/40 hover:border-amber-500/70 hover:shadow-md'
                     : 'border-border hover:border-emerald-500/40'
                 }`}
@@ -1019,7 +1234,14 @@ export function DispatcherSchedule() {
                       {item.route?.routeCode || 'CT-ICTU'}
                     </span>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {/* Badge Vừa cập nhật điều phối */}
+                      {isRecentlyDispatched && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white px-2 py-0.5 text-[10px] font-bold animate-pulse">
+                          <Sparkles size={10} /> Vừa Gán Lịch
+                        </span>
+                      )}
+
                       {/* Badge Nguồn Chuyến: Định kỳ vs Tăng cường */}
                       {isAdhoc ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
@@ -1208,12 +1430,24 @@ export function DispatcherSchedule() {
                   [{dispatchingTrip.route?.routeCode || 'CT'}] {dispatchingTrip.route?.name}
                 </p>
               </div>
-              <button
-                onClick={() => setDispatchingTrip(null)}
-                className="rounded-xl p-1 text-muted-foreground hover:bg-muted cursor-pointer"
-              >
-                <X size={18} />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSmartSuggest}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition cursor-pointer"
+                  title="Tự động chọn xe & tài xế đang trống lịch tốt nhất"
+                >
+                  <Sparkles size={13} className="text-amber-500 fill-amber-500" />
+                  <span>⚡ Gợi Ý Nhanh</span>
+                </button>
+                <button
+                  onClick={() => setDispatchingTrip(null)}
+                  className="rounded-xl p-1 text-muted-foreground hover:bg-muted cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* CẢNH BÁO XUNG ĐỘT TRỰC QUAN (REAL-TIME PRE-CHECK ALERT) */}
@@ -1287,11 +1521,22 @@ export function DispatcherSchedule() {
                   required
                 >
                   <option value="">-- Chọn phương tiện xe buýt --</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.licensePlate} ({v.model} - {v.seatCapacity} chỗ - {v.vehicleType})
-                    </option>
-                  ))}
+                  <optgroup label="✅ Phương tiện sẵn sàng (Khả dụng)">
+                    {resourceAvailability.availableVehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.licensePlate} ({v.model} - {v.seatCapacity} chỗ) - Sẵn sàng
+                      </option>
+                    ))}
+                  </optgroup>
+                  {resourceAvailability.busyVehicles.length > 0 && (
+                    <optgroup label="⚠️ Đang bận / Trùng ca / Bảo dưỡng">
+                      {resourceAvailability.busyVehicles.map((item) => (
+                        <option key={item.v.id} value={item.v.id}>
+                          {item.v.licensePlate} ({item.v.model}) - {item.reason}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 {dispatchConflict?.vehicleConflictTrip && (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
@@ -1321,11 +1566,22 @@ export function DispatcherSchedule() {
                   required
                 >
                   <option value="">-- Chọn tài xế đủ điều kiện --</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.fullName} (SĐT: {d.phoneNumber || 'Chưa cập nhật'})
-                    </option>
-                  ))}
+                  <optgroup label="✅ Tài xế sẵn sàng (Khả dụng)">
+                    {resourceAvailability.availableDrivers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.fullName} (SĐT: {d.phoneNumber || 'N/A'}) - Sẵn sàng
+                      </option>
+                    ))}
+                  </optgroup>
+                  {resourceAvailability.busyDrivers.length > 0 && (
+                    <optgroup label="⚠️ Đang bận / Trùng ca / Khóa">
+                      {resourceAvailability.busyDrivers.map((item) => (
+                        <option key={item.d.id} value={item.d.id}>
+                          {item.d.fullName} - {item.reason}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 {dispatchConflict?.driverConflictTrip ? (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
@@ -1356,11 +1612,22 @@ export function DispatcherSchedule() {
                   }`}
                 >
                   <option value="">-- Tự động soát vé / Không phân công phụ xe --</option>
-                  {conductors.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.fullName} (SĐT: {c.phoneNumber || 'N/A'})
-                    </option>
-                  ))}
+                  <optgroup label="✅ Phụ xe sẵn sàng (Khả dụng)">
+                    {resourceAvailability.availableConductors.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.fullName} (SĐT: {c.phoneNumber || 'N/A'}) - Sẵn sàng
+                      </option>
+                    ))}
+                  </optgroup>
+                  {resourceAvailability.busyConductors.length > 0 && (
+                    <optgroup label="⚠️ Đang bận / Trùng ca">
+                      {resourceAvailability.busyConductors.map((item) => (
+                        <option key={item.c.id} value={item.c.id}>
+                          {item.c.fullName} - {item.reason}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 {dispatchConflict?.conductorConflictTrip && (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
