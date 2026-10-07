@@ -71,6 +71,15 @@ export class TripsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Post(':id/notify-crew')
+  @ApiOperation({ summary: 'Gửi lại thông báo & lịch trình làm việc đến Tài xế và Phụ xe (Manager, Admin)' })
+  async notifyCrew(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.tripsService.notifyCrew(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DRIVER, Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
   @Get('driver/today')

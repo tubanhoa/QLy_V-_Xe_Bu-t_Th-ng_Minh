@@ -6,6 +6,7 @@ import {
   Inject,
   forwardRef,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, Not } from 'typeorm';
@@ -19,9 +20,18 @@ import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto, CreateAdhocTripDto } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
-import { TripStatus, TicketStatus, BookingStatus, ApprovalStatus } from '../../common/constants/status.constant.js';
+import {
+  TripStatus,
+  TicketStatus,
+  BookingStatus,
+  ApprovalStatus,
+  VehicleStatus,
+  UserStatus,
+} from '../../common/constants/status.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
+import { NotificationCenterService } from '../notification/notification-center.service.js';
+import { FcmService } from '../notification/fcm.service.js';
 
 // Map DTO field names to actual DB column names
 const SORT_COLUMN_MAP: Record<string, string> = {
@@ -32,6 +42,8 @@ const SORT_COLUMN_MAP: Record<string, string> = {
 
 @Injectable()
 export class TripsService {
+  private readonly logger = new Logger(TripsService.name);
+
   constructor(
     @InjectRepository(TripEntity)
     private readonly tripRepository: Repository<TripEntity>,
@@ -54,6 +66,10 @@ export class TripsService {
     @Optional()
     @InjectRepository(SeatHoldEntity)
     private readonly seatHoldRepository?: Repository<SeatHoldEntity>,
+    @Optional()
+    private readonly notificationCenterService?: NotificationCenterService,
+    @Optional()
+    private readonly fcmService?: FcmService,
   ) {}
 
   /**
@@ -224,22 +240,26 @@ export class TripsService {
 
   /**
    * Kiểm tra xung đột lịch trình (Double-booking):
-   * Đảm bảo xe hoặc tài xế không bị xếp trùng 2 chuyến chạy đè giờ nhau
+   * Đảm bảo xe, tài xế hoặc phụ xe không bị xếp trùng 2 chuyến chạy đè giờ nhau
    */
   private async checkScheduleConflict(
-    entityType: 'vehicle' | 'driver',
+    entityType: 'vehicle' | 'driver' | 'conductor',
     entityId: string,
     excludeTripId: string | null,
     departureTime: Date,
     arrivalTime: Date,
   ): Promise<TripEntity | null> {
+    let whereClause = 'trip.driverId = :entityId';
+    if (entityType === 'vehicle') {
+      whereClause = 'trip.vehicleId = :entityId';
+    } else if (entityType === 'conductor') {
+      whereClause = 'trip.conductorId = :entityId';
+    }
+
     const qb = this.tripRepository
       .createQueryBuilder('trip')
       .leftJoinAndSelect('trip.route', 'route')
-      .andWhere(
-        entityType === 'vehicle' ? 'trip.vehicleId = :entityId' : 'trip.driverId = :entityId',
-        { entityId },
-      )
+      .andWhere(whereClause, { entityId })
       .andWhere('trip.status NOT IN (:...excludedStatuses)', {
         excludedStatuses: [TripStatus.CANCELLED, TripStatus.COMPLETED],
       })
@@ -302,6 +322,20 @@ export class TripsService {
       }
     }
 
+    if (dto.conductorId) {
+      const conductor = await this.userRepository.findOne({ where: { id: dto.conductorId } });
+      if (!conductor) {
+        throw new NotFoundException('Phụ xe không tồn tại');
+      }
+      const conflict = await this.checkScheduleConflict('conductor', conductor.id, null, departure, arrival);
+      if (conflict) {
+        const timeStr = new Date(conflict.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        throw new ConflictException(
+          `Xung đột lịch trình: Phụ xe ${conductor.fullName || conductor.phoneNumber} đã có ca làm việc trên chuyến "${conflict.route?.name || 'Tuyến khác'}" lúc ${timeStr}. Vui lòng chọn phụ xe khác!`,
+        );
+      }
+    }
+
     const trip = this.tripRepository.create({
       routeId: route.id,
       vehicleId: dto.vehicleId || undefined,
@@ -334,10 +368,18 @@ export class TripsService {
       arrival = new Date(departure.getTime() + durationMs);
     }
 
+    let vehicle: VehicleEntity | null = null;
     if (dto.vehicleId) {
-      const vehicle = await this.vehicleRepository.findOne({ where: { id: dto.vehicleId } });
+      vehicle = await this.vehicleRepository.findOne({ where: { id: dto.vehicleId } });
       if (!vehicle) {
         throw new NotFoundException('Phương tiện không tồn tại');
+      }
+
+      // Kiểm tra trạng thái xe (chỉ cho phép ACTIVE)
+      if (vehicle.status !== VehicleStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Xe buýt ${vehicle.licensePlate} đang trong trạng thái bảo dưỡng/ngừng hoạt động (${vehicle.status}), không thể phân công!`,
+        );
       }
 
       // Ràng buộc 1: Chống làm mất ghế của hành khách (seatCapacity < bookedCount)
@@ -366,12 +408,51 @@ export class TripsService {
       }
 
       trip.vehicleId = vehicle.id;
+    } else if (trip.vehicle) {
+      vehicle = trip.vehicle;
+    } else if (trip.vehicleId) {
+      vehicle = await this.vehicleRepository.findOne({ where: { id: trip.vehicleId } });
     }
 
+    const oldDriverId = trip.driverId;
+    let driver: UserEntity | null = null;
     if (dto.driverId) {
-      const driver = await this.userRepository.findOne({ where: { id: dto.driverId } });
+      driver = await this.userRepository.findOne({
+        where: { id: dto.driverId },
+        relations: { role: true },
+      });
       if (!driver) {
         throw new NotFoundException('Tài xế không tồn tại');
+      }
+
+      // Kiểm tra trạng thái tài xế (phải ACTIVE)
+      if (driver.status !== UserStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Tài xế ${driver.fullName} đang bị khóa hoặc chưa kích hoạt (${driver.status}), không thể phân công!`,
+        );
+      }
+
+      // Kiểm tra vai trò tài xế
+      const allowedRoles = ['driver', 'admin', 'manager'];
+      const roleName = driver.role?.name?.toLowerCase();
+      if (roleName && !allowedRoles.includes(roleName)) {
+        throw new BadRequestException(
+          `Người dùng ${driver.fullName} không có vai trò tài xế (vai trò hiện tại: ${driver.role?.name || 'Không xác định'})!`,
+        );
+      }
+
+      // Kiểm tra bằng lái hợp lệ (Hạng D hoặc Hạng E theo quy chuẩn GTVT)
+      const license = (driver.faculty || '').toUpperCase();
+      const isValid =
+        /\b(D|E|FD|FE)\b/i.test(license) ||
+        license.includes('HẠNG D') ||
+        license.includes('HẠNG E') ||
+        license.includes('BẰNG D') ||
+        license.includes('BẰNG E');
+      if (!isValid && (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' || license.length > 0)) {
+        throw new BadRequestException(
+          `Tài xế ${driver.fullName} không đủ điều kiện giấy phép lái xe (Yêu cầu tối thiểu Bằng Hạng D, hiện có: "${driver.faculty || 'Chưa cập nhật'}")!`,
+        );
       }
 
       // Ràng buộc 3: Chống xung đột lịch trình (Double-booking cho tài xế)
@@ -386,16 +467,272 @@ export class TripsService {
       trip.driverId = driver.id;
     }
 
+    const oldConductorId = trip.conductorId;
+    let conductor: UserEntity | null = null;
     if (dto.conductorId) {
-      const conductor = await this.userRepository.findOne({ where: { id: dto.conductorId } });
+      conductor = await this.userRepository.findOne({
+        where: { id: dto.conductorId },
+        relations: { role: true },
+      });
       if (!conductor) {
         throw new NotFoundException('Phụ xe không tồn tại');
       }
+
+      // Kiểm tra trạng thái phụ xe (phải ACTIVE)
+      if (conductor.status !== UserStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Phụ xe ${conductor.fullName} đang bị khóa hoặc chưa kích hoạt (${conductor.status}), không thể phân công!`,
+        );
+      }
+
+      // Ràng buộc 4: Chống xung đột lịch trình (Double-booking cho phụ xe)
+      const conflict = await this.checkScheduleConflict('conductor', conductor.id, trip.id, departure, arrival);
+      if (conflict) {
+        const timeStr = new Date(conflict.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        throw new ConflictException(
+          `Xung đột lịch trình: Phụ xe ${conductor.fullName} đã có ca làm việc trên chuyến "${conflict.route?.name || 'Tuyến khác'}" lúc ${timeStr}. Vui lòng chọn phụ xe khác!`,
+        );
+      }
+
       trip.conductorId = conductor.id;
     }
 
     await this.tripRepository.save(trip);
-    return this.findById(trip.id);
+    const updatedTrip = await this.findById(trip.id);
+
+    // Tự động gửi thông báo lịch trình làm việc khi dispatch thành công
+    if (this.notificationCenterService) {
+      try {
+        const departureDate = new Date(updatedTrip.departureTime);
+        const departureTimeStr = departureDate.toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
+        const departureDateStr = departureDate.toLocaleDateString('vi-VN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+        const routeCode = updatedTrip.route?.routeCode || '';
+        const routeName = updatedTrip.route?.name || 'Tuyến xe buýt ICTU';
+        const licensePlate = updatedTrip.vehicle?.licensePlate || vehicle?.licensePlate || 'xe buýt';
+
+        // 1. Phân công mới cho tài xế
+        if (dto.driverId && driver) {
+          const title = `🚌 Phân công ca chạy mới: Chuyến ${routeCode} lúc ${departureTimeStr}`;
+          const message = `Bạn đã được phân công ca chạy xe ${licensePlate} trên tuyến ${routeName}. Giờ xuất bến: ${departureTimeStr} ngày ${departureDateStr}.`;
+          await this.notificationCenterService.saveNotification({
+            userId: driver.id,
+            tripId: updatedTrip.id,
+            type: 'TRIP_ASSIGNED',
+            title,
+            message,
+            deepLink: '/portal/driver',
+            data: {
+              tripId: updatedTrip.id,
+              routeCode,
+              licensePlate,
+              departureTime: updatedTrip.departureTime,
+            },
+          });
+          if (this.fcmService) {
+            await this.fcmService.sendPushToUser(driver.id, title, message, {
+              tripId: updatedTrip.id,
+              deepLink: '/portal/driver',
+            });
+          }
+        }
+
+        // 2. Phân công mới cho phụ xe
+        if (dto.conductorId && conductor) {
+          const title = `🚌 Phân công ca chạy mới: Chuyến ${routeCode} lúc ${departureTimeStr}`;
+          const message = `Bạn đã được phân công ca chạy xe ${licensePlate} trên tuyến ${routeName}. Giờ xuất bến: ${departureTimeStr} ngày ${departureDateStr}.`;
+          await this.notificationCenterService.saveNotification({
+            userId: conductor.id,
+            tripId: updatedTrip.id,
+            type: 'TRIP_ASSIGNED',
+            title,
+            message,
+            deepLink: '/portal/driver',
+            data: {
+              tripId: updatedTrip.id,
+              routeCode,
+              licensePlate,
+              departureTime: updatedTrip.departureTime,
+            },
+          });
+          if (this.fcmService) {
+            await this.fcmService.sendPushToUser(conductor.id, title, message, {
+              tripId: updatedTrip.id,
+              deepLink: '/portal/driver',
+            });
+          }
+        }
+
+        // 3. Cơ chế điều chuyển: Nếu đổi tài xế khác so với phân công cũ
+        if (dto.driverId && oldDriverId && oldDriverId !== dto.driverId) {
+          const title = `⚠️ Điều chuyển ca chạy: Chuyến ${routeCode}`;
+          const message = `Ca chạy lúc ${departureTimeStr} ngày ${departureDateStr} của bạn đã được quản lý điều chuyển sang tài xế khác.`;
+          await this.notificationCenterService.saveNotification({
+            userId: oldDriverId,
+            tripId: updatedTrip.id,
+            type: 'TRIP_UNASSIGNED',
+            title,
+            message,
+            deepLink: '/portal/driver',
+            data: { tripId: updatedTrip.id, routeCode },
+          });
+          if (this.fcmService) {
+            await this.fcmService.sendPushToUser(oldDriverId, title, message, {
+              tripId: updatedTrip.id,
+              deepLink: '/portal/driver',
+            });
+          }
+        }
+
+        // 4. Cơ chế điều chuyển: Nếu đổi phụ xe khác so với phân công cũ
+        if (dto.conductorId && oldConductorId && oldConductorId !== dto.conductorId) {
+          const title = `⚠️ Điều chuyển ca chạy: Chuyến ${routeCode}`;
+          const message = `Ca chạy lúc ${departureTimeStr} ngày ${departureDateStr} của bạn đã được quản lý điều chuyển sang phụ xe khác.`;
+          await this.notificationCenterService.saveNotification({
+            userId: oldConductorId,
+            tripId: updatedTrip.id,
+            type: 'TRIP_UNASSIGNED',
+            title,
+            message,
+            deepLink: '/portal/driver',
+            data: { tripId: updatedTrip.id, routeCode },
+          });
+          if (this.fcmService) {
+            await this.fcmService.sendPushToUser(oldConductorId, title, message, {
+              tripId: updatedTrip.id,
+              deepLink: '/portal/driver',
+            });
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Lỗi gửi thông báo phân công chuyến xe: ${err.message}`);
+      }
+    }
+
+    return updatedTrip;
+  }
+
+  /**
+   * Gửi lại thông báo & lịch trình làm việc đến Tài xế và Phụ xe (Manager, Admin)
+   * POST /api/v1/trips/:id/notify-crew
+   */
+  async notifyCrew(tripId: string) {
+    const trip = await this.tripRepository.findOne({
+      where: { id: tripId },
+      relations: { route: true, vehicle: true, driver: true, conductor: true },
+    });
+
+    if (!trip) {
+      throw new NotFoundException(`Không tìm thấy chuyến xe với ID ${tripId}`);
+    }
+
+    if (!trip.driverId && !trip.conductorId) {
+      throw new BadRequestException('Chuyến xe chưa được phân công tài xế hoặc phụ xe để gửi thông báo!');
+    }
+
+    const bookedCount = await this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoin('ticket.booking', 'booking')
+      .where('booking.tripId = :tripId', { tripId: trip.id })
+      .andWhere('ticket.status NOT IN (:...excluded)', {
+        excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+      })
+      .getCount();
+
+    const depDate = new Date(trip.departureTime);
+    const departureTimeStr = depDate.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const departureDateStr = depDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const arrivalTimeStr = trip.arrivalTime
+      ? new Date(trip.arrivalTime).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      : 'Theo lộ trình';
+    const seatCapacity = trip.vehicle?.seatCapacity || 29;
+    const licensePlate = trip.vehicle?.licensePlate || 'Chưa gán xe';
+    const routeName = trip.route?.name || 'Tuyến buýt ICTU';
+    const routeCode = trip.route?.routeCode || '';
+
+    const title = `📋 Lịch trình ca chạy: Chuyến ${routeCode} (${departureTimeStr} - ${departureDateStr})`;
+    const body = `Tuyến: ${routeName} | Xe: ${licensePlate} | Giờ chạy: ${departureTimeStr} - ${arrivalTimeStr} | Sức chứa: ${seatCapacity} chỗ (Đã đặt: ${bookedCount} vé).`;
+
+    if (this.notificationCenterService) {
+      if (trip.driverId) {
+        await this.notificationCenterService.saveNotification({
+          userId: trip.driverId,
+          tripId: trip.id,
+          type: 'TRIP_ASSIGNED',
+          title,
+          message: body,
+          deepLink: '/portal/driver',
+          data: {
+            tripId: trip.id,
+            routeCode,
+            licensePlate,
+            departureTime: trip.departureTime,
+            bookedCount,
+            seatCapacity,
+          },
+        });
+        if (this.fcmService) {
+          await this.fcmService.sendPushToUser(trip.driverId, title, body, {
+            tripId: trip.id,
+            deepLink: '/portal/driver',
+          });
+        }
+      }
+
+      if (trip.conductorId) {
+        await this.notificationCenterService.saveNotification({
+          userId: trip.conductorId,
+          tripId: trip.id,
+          type: 'TRIP_ASSIGNED',
+          title,
+          message: body,
+          deepLink: '/portal/driver',
+          data: {
+            tripId: trip.id,
+            routeCode,
+            licensePlate,
+            departureTime: trip.departureTime,
+            bookedCount,
+            seatCapacity,
+          },
+        });
+        if (this.fcmService) {
+          await this.fcmService.sendPushToUser(trip.conductorId, title, body, {
+            tripId: trip.id,
+            deepLink: '/portal/driver',
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Đã gửi thông báo lịch trình làm việc đến tổ xe thành công',
+      data: {
+        tripId: trip.id,
+        notifiedDriverId: trip.driverId || null,
+        notifiedConductorId: trip.conductorId || null,
+      },
+    };
   }
 
   async findById(id: string) {

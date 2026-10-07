@@ -20,7 +20,9 @@ export type NotificationType =
   | 'PROMOTION'
   | 'SYSTEM'
   | 'BUS_APPROACHING'
-  | 'TICKET_BOOKED';
+  | 'TICKET_BOOKED'
+  | 'TRIP_ASSIGNED'
+  | 'TRIP_UNASSIGNED';
 
 export type NotificationDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED';
 

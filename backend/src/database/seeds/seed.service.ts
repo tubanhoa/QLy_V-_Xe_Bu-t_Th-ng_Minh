@@ -106,6 +106,7 @@ export class SeedService implements OnApplicationBootstrap {
         phoneNumber: '0903456789',
         passwordHash,
         roleId: roleMap.get(Role.DRIVER)!.id,
+        faculty: 'Hạng D (Xe 29-45 chỗ)',
         status: UserStatus.ACTIVE,
       },
       {

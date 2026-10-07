@@ -11,6 +11,7 @@ import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.j
 import { TripsController } from './trips.controller.js';
 import { TripsService } from './trips.service.js';
 import { BookingModule } from '../booking/booking.module.js';
+import { NotificationModule } from '../notification/notification.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { BookingModule } from '../booking/booking.module.js';
       MonthlyPassEntity,
     ]),
     forwardRef(() => BookingModule),
+    NotificationModule,
   ],
   controllers: [TripsController],
   providers: [TripsService],
