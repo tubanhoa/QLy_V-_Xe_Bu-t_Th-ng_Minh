@@ -107,6 +107,17 @@ export class PaymentController {
     return this.paymentService.cancelPayment(bookingId, userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post(['mock-confirm/:bookingId', 'confirm/:bookingId'])
+  @ApiOperation({ summary: 'Mô phỏng xác nhận thanh toán thành công (Demo / Sandbox / Cash)' })
+  async mockConfirmPayment(
+    @Param('bookingId') bookingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.paymentService.mockConfirmPayment(bookingId, userId);
+  }
+
   @UseGuards(JwtAuthGuard, RateLimitGuard)
   @RateLimit({
     limit: 3,
