@@ -134,6 +134,9 @@ export function AdminPayments() {
     }
   }, [])
 
+  // Auto-sync real-time biến động IPN (10 giây)
+  const [autoSync, setAutoSync] = useState(true)
+
   useEffect(() => {
     if (activeTab === 'transactions') {
       loadTickets()
@@ -143,6 +146,21 @@ export function AdminPayments() {
       loadLogs()
     }
   }, [activeTab, loadTickets, loadReconciliation, loadLogs])
+
+  // Lắng nghe và cập nhật định kỳ mỗi 10 giây
+  useEffect(() => {
+    if (!autoSync) return
+    const interval = setInterval(() => {
+      if (activeTab === 'transactions') {
+        loadTickets()
+      } else if (activeTab === 'reconciliation') {
+        loadReconciliation()
+      } else if (activeTab === 'logs') {
+        loadLogs()
+      }
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [autoSync, activeTab, loadTickets, loadReconciliation, loadLogs])
 
   // Thực hiện hoàn vé thật
   const handleRefund = async (ticket: AdminTicketItem) => {
@@ -247,43 +265,62 @@ export function AdminPayments() {
           </p>
         </div>
 
-        {/* Tab Switchers */}
-        <div className="flex items-center gap-1.5 rounded-2xl bg-muted/60 p-1 border border-border">
+        {/* Tab Switchers & IPN Realtime Sync Toggle */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('transactions')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'transactions'
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+            onClick={() => setAutoSync(!autoSync)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+              autoSync
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'bg-muted text-muted-foreground border-border hover:text-foreground'
             }`}
+            title="Tự động đồng bộ biến động doanh thu & giao dịch từ VNPay IPN mỗi 10 giây"
           >
-            Giao Dịch Vé ({total})
+            <span className={`relative flex size-2`}>
+              {autoSync && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full size-2 ${autoSync ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
+            </span>
+            <span>{autoSync ? 'IPN Live Sync: Bật' : 'IPN Live Sync: Tắt'}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('reconciliation')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'reconciliation'
-                ? 'bg-card text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <TrendingUp size={13} />
-            Báo Cáo Đối Soát
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('logs')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'logs'
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <History size={13} />
-            Nhật Ký Hoàn Tiền
-          </button>
+
+          <div className="flex items-center gap-1.5 rounded-2xl bg-muted/60 p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setActiveTab('transactions')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'transactions'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Giao Dịch Vé ({total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('reconciliation')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'reconciliation'
+                  ? 'bg-card text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TrendingUp size={13} />
+              Báo Cáo Đối Soát
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'logs'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <History size={13} />
+              Nhật Ký Hoàn Tiền
+            </button>
+          </div>
         </div>
       </div>
 

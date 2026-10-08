@@ -368,7 +368,7 @@ export class PaymentService {
     };
   }
 
-  async handleVNPayIpn(queryParams: Record<string, string>) {
+  async handleVNPayIpn(queryParams: Record<string, string>, clientIp?: string) {
     const secureHash = queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHashType'];
@@ -381,9 +381,11 @@ export class PaymentService {
     if (secureHash !== checkHash) {
       await this.logPaymentEvent({
         gateway: PaymentMethod.VNPAY,
-        eventType: 'ipn_received',
+        eventType: 'ipn_checksum_error',
         requestData: queryParams,
+        responseData: { RspCode: '97', Message: 'Invalid Checksum' },
         status: 'failed',
+        ipAddress: clientIp,
         errorMessage: 'Invalid VNPay checksum',
       });
       return { RspCode: '97', Message: 'Invalid Checksum' };
@@ -400,21 +402,57 @@ export class PaymentService {
         gateway: PaymentMethod.VNPAY,
         eventType: 'ipn_not_found',
         requestData: queryParams,
+        responseData: { RspCode: '01', Message: 'Order not found' },
         status: 'failed',
+        ipAddress: clientIp,
         errorMessage: 'Order not found',
       });
       return { RspCode: '01', Message: 'Order not found' };
     }
 
     if (payment.status === PaymentStatus.SUCCESS) {
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_duplicate',
+        requestData: queryParams,
+        responseData: { RspCode: '02', Message: 'Order already confirmed' },
+        status: 'success',
+        ipAddress: clientIp,
+      });
       return { RspCode: '02', Message: 'Order already confirmed' };
     }
 
     if (queryParams['vnp_ResponseCode'] === '00') {
       await this.confirmPayment(txnRef, queryParams);
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_success',
+        requestData: queryParams,
+        responseData: { RspCode: '00', Message: 'Confirm Success' },
+        status: 'success',
+        ipAddress: clientIp,
+      });
       return { RspCode: '00', Message: 'Confirm Success' };
     } else {
       await this.failPayment(txnRef, queryParams);
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_failed',
+        requestData: queryParams,
+        responseData: { RspCode: '00', Message: 'Confirm Success' },
+        status: 'failed',
+        ipAddress: clientIp,
+        errorMessage: `VNPay returned response code: ${queryParams['vnp_ResponseCode']}`,
+      });
       return { RspCode: '00', Message: 'Confirm Success' };
     }
   }

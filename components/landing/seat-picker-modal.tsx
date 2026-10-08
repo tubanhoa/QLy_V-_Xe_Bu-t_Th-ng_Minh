@@ -240,6 +240,43 @@ export function SeatPickerModal({
     toggleSeat(seat)
   }, [toggleSeat])
 
+  // Lắng nghe trạng thái thanh toán tự động (Asynchronous IPN Webhook Polling mỗi 3 giây)
+  useEffect(() => {
+    if (step !== 'payment-qr') return
+
+    const primaryTicketId = bookingResult?.tickets?.[0]?.id || bookingResult?.ticketId
+    const bookingId = bookingResult?.id || bookingResult?.bookingId
+
+    if (!primaryTicketId && !bookingId) return
+
+    let isCancelled = false
+    const interval = setInterval(async () => {
+      try {
+        if (primaryTicketId) {
+          const res = await paymentService.getTicketDetail(primaryTicketId)
+          if (res.success && res.data) {
+            const status = (res.data.status || '').toLowerCase()
+            if (status === 'paid' && !isCancelled) {
+              setBookingResult((prev: any) => ({
+                ...prev,
+                status: 'paid',
+                tickets: [res.data],
+              }))
+              setStep('success')
+            }
+          }
+        }
+      } catch {
+        // Tiếp tục lắng nghe chu kỳ tiếp theo
+      }
+    }, 3000)
+
+    return () => {
+      isCancelled = true
+      clearInterval(interval)
+    }
+  }, [step, bookingResult])
+
   const handleClose = async () => {
     if (step === 'payment-qr' && bookingResult?.id) {
       await paymentService.cancelPayment(bookingResult.id).catch(() => {})
@@ -983,6 +1020,15 @@ export function SeatPickerModal({
                 </strong>
                 . Mở ứng dụng ngân hàng hoặc ví điện tử để quét mã.
               </p>
+              <div className="pt-1 flex items-center justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-[11px] font-bold text-blue-700 shadow-2xs">
+                  <span className="relative flex size-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full size-2 bg-blue-600"></span>
+                  </span>
+                  <span>Đang kết nối Webhook IPN Sandbox · Tự động xác nhận sau khi quét</span>
+                </span>
+              </div>
             </div>
 
             {/* Khung mã QR Code chuẩn VietQR & EMVCo */}
