@@ -109,6 +109,7 @@ export function SeatPickerModal({
   const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'zalopay' | 'bank_card' | 'vietqr' | 'ictupay'>('vnpay')
   const [paymentResponse, setPaymentResponse] = useState<PaymentUrlResponseData | null>(null)
   const [isCancellingPayment, setIsCancellingPayment] = useState(false)
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -274,6 +275,31 @@ export function SeatPickerModal({
       setStep('seats')
     } finally {
       setIsCancellingPayment(false)
+    }
+  }
+
+  // Xác nhận thanh toán thành công (chốt chuyển sang PAID trên backend Supabase)
+  const handleConfirmPaymentSuccess = async () => {
+    const validBookingId = bookingResult?.id || (bookingResult as any)?.bookingId || paymentResponse?.bookingId
+    if (!validBookingId) {
+      setStep('success')
+      refreshSeatMap()
+      return
+    }
+
+    setIsConfirmingPayment(true)
+    try {
+      const confirmRes = await paymentService.confirmBookingPayment(validBookingId)
+      if (confirmRes.success) {
+        refreshSeatMap()
+        setStep('success')
+      } else {
+        alert(confirmRes.message || 'Không thể xác nhận thanh toán. Vui lòng kiểm tra lại.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi kết nối xác nhận thanh toán')
+    } finally {
+      setIsConfirmingPayment(false)
     }
   }
 
@@ -1094,6 +1120,39 @@ export function SeatPickerModal({
               )}
             </div>
 
+            {/* Card thông tin thẻ test NCB Sandbox dành cho VNPay */}
+            {(paymentMethod === 'vnpay' || paymentMethod === 'bank_card') && (
+              <div className="w-full max-w-sm rounded-2xl border border-blue-200 bg-blue-50/80 p-3.5 text-left text-xs space-y-2 text-blue-950 shadow-xs shrink-0">
+                <div className="flex items-center justify-between font-black">
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <CreditCard size={15} className="text-blue-700" />
+                    <span>Thông Tin Thẻ Test VNPay Sandbox</span>
+                  </span>
+                  <span className="text-[10px] bg-blue-200 text-blue-900 px-2 py-0.5 rounded-full font-mono font-bold">
+                    NCB TEST
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 font-mono text-[11px] bg-white/80 p-2.5 rounded-xl border border-blue-100">
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Số thẻ test:</span>
+                    <strong className="text-blue-950 font-black">9704198526191432198</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Tên chủ thẻ:</span>
+                    <strong className="text-blue-950 font-black">NGUYEN VAN A</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Ngày phát hành:</span>
+                    <strong className="text-blue-950 font-black">07/15</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Mã OTP:</span>
+                    <strong className="text-blue-950 font-black">123456</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Các nút hành động */}
             <div className="flex flex-col gap-2 w-full max-w-sm pt-1 shrink-0 pb-4 safe-pb-dock">
               {paymentResponse?.paymentUrl && (
@@ -1104,20 +1163,27 @@ export function SeatPickerModal({
                   className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer touch-press touch-manipulation"
                 >
                   <ExternalLink size={15} />
-                  <span>Mở Trang Thanh Toán Cổng {paymentMethod.toUpperCase()}</span>
+                  <span>Mở Cổng Thanh Toán {paymentMethod === 'vnpay' ? 'VNPay Sandbox' : paymentMethod.toUpperCase()}</span>
                 </a>
               )}
 
               <button
                 type="button"
-                onClick={() => {
-                  setStep('success')
-                  refreshSeatMap()
-                }}
-                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
+                disabled={isConfirmingPayment}
+                onClick={handleConfirmPaymentSuccess}
+                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation disabled:opacity-50"
               >
-                <CheckCircle2 size={15} />
-                <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                {isConfirmingPayment ? (
+                  <>
+                    <span className="size-3.5 rounded-full border-2 border-[#005A36] border-t-transparent animate-spin" />
+                    <span>Đang kiểm tra & chốt thanh toán...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={15} />
+                    <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                  </>
+                )}
               </button>
 
               <button
