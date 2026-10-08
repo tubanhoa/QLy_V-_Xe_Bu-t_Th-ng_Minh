@@ -178,6 +178,31 @@ class TripService {
     }
   }
 
+  /** Hủy phân công: Gỡ toàn bộ xe buýt, tài xế và phụ xe khỏi chuyến */
+  async unassignTrip(tripId: string): Promise<TripApiResponse<TripItem | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/${tripId}/unassign`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể hủy phân công chuyến xe này',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
   /** Cập nhật trạng thái chuyến xe (in_progress, completed, delayed, cancelled) */
   async updateStatus(
     tripId: string,
