@@ -11,6 +11,8 @@ const beVietnamPro = Be_Vietnam_Pro({
   subsets: ['latin', 'vietnamese'],
   variable: '--font-be-vietnam-pro',
   display: 'swap',
+  fallback: ['Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
+  adjustFontFallback: true,
 })
 
 export const metadata: Metadata = {
@@ -55,8 +57,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="vi" className={`${beVietnamPro.variable} font-sans`} suppressHydrationWarning>
-      <body className="font-sans antialiased selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:bg-emerald-500/30 dark:selection:text-emerald-200" suppressHydrationWarning>
+    <html lang="vi" className={`${beVietnamPro.variable} ${beVietnamPro.className} font-sans`} suppressHydrationWarning>
+      <body className={`${beVietnamPro.className} font-sans antialiased selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:bg-emerald-500/30 dark:selection:text-emerald-200`} suppressHydrationWarning>
         <AntdRegistry>
           <AuthProvider>
             <ThemedConfigProvider>{children}</ThemedConfigProvider>
