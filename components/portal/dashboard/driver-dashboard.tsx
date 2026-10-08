@@ -12,9 +12,16 @@ import {
   AlertCircle,
   CheckCircle2,
   Calendar,
+  Bell,
+  CheckCheck,
+  ChevronRight,
+  Send,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { driverService, DriverTripItem } from '@/lib/services/driver.service'
+import { notificationService } from '@/lib/services/notification.service'
+import { authService } from '@/lib/services/auth.service'
+import type { NotificationItem } from '@/lib/types/notification'
 
 interface DriverDashboardProps {
   onNavigate: (key: string) => void
@@ -65,7 +72,16 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
   const [manifestCount, setManifestCount] = useState<number>(0)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Tải danh sách ca chạy từ API Backend Supabase
+  // Thông báo phân công & lịch trình ca chạy
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+
+  // Thông tin người dùng đăng nhập hiện tại
+  const currentUser = useMemo(() => authService.getUser(), [])
+  const isConductor = currentUser?.role === 'conductor'
+
+  // Tải danh sách ca chạy từ API Backend
   const loadTrips = useCallback(async () => {
     setIsLoading(true)
     const res = await driverService.getTodayTrips()
@@ -96,9 +112,58 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
     setIsLoading(false)
   }, [])
 
+  // Tải danh sách thông báo điều phối từ Backend
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await notificationService.getNotifications(1, 10, false)
+      if (res && res.success && res.data) {
+        const list = res.data.notifications || []
+        setNotifications(list)
+        setUnreadNotifCount(res.data.unreadCount ?? list.filter((n) => !n.isRead).length)
+      }
+    } catch (e) {
+      console.warn('[DriverDashboard] Không thể tải thông báo:', e)
+    }
+  }, [])
+
   useEffect(() => {
     loadTrips()
-  }, [loadTrips])
+    loadNotifications()
+    const timer = setInterval(loadNotifications, 30000)
+    return () => clearInterval(timer)
+  }, [loadTrips, loadNotifications])
+
+  // Tiếp nhận ca chạy từ thông báo
+  const handleAcceptDispatch = async (notif: NotificationItem) => {
+    try {
+      await notificationService.markAsRead(notif.id)
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+      )
+      setUnreadNotifCount((prev) => Math.max(0, prev - 1))
+      await loadTrips()
+      const targetTripId = notif.data?.tripId || notif.tripId
+      if (targetTripId) {
+        const found = trips.find((t) => t.id === targetTripId)
+        if (found) {
+          setActiveTrip(found)
+        }
+      }
+    } catch (e) {
+      console.warn('[DriverDashboard] Lỗi tiếp nhận ca chạy:', e)
+    }
+  }
+
+  // Đánh dấu tất cả thông báo là đã đọc
+  const handleMarkAllNotifsAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead()
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      setUnreadNotifCount(0)
+    } catch (e) {
+      console.warn('[DriverDashboard] Lỗi đánh dấu đọc toàn bộ:', e)
+    }
+  }
 
   // Trích xuất lộ trình trạm dừng thực tế từ Supabase DB (routeStations) có memoization
   const routeStops: StationItem[] = useMemo(() => {
@@ -167,9 +232,12 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs sm:text-sm text-muted-foreground">Chào buổi sáng, Bác tài</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              {isConductor ? 'Chào ca trực, Phụ xe' : 'Chào buổi sáng, Bác tài'}
+              {currentUser?.fullName ? ` ${currentUser.fullName}` : ''}
+            </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-              Phân Quyền Live
+              {isConductor ? 'Soát Vé & Phụ Xe' : 'Tài Xế Trực Tuyến'}
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
@@ -177,9 +245,26 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* Nút chuông thông báo điều phối */}
           <button
             type="button"
-            onClick={loadTrips}
+            onClick={() => setIsNotifOpen((prev) => !prev)}
+            title="Thông báo lịch trình & phân công ca chạy"
+            className="relative p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+          >
+            <Bell size={15} />
+            {unreadNotifCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white shadow-sm">
+                {unreadNotifCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              loadTrips()
+              loadNotifications()
+            }}
             title="Làm mới dữ liệu từ máy chủ"
             className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
           >
@@ -197,6 +282,181 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
           )}
         </div>
       </div>
+
+      {/* WIDGET: THÔNG BÁO LỊCH TRÌNH & ĐIỀU PHỐI TỔ XE */}
+      {isNotifOpen && (
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Bell size={16} className="text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-sm font-bold text-foreground">
+                Thông Báo Phân Công & Ca Trực
+              </h2>
+              {unreadNotifCount > 0 && (
+                <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">
+                  {unreadNotifCount} chưa đọc
+                </span>
+              )}
+            </div>
+            {unreadNotifCount > 0 && (
+              <button
+                type="button"
+                onClick={handleMarkAllNotifsAsRead}
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer flex items-center gap-1"
+              >
+                <CheckCheck size={12} />
+                Đánh dấu tất cả đã đọc
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 space-y-2 max-h-72 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Chưa có thông báo phân công ca chạy nào.
+              </p>
+            ) : (
+              notifications.map((notif) => {
+                const isDispatch =
+                  notif.type === 'TRIP_DISPATCHED' ||
+                  notif.type === 'TRIP_SCHEDULE_UPDATE' ||
+                  notif.title.toLowerCase().includes('phân công') ||
+                  notif.title.toLowerCase().includes('lịch trình')
+                const isUnassigned = notif.type === 'TRIP_UNASSIGNED'
+
+                return (
+                  <div
+                    key={notif.id}
+                    className={cn(
+                      'rounded-xl border p-3 text-xs transition-colors',
+                      !notif.isRead
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : 'border-border bg-muted/20'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2">
+                        <div
+                          className={cn(
+                            'mt-0.5 rounded-lg p-1.5 shrink-0',
+                            isUnassigned
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                              : isDispatch
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                          )}
+                        >
+                          {isUnassigned ? (
+                            <AlertCircle size={14} />
+                          ) : isDispatch ? (
+                            <Calendar size={14} />
+                          ) : (
+                            <Bell size={14} />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">{notif.title}</p>
+                          <p className="text-muted-foreground mt-0.5 leading-relaxed">{notif.body}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+                            {new Date(notif.createdAt).toLocaleTimeString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              day: '2-digit',
+                              month: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {!notif.isRead && (
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptDispatch(notif)}
+                          className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition cursor-pointer"
+                        >
+                          {isUnassigned ? 'Đã hiểu' : 'Tiếp nhận ca'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* DANH SÁCH CA CHẠY TRONG NGÀY (KHI CÓ NHIỀU HƠN 1 CHUYẾN) */}
+      {!isLoading && trips.length > 1 && (
+        <section className="rounded-2xl border border-border bg-card p-3.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Calendar size={13} className="text-emerald-600 dark:text-emerald-400" />
+              Tất Cả Ca Chạy Hôm Nay ({trips.length} chuyến)
+            </span>
+            <span className="text-[11px] text-muted-foreground">Bấm chọn để chuyển ca</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {trips.map((t) => {
+              const isSelected = activeTrip?.id === t.id
+              const depTime = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+              const isRunning = t.status === 'in_progress' || t.status === 'boarding'
+
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTrip(t)
+                    if (t.id) {
+                      driverService
+                        .getTripManifest(t.id)
+                        .then((mRes) => {
+                          if (mRes.success && mRes.data) {
+                            setManifestCount(mRes.data.totalPassengers || mRes.data.manifest?.length || 0)
+                          }
+                        })
+                        .catch(() => {})
+                    }
+                  }}
+                  className={cn(
+                    'rounded-xl border p-2.5 text-left transition-all cursor-pointer',
+                    isSelected
+                      ? 'border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/30'
+                      : 'border-border bg-background hover:border-border/80 hover:bg-muted/40'
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-mono text-xs font-bold text-foreground">{depTime}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase',
+                        isRunning
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                          : t.status === 'completed'
+                          ? 'bg-gray-500/20 text-gray-600 dark:text-gray-300'
+                          : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                      )}
+                    >
+                      {isRunning ? 'Đang chạy' : t.status === 'completed' ? 'Xong' : 'Sẵn sàng'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-medium text-foreground truncate mt-1">
+                    {t.route?.routeCode || 'Tuyến'} - {t.route?.name || t.route?.destination || 'Lộ trình'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                    Xe: {(t.vehicle as any)?.licensePlate || t.vehicle?.plateNumber || 'Chưa gán'}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Trường hợp chưa có chuyến xe được phân công */}
       {!isLoading && !activeTrip ? (

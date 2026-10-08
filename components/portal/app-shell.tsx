@@ -232,7 +232,7 @@ export function AppShell() {
 
     // Phân hệ Dispatcher (Điều hành viên)
     if (portalRole === 'dispatcher') {
-      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
+      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} onNavigate={handleNavigate} />
       if (activeItem.key === 'gps') return <DispatcherGpsMap />
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
@@ -242,7 +242,7 @@ export function AppShell() {
 
     // Phân hệ Super Admin (Quản trị viên)
     if (portalRole === 'admin') {
-      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} />
+      if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} onNavigate={handleNavigate} />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'gps') return <DispatcherGpsMap />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />

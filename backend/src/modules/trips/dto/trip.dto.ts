@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsEnum,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TripStatus } from '../../../common/constants/status.constant.js';
@@ -41,20 +42,22 @@ export class DispatchTripDto {
   @IsNotEmpty()
   tripId: string;
 
-  @ApiPropertyOptional({ description: 'ID phương tiện xe' })
+  @ApiPropertyOptional({ description: 'ID phương tiện xe (truyền rỗng hoặc null để hủy gán xe)' })
   @IsOptional()
-  @IsString()
-  vehicleId?: string;
+  vehicleId?: string | null;
 
-  @ApiPropertyOptional({ description: 'ID tài xế' })
+  @ApiPropertyOptional({ description: 'ID tài xế (truyền rỗng hoặc null để hủy gán tài xế)' })
   @IsOptional()
-  @IsString()
-  driverId?: string;
+  driverId?: string | null;
 
-  @ApiPropertyOptional({ description: 'ID phụ xe' })
+  @ApiPropertyOptional({ description: 'ID phụ xe (truyền rỗng hoặc null để hủy gán phụ xe)' })
   @IsOptional()
-  @IsString()
-  conductorId?: string;
+  conductorId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Cờ hủy toàn bộ phân công của chuyến xe (Unassign All)' })
+  @IsOptional()
+  @IsBoolean()
+  unassignAll?: boolean;
 }
 
 export class UpdateTripStatusDto {

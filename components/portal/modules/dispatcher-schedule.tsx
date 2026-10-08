@@ -31,6 +31,7 @@ import {
   Bell,
   ShieldAlert,
   FileText,
+  Trash2,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
@@ -383,6 +384,41 @@ export function DispatcherSchedule() {
     } finally {
       setIsSubmittingDispatch(false)
     }
+  }
+
+  // Hủy phân công chuyến xe (gỡ xe, tài xế, phụ xe)
+  const handleUnassignDispatch = () => {
+    if (!dispatchingTrip) return
+
+    const tripCode = dispatchingTrip.route?.routeCode || 'Chuyến'
+    const depTimeStr = new Date(dispatchingTrip.departureTime).toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    setConfirmDialog({
+      title: 'Hủy Phân Công Chuyến Xe',
+      message: `Bạn có chắc chắn muốn hủy phân công chuyến xe [${tripCode}] khởi hành lúc ${depTimeStr}? Hệ thống sẽ gỡ xe buýt, tài xế và phụ xe khỏi chuyến này, đồng thời gửi thông báo gỡ ca đến tổ xe.`,
+      confirmText: 'Xác Nhận Hủy Phân Công',
+      variant: 'danger',
+      onConfirm: async () => {
+        setIsSubmittingDispatch(true)
+        try {
+          const res = await tripService.unassignTrip(dispatchingTrip.id)
+          if (res.success) {
+            showToast('Đã hủy phân công chuyến xe thành công và cập nhật lại điều phối!', 'success')
+            setDispatchingTrip(null)
+            await loadTrips()
+          } else {
+            showToast(res.message || 'Không thể hủy phân công chuyến này', 'error')
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi khi hủy phân công chuyến xe', 'error')
+        } finally {
+          setIsSubmittingDispatch(false)
+        }
+      },
+    })
   }
 
   // Gửi thông báo lịch trình đến tổ xe của 1 chuyến cụ thể
@@ -1669,28 +1705,52 @@ export function DispatcherSchedule() {
               </div>
 
               {/* NÚT THAO TÁC */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setDispatchingTrip(null)}
-                  className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingDispatch}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmittingDispatch ? (
-                    'Đang xử lý...'
-                  ) : (
-                    <>
-                      <Send size={13} />
-                      <span>Xác Nhận & Gửi Lịch Tổ Xe</span>
-                    </>
-                  )}
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
+                {Boolean(
+                  dispatchingTrip.vehicleId ||
+                    dispatchingTrip.vehicle ||
+                    dispatchingTrip.driverId ||
+                    dispatchingTrip.driver ||
+                    dispatchingTrip.conductorId ||
+                    dispatchingTrip.conductor
+                ) ? (
+                  <button
+                    type="button"
+                    onClick={handleUnassignDispatch}
+                    disabled={isSubmittingDispatch}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 cursor-pointer transition"
+                    title="Gỡ toàn bộ xe, tài xế và phụ xe khỏi chuyến này"
+                  >
+                    <Trash2 size={13} />
+                    <span>Hủy Phân Công</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDispatchingTrip(null)}
+                    className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingDispatch}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmittingDispatch ? (
+                      'Đang xử lý...'
+                    ) : (
+                      <>
+                        <Send size={13} />
+                        <span>Xác Nhận & Gửi Lịch Tổ Xe</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

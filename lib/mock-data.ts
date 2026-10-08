@@ -6,11 +6,17 @@ export interface Trip {
   route: string
   plate: string
   driver: string
+  conductor?: string
+  vehicleId?: string
+  driverId?: string
+  conductorId?: string
   departure: string
   occupancy: number
   capacity: number
   status: TripStatus
   delayMinutes?: number
+  isAssigned?: boolean
+  tripType?: string
 }
 
 export interface Kpi {

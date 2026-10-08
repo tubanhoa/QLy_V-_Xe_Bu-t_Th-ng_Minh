@@ -45,7 +45,13 @@ const COPY = {
   },
 }
 
-export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
+export function OpsDashboard({
+  role,
+  onNavigate,
+}: {
+  role: Exclude<Role, 'driver'>
+  onNavigate?: (key: string) => void
+}) {
   const copy = COPY[role]
   const [data, setData] = useState<AdminDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -186,16 +192,26 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
           })
         : '07:15'
 
+      const hasVehicle = Boolean(t.vehicle?.licensePlate || t.vehicleId)
+      const hasDriver = Boolean(t.driver?.fullName || t.driverId)
+      const isAssigned = hasVehicle && hasDriver
+
       return {
         id: t.id || `trip_${idx}`,
         code: t.route?.routeCode ? `${t.route.routeCode}-#${idx + 1}` : `BUS-${idx + 101}`,
         route: t.route ? `${t.route.routeCode} · ${t.route.name}` : 'Tuyến đang cập nhật',
-        plate: t.vehicle?.licensePlate || '20B-012.34',
-        driver: t.driver?.fullName || 'Trần Văn Nam (Tài xế)',
+        plate: t.vehicle?.licensePlate || '',
+        driver: t.driver?.fullName || '',
+        conductor: t.conductor?.fullName || '',
+        vehicleId: t.vehicleId || t.vehicle?.id,
+        driverId: t.driverId || t.driver?.id,
+        conductorId: t.conductorId || t.conductor?.id,
         departure: departureStr,
         occupancy: t.bookedSeatsCount ?? 0,
         capacity: t.vehicle?.seatCapacity || 28,
         status: tripStatus,
+        isAssigned,
+        tripType: (t as any).tripType || 'regular',
       }
     })
   }, [data?.liveTrips])
@@ -264,6 +280,19 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
 
         {/* Security & Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Nút Chuyển nhanh sang Điều phối & Phân công */}
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('schedule')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs"
+              title="Mở Bàn Điều Phối & Lịch Gantt phân công xe, tài xế"
+            >
+              <CalendarDays size={14} />
+              <span>Điều Phối Chuyến Xe</span>
+            </button>
+          )}
+
           {/* Nút Làm Mới Realtime */}
           <button
             type="button"
@@ -419,7 +448,11 @@ export function OpsDashboard({ role }: { role: Exclude<Role, 'driver'> }) {
       {/* DANH SÁCH CHUYẾN XE LIVE & CÁC BẢNG PHỤ TRỢ */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <TripsPanel trips={mappedTrips} />
+          <TripsPanel
+            trips={mappedTrips}
+            onNavigateToSchedule={() => onNavigate?.('schedule')}
+            onOpenDispatch={(trip) => onNavigate?.('schedule')}
+          />
         </div>
         <div className="flex flex-col gap-6">
           <IncidentsCard incidents={data?.activeIncidentsList} />

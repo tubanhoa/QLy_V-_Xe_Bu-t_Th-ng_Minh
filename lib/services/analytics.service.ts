@@ -73,16 +73,27 @@ export interface ActivityLogItem {
 export interface LiveTripItem {
   id: string
   routeId: string
+  vehicleId?: string
+  driverId?: string
+  conductorId?: string
+  tripType?: string
   route?: {
     routeCode: string
     name: string
   }
   vehicle?: {
+    id?: string
     licensePlate: string
     model?: string
     seatCapacity: number
   }
   driver?: {
+    id?: string
+    fullName: string
+    phoneNumber?: string
+  }
+  conductor?: {
+    id?: string
     fullName: string
     phoneNumber?: string
   }

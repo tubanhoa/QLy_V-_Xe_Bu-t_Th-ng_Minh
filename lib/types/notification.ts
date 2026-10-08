@@ -13,6 +13,10 @@ export type NotificationType =
   | 'SYSTEM'
   | 'BUS_APPROACHING'
   | 'TICKET_BOOKED'
+  | 'TRIP_DISPATCHED'
+  | 'TRIP_SCHEDULE_UPDATE'
+  | 'TRIP_UNASSIGNED'
+  | (string & {})
 
 export type NotificationDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED'
 

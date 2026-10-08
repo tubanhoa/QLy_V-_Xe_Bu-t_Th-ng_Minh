@@ -73,6 +73,15 @@ export class TripsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
+  @Post(':id/unassign')
+  @ApiOperation({ summary: 'Hủy phân công: Gỡ bỏ gán xe buýt, tài xế và phụ xe khỏi chuyến (Manager, Admin)' })
+  async unassignTrip(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.tripsService.unassign(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post(':id/notify-crew')
   @ApiOperation({ summary: 'Gửi lại thông báo & lịch trình làm việc đến Tài xế và Phụ xe (Manager, Admin)' })
   async notifyCrew(@Param('id', new ParseUUIDPipe()) id: string) {

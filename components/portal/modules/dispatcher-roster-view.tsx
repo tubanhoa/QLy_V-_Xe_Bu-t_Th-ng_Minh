@@ -55,11 +55,14 @@ export function RosterGroupedView({
     )
     const conflicts: Array<{ tripA: TripItem; tripB: TripItem }> = []
     for (let i = 0; i < sorted.length - 1; i++) {
-      const aDep = new Date(sorted[i].departureTime).getTime()
-      const bDep = new Date(sorted[i + 1].departureTime).getTime()
-      // Giả sử mỗi chuyến kéo dài 30 phút, nếu cách nhau dưới 30 phút => xung đột
-      if (bDep - aDep < 30 * 60 * 1000) {
-        conflicts.push({ tripA: sorted[i], tripB: sorted[i + 1] })
+      const a = sorted[i]
+      const b = sorted[i + 1]
+      const aDep = new Date(a.departureTime).getTime()
+      const aArr = a.arrivalTime ? new Date(a.arrivalTime).getTime() : aDep + 45 * 60 * 1000
+      const bDep = new Date(b.departureTime).getTime()
+
+      if (bDep < aArr) {
+        conflicts.push({ tripA: a, tripB: b })
       }
     }
     return conflicts
