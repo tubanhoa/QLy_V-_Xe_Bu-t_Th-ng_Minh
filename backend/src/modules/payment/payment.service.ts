@@ -809,6 +809,28 @@ export class PaymentService {
     }
   }
 
+  async mockConfirmPayment(bookingId: string, userId?: string) {
+    const payment = await this.paymentRepository.findOne({
+      where: { bookingId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (payment) {
+      await this.confirmPayment(payment.transactionId, {
+        gateway: payment.paymentMethod || 'sandbox_mock',
+        status: 'PAID',
+        confirmedBy: userId || 'system',
+        confirmedAt: new Date().toISOString(),
+        isDemoMock: true,
+      });
+      return { success: true, message: 'Đã xác nhận thanh toán thành công' };
+    }
+
+    await this.bookingRepository.update(bookingId, { status: BookingStatus.PAID });
+    await this.ticketRepository.update({ bookingId }, { status: TicketStatus.PAID });
+    return { success: true, message: 'Đã cập nhật trạng thái vé sang Đã thanh toán (PAID)' };
+  }
+
   async cancelPayment(bookingId: string, userId?: string) {
     const booking = await this.bookingRepository.findOne({
       where: { id: bookingId },
