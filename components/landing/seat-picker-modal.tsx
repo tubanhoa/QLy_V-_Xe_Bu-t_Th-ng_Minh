@@ -326,8 +326,19 @@ export function SeatPickerModal({
 
     setIsConfirmingPayment(true)
     try {
-      const confirmRes = await paymentService.confirmBookingPayment(validBookingId)
+      const confirmRes = await paymentService.mockConfirmPayment(validBookingId)
       if (confirmRes.success) {
+        const confirmedData = confirmRes.data as any
+        const updatedTickets = confirmedData?.tickets || bookingResult?.tickets
+        const updatedBooking = confirmedData?.booking || bookingResult
+
+        setBookingResult((prev: any) => ({
+          ...prev,
+          ...updatedBooking,
+          status: 'paid',
+          tickets: updatedTickets,
+        }))
+
         refreshSeatMap()
         setStep('success')
       } else {
@@ -1181,7 +1192,17 @@ export function SeatPickerModal({
                 <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 font-mono text-[11px] bg-white/80 p-2.5 rounded-xl border border-blue-100">
                   <div>
                     <span className="text-slate-500 text-[10px] block font-sans">Số thẻ test:</span>
-                    <strong className="text-blue-950 font-black">9704198526191432198</strong>
+                    <div className="flex items-center gap-1">
+                      <strong className="text-blue-950 font-black">9704198526191432198</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard('9704198526191432198', 'ncb_card')}
+                        className="p-0.5 rounded hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
+                        title="Sao chép số thẻ test NCB"
+                      >
+                        {copiedField === 'ncb_card' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block font-sans">Tên chủ thẻ:</span>
@@ -1193,7 +1214,17 @@ export function SeatPickerModal({
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block font-sans">Mã OTP:</span>
-                    <strong className="text-blue-950 font-black">123456</strong>
+                    <div className="flex items-center gap-1">
+                      <strong className="text-blue-950 font-black">123456</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard('123456', 'ncb_otp')}
+                        className="p-0.5 rounded hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
+                        title="Sao chép mã OTP"
+                      >
+                        {copiedField === 'ncb_otp' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1209,7 +1240,7 @@ export function SeatPickerModal({
                   className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer touch-press touch-manipulation"
                 >
                   <ExternalLink size={15} />
-                  <span>Mở Cổng Thanh Toán {paymentMethod === 'vnpay' ? 'VNPay Sandbox' : paymentMethod.toUpperCase()}</span>
+                  <span>Mở Cổng Thanh Toán VNPay Sandbox Chính Thức</span>
                 </a>
               )}
 
@@ -1313,6 +1344,7 @@ export function SeatPickerModal({
               >
                 <QRCodeSVG
                   value={
+                    bookingResult?.tickets?.[0]?.qrData ||
                     bookingResult?.tickets?.[0]?.qrCodeData ||
                     `ICTU-PASS:${bookingResult?.tickets?.[0]?.ticketCode || bookingResult?.bookingCode || 'TICKET'}`
                   }

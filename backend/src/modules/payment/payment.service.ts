@@ -855,18 +855,36 @@ export class PaymentService {
 
     if (payment) {
       await this.confirmPayment(payment.transactionId, {
-        gateway: payment.paymentMethod || 'sandbox_mock',
+        gateway: payment.paymentMethod || 'vnpay',
         status: 'PAID',
         confirmedBy: userId || 'system',
         confirmedAt: new Date().toISOString(),
         isDemoMock: true,
       });
-      return { success: true, message: 'Đã xác nhận thanh toán thành công' };
+    } else {
+      await this.bookingRepository.update(bookingId, { status: BookingStatus.PAID });
+      await this.ticketRepository.update({ bookingId }, { status: TicketStatus.PAID });
     }
 
-    await this.bookingRepository.update(bookingId, { status: BookingStatus.PAID });
-    await this.ticketRepository.update({ bookingId }, { status: TicketStatus.PAID });
-    return { success: true, message: 'Đã cập nhật trạng thái vé sang Đã thanh toán (PAID)' };
+    const tickets = await this.ticketRepository.find({
+      where: { bookingId },
+      relations: { seat: true },
+    });
+
+    const booking = await this.bookingRepository.findOne({
+      where: { id: bookingId },
+      relations: { trip: { route: true, vehicle: true }, user: true },
+    });
+
+    return {
+      success: true,
+      message: 'Đã xác nhận thanh toán thành công và kích hoạt vé điện tử có chữ ký HMAC',
+      bookingId,
+      bookingCode: booking?.bookingCode,
+      status: 'paid',
+      tickets,
+      booking,
+    };
   }
 
   async cancelPayment(bookingId: string, userId?: string) {

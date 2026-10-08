@@ -448,6 +448,16 @@ class PaymentService {
   }
 
   /**
+   * Xác nhận thanh toán chốt đơn thực tế (Demo / Sandbox VNPay / Tiền mặt)
+   * Endpoint: POST /api/v1/payment/mock-confirm/:bookingId
+   */
+  async mockConfirmPayment(
+    bookingId: string,
+  ): Promise<UnifiedApiResponse<{ message: string; success?: boolean; tickets?: any[]; booking?: any }>> {
+    return this.confirmBookingPayment(bookingId) as any
+  }
+
+  /**
    * Lấy chi tiết vé điện tử kèm chữ ký HMAC và trạng thái
    * Endpoint: GET /api/v1/booking/tickets/:id
    */
