@@ -236,8 +236,8 @@ export class PaymentService {
     bankCode?: string;
     returnUrl?: string;
   }): string {
-    const tmnCode = process.env.VNPAY_TMN_CODE || 'ICTUBUS01';
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const tmnCode = process.env.VNPAY_TMN_CODE || 'BDCDEH71';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const vnpUrl = process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
     const returnUrl = params.returnUrl || process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payment/result';
 
@@ -342,7 +342,7 @@ export class PaymentService {
     delete queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHashType'];
 
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
     const signData = new URLSearchParams(sorted).toString();
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
@@ -373,7 +373,7 @@ export class PaymentService {
     delete queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHashType'];
 
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
     const signData = new URLSearchParams(sorted).toString();
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');

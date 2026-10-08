@@ -135,8 +135,8 @@ export class GatewayRefundService {
   }): Promise<RefundGatewayResponse> {
     const { ticket, booking, payment, refundAmount, originalAmount, reason, ipAddress } = params;
 
-    const tmnCode = process.env.VNPAY_TMN_CODE || 'ICTUBUS01';
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const tmnCode = process.env.VNPAY_TMN_CODE || 'BDCDEH71';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const vnpEndpoint =
       process.env.VNPAY_REFUND_URL || 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction';
 
