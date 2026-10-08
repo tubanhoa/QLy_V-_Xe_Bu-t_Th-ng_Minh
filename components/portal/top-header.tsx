@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { analyticsService, type IncidentReportItem } from '@/lib/services/analytics.service'
-import { ROLE_META, ROLES, type NavItem, type Role } from '@/lib/rbac'
+import { ROLE_META, type NavItem, type Role } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 
 interface TopHeaderProps {
@@ -77,20 +77,6 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
       ),
-    },
-    { type: 'divider' },
-    {
-      type: 'group',
-      label: 'Chuyển vai trò (Demo)',
-      children: ROLES.map((r) => {
-        const Icon = ROLE_META[r].icon
-        return {
-          key: `role:${r}`,
-          icon: <Icon size={16} strokeWidth={1.75} aria-hidden="true" />,
-          label: ROLE_META[r].label,
-          disabled: r === role,
-        }
-      }),
     },
     { type: 'divider' },
     {
