@@ -999,7 +999,15 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
               ) : (
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-500 pt-2">
                   <span>Mẹo: Quét mã QR từ điện thoại hoặc thẻ vé tháng HSSV</span>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="/mobile/scanner"
+                      target="_blank"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[11px] font-bold text-white transition-all cursor-pointer shadow-xs inline-flex items-center gap-1"
+                    >
+                      <QrCode size={12} />
+                      <span>Camera Live</span>
+                    </a>
                     <button
                       type="button"
                       onClick={() => handleVerifyTicket('TK-01A')}
@@ -1085,7 +1093,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                               : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                           }`}
                         >
-                          {isChecked ? '✓' : '...'}
+                          {isChecked ? '[V]' : '...'}
                         </span>
                       </div>
                     )
