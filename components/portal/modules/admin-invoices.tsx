@@ -69,7 +69,7 @@ export function AdminInvoices() {
   }, [loadRecentTickets])
 
   const generateInvoiceFromTicket = (t: AdminTicketItem) => {
-    const finalAmt = t.price || 10000
+    const finalAmt = Number(t.price ?? t.amount ?? 0)
     const vatRate = 8
     const vatAmount = Math.round((finalAmt * vatRate) / 108)
     const baseAmount = finalAmt - vatAmount
@@ -79,14 +79,17 @@ export function AdminInvoices() {
       lookupCode: `ICTU-${t.id.slice(0, 8).toUpperCase()}`,
       issueDate: t.createdAt || new Date().toISOString(),
       bookingCode: t.ticketCode || t.id.slice(0, 8),
-      buyerName: t.user?.fullName || 'Hành khách Smart Bus',
+      buyerName: t.user?.fullName || t.customerName || 'Hành khách Smart Bus',
       buyerTaxCode: '0100109106 (ĐH CNTT & TT Thái Nguyên)',
       buyerAddress: 'Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên',
       totalAmount: baseAmount,
       vatRate,
       vatAmount,
       finalAmount: finalAmt,
-      paymentMethod: (t.booking as any)?.paymentMethod || 'VNPay / Thẻ vé thông minh',
+      paymentMethod:
+        (t.booking as any)?.payments?.[0]?.paymentMethod?.toUpperCase() ||
+        t.paymentMethod?.toUpperCase() ||
+        'TIỀN MẶT',
       status: 'issued',
     }
     setCurrentInvoice(inv)
@@ -218,20 +221,30 @@ export function AdminInvoices() {
         </form>
 
         {/* Quick Picks */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Vé xuất gần đây:</span>
-          {tickets.slice(0, 4).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => generateInvoiceFromTicket(t)}
-              className="rounded-lg border border-border bg-accent/40 px-2.5 py-1 font-mono text-[11px] text-foreground hover:border-emerald-500"
-            >
-              {t.ticketCode || t.id.slice(0, 8)}
-            </button>
-          ))}
-        </div>
+        {tickets.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Vé xuất gần đây:</span>
+            {tickets.slice(0, 4).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => generateInvoiceFromTicket(t)}
+                className="rounded-lg border border-border bg-accent/40 px-2.5 py-1 font-mono text-[11px] text-foreground hover:border-emerald-500"
+              >
+                {t.ticketCode || t.id.slice(0, 8)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {!currentInvoice && (
+        <div className="rounded-3xl border border-dashed border-border bg-card/50 p-12 text-center text-xs text-muted-foreground space-y-2">
+          <FileText className="size-8 mx-auto text-muted-foreground/60" />
+          <p className="font-semibold text-foreground text-sm">Chưa có hóa đơn nào được chọn</p>
+          <p>Dữ liệu hóa đơn VAT điện tử sẽ hiển thị tự động khi hành khách hoàn tất thanh toán vé xe thật.</p>
+        </div>
+      )}
 
       {/* Invoice Detail Sheet Preview */}
       {currentInvoice && (

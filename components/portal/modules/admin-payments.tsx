@@ -243,7 +243,7 @@ export function AdminPayments() {
             Quản Lý Cổng Thanh Toán & Đối Soát
           </h1>
           <p className="text-sm text-muted-foreground">
-            Đối soát trực tiếp dữ liệu 145 vé thật từ Supabase Cloud qua các cổng VNPay, MoMo, ZaloPay, VietQR và Tiền mặt
+            Đối soát trực tiếp dữ liệu giao dịch vé thời gian thực từ Supabase Cloud qua các cổng VNPay, MoMo, ZaloPay, VietQR và Tiền mặt
           </p>
         </div>
 
@@ -433,7 +433,7 @@ export function AdminPayments() {
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
                         <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-emerald-600" />
-                        Đang nạp 145 vé từ Supabase Cloud...
+                        Đang đồng bộ dữ liệu giao dịch từ Supabase Cloud...
                       </td>
                     </tr>
                   ) : tickets.length === 0 ? (
@@ -588,15 +588,27 @@ export function AdminPayments() {
                   { gateway: 'vietqr', name: 'VietQR Chuyển khoản Napas 24/7', code: 'vietqr' },
                   { gateway: 'cash', name: 'Tiền mặt tại quầy / Tài xế', code: 'cash' },
                 ].map((g) => {
-                  const filteredGate = tickets.filter(
-                    (t) => t.paymentMethod?.toLowerCase() === g.code
+                  const gwSummary = reconciliation?.summaryByGateway?.find(
+                    (item: any) => item.gateway === g.code,
                   )
-                  const successCount = filteredGate.filter((t) => t.status === 'paid').length
-                  const failedCount = filteredGate.filter((t) => t.status === 'cancelled' || t.status === 'reserved').length
-                  const refundCount = filteredGate.filter((t) => t.status === 'refunded').length
-                  const revenue = filteredGate
-                    .filter((t) => t.status === 'paid')
-                    .reduce((sum, t) => sum + t.amount, 0)
+                  const filteredGate = tickets.filter(
+                    (t) => t.paymentMethod?.toLowerCase() === g.code,
+                  )
+                  const totalTxn = gwSummary ? gwSummary.total : filteredGate.length
+                  const successCount = gwSummary
+                    ? gwSummary.successCount
+                    : filteredGate.filter((t) => t.status === 'paid').length
+                  const failedCount = gwSummary
+                    ? gwSummary.failedCount
+                    : filteredGate.filter((t) => t.status === 'cancelled' || t.status === 'reserved').length
+                  const refundCount = gwSummary
+                    ? gwSummary.refundCount
+                    : filteredGate.filter((t) => t.status === 'refunded').length
+                  const revenue = gwSummary
+                    ? gwSummary.revenue
+                    : filteredGate
+                        .filter((t) => t.status === 'paid')
+                        .reduce((sum, t) => sum + t.amount, 0)
 
                   return (
                     <tr key={g.gateway} className="hover:bg-muted/20 transition-colors">
@@ -605,7 +617,7 @@ export function AdminPayments() {
                         <span>{g.name}</span>
                       </td>
                       <td className="p-4 text-xs font-mono font-bold text-foreground">
-                        {filteredGate.length}
+                        {totalTxn}
                       </td>
                       <td className="p-4 text-xs font-mono text-emerald-700 font-bold">{successCount}</td>
                       <td className="p-4 text-xs font-mono text-amber-700">{failedCount}</td>

@@ -35,12 +35,12 @@ export function AutoRefundAlertModal({
   open,
   onClose,
   onBookAnotherTrip,
-  bookingCode = 'BK-ICTU-8168',
-  ticketCode = 'TK-2026-01A',
-  refundAmount = 10000,
-  refundMethod = 'vnpay',
-  refundTransactionId = 'AUTO-RF-88992211',
-  reason = 'Đơn vé đã quá thời gian giữ chỗ 10 phút hoặc chuyến xe gặp sự cố kỹ thuật đột xuất.',
+  bookingCode = '',
+  ticketCode = '',
+  refundAmount = 0,
+  refundMethod = 'N/A',
+  refundTransactionId = '',
+  reason = 'Đơn vé đã quá thời gian giữ chỗ hoặc chuyến xe gặp sự cố kỹ thuật.',
 }: AutoRefundAlertModalProps) {
   const [copied, setCopied] = useState(false)
   const [showDetail, setShowDetail] = useState(false)

@@ -60,10 +60,10 @@ const SEATS_LAYOUT = [
 export function ExchangeTicketModal({
   ticketId,
   ticketCode,
-  currentSeatNumber = '01A',
+  currentSeatNumber = '',
   currentDepartureTime,
-  currentPrice = 10000,
-  routeName = 'ĐH CNTT & TT (ICTU) ↔ Bến Xe Trung Tâm Thái Nguyên',
+  currentPrice = 0,
+  routeName = '',
   onClose,
   onSuccess,
 }: ExchangeTicketModalProps) {

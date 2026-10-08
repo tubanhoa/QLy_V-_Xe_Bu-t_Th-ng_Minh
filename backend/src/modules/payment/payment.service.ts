@@ -1321,11 +1321,33 @@ export class PaymentService {
       0,
     );
 
+    // Tổng hợp đối soát theo từng cổng thanh toán thực tế 100% từ CSDL
+    const allPayments = await this.paymentRepository.find();
+    const GATEWAYS = ['vnpay', 'momo', 'zalopay', 'vietqr', 'cash'];
+    const summaryByGateway = GATEWAYS.map((gw) => {
+      const gwPayments = allPayments.filter((p) => (p.paymentMethod || '').toLowerCase() === gw);
+      const successful = gwPayments.filter((p) => p.status === PaymentStatus.SUCCESS);
+      const refunded = gwPayments.filter((p) => p.status === PaymentStatus.REFUNDED);
+      const pendingOrFailed = gwPayments.filter(
+        (p) => p.status !== PaymentStatus.SUCCESS && p.status !== PaymentStatus.REFUNDED,
+      );
+      const revenue = successful.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      return {
+        gateway: gw,
+        total: gwPayments.length,
+        successCount: successful.length,
+        failedCount: pendingOrFailed.length,
+        refundCount: refunded.length,
+        revenue,
+      };
+    });
+
     return {
       totalLogs: logs.length,
       totalSuccessfulPayments: successfulPayments.length,
       totalRevenue,
       logs,
+      summaryByGateway,
     };
   }
 
