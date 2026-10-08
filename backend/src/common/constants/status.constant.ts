@@ -102,6 +102,23 @@ export enum ApprovalStatus {
 }
 
 /**
+ * Monthly Pass Payment Status
+ */
+export enum MonthlyPassPaymentStatus {
+  UNPAID = 'unpaid',
+  PAID = 'paid',
+  REFUNDED = 'refunded',
+}
+
+/**
+ * Monthly Pass Transaction Type
+ */
+export enum MonthlyPassTransactionType {
+  REGISTER = 'register',
+  RENEW = 'renew',
+}
+
+/**
  * Incident Type
  */
 export enum IncidentType {

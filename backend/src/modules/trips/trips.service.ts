@@ -26,6 +26,7 @@ import {
   TicketStatus,
   BookingStatus,
   ApprovalStatus,
+  MonthlyPassPaymentStatus,
   VehicleStatus,
   UserStatus,
 } from '../../common/constants/status.constant.js';
@@ -1146,6 +1147,13 @@ export class TripsService {
         if (monthlyPass.approvalStatus !== ApprovalStatus.APPROVED) {
           throw new BadRequestException(
             `Thẻ vé tháng ${monthlyPass.passCode} chưa được duyệt (Trạng thái: ${monthlyPass.approvalStatus})`,
+          );
+        }
+
+        // Kiểm tra thanh toán
+        if (monthlyPass.paymentStatus === MonthlyPassPaymentStatus.UNPAID) {
+          throw new BadRequestException(
+            `Thẻ vé tháng ${monthlyPass.passCode} chưa được thanh toán thành công. Không thể soát vé lên xe!`,
           );
         }
 

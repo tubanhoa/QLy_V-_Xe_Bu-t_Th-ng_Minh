@@ -10,6 +10,7 @@ export * from './booking.entity.js';
 export * from './ticket.entity.js';
 export * from './payment.entity.js';
 export * from './monthly-pass.entity.js';
+export * from './monthly-pass-transaction.entity.js';
 export * from './voucher.entity.js';
 export * from './vehicle-tracking.entity.js';
 export * from './trip-incident.entity.js';
@@ -35,6 +36,7 @@ import { BookingEntity } from './booking.entity.js';
 import { TicketEntity } from './ticket.entity.js';
 import { PaymentEntity } from './payment.entity.js';
 import { MonthlyPassEntity } from './monthly-pass.entity.js';
+import { MonthlyPassTransactionEntity } from './monthly-pass-transaction.entity.js';
 import { VoucherEntity } from './voucher.entity.js';
 import { VehicleTrackingEntity } from './vehicle-tracking.entity.js';
 import { TripIncidentEntity } from './trip-incident.entity.js';
@@ -61,6 +63,7 @@ export const ALL_ENTITIES = [
   TicketEntity,
   PaymentEntity,
   MonthlyPassEntity,
+  MonthlyPassTransactionEntity,
   VoucherEntity,
   VehicleTrackingEntity,
   TripIncidentEntity,
