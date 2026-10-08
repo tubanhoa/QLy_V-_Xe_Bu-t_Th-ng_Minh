@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,20 +11,35 @@ const backendDir = path.resolve(rootDir, 'backend');
 const isWin = process.platform === 'win32';
 const npmCmd = isWin ? 'npm.cmd' : 'npm';
 
+// Kích hoạt bảng mã UTF-8 (Code Page 65001) trên Windows console để hiển thị tiếng Việt chuẩn
+if (isWin) {
+  try {
+    execSync('chcp 65001', { stdio: 'ignore' });
+  } catch {}
+}
+
 console.log('\x1b[36m%s\x1b[0m', '==========================================================');
-console.log('\x1b[32m%s\x1b[0m', ' 🚀 SMART BUS TICKETING SYSTEM - ICTU');
-console.log('\x1b[33m%s\x1b[0m', ' ⚡ Khởi động song song 1-Click: Backend + Frontend');
+console.log('\x1b[32m%s\x1b[0m', ' [SYSTEM] SMART BUS TICKETING SYSTEM - ICTU');
+console.log('\x1b[33m%s\x1b[0m', ' [START]  Khoi dong song song Backend + Frontend (Port 3000 & 3001)');
 console.log('\x1b[36m%s\x1b[0m', '==========================================================');
-console.log('\x1b[90m%s\x1b[0m', ' • Frontend: http://localhost:3000');
-console.log('\x1b[90m%s\x1b[0m', ' • Backend:  http://localhost:3001/api/v1');
-console.log('\x1b[90m%s\x1b[0m', ' • Swagger:  http://localhost:3001/api/docs\n');
+console.log('\x1b[90m%s\x1b[0m', ' - Frontend Web:    http://localhost:3000');
+console.log('\x1b[90m%s\x1b[0m', ' - Bang Dieu Hanh:  http://localhost:3000/dashboard');
+console.log('\x1b[90m%s\x1b[0m', ' - Backend API:     http://localhost:3001/api/v1');
+console.log('\x1b[90m%s\x1b[0m', ' - Swagger API:     http://localhost:3001/api/docs\n');
+
+const devEnv = {
+  ...process.env,
+  FORCE_COLOR: '1',
+  LANG: 'en_US.UTF-8',
+  LC_ALL: 'en_US.UTF-8',
+};
 
 // 1. Khởi động Backend (NestJS)
 const backend = spawn(npmCmd, ['run', 'start:dev'], {
   cwd: backendDir,
   stdio: 'pipe',
   shell: true,
-  env: { ...process.env, FORCE_COLOR: '1' }
+  env: devEnv,
 });
 
 backend.stdout.on('data', (data) => {
@@ -50,7 +65,7 @@ const frontend = spawn(npmCmd, ['run', 'dev'], {
   cwd: rootDir,
   stdio: 'pipe',
   shell: true,
-  env: { ...process.env, FORCE_COLOR: '1' }
+  env: devEnv,
 });
 
 frontend.stdout.on('data', (data) => {

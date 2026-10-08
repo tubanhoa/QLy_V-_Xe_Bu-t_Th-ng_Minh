@@ -148,7 +148,7 @@ export class UsersService {
     if (!role) {
       role = this.roleRepository.create({
         name: dto.role,
-        description: `Vai trò ${dto.role}`,
+        description: dto.role === Role.CONDUCTOR ? 'Phụ xe / Soát vé viên' : `Vai trò ${dto.role}`,
       });
       await this.roleRepository.save(role);
     }
