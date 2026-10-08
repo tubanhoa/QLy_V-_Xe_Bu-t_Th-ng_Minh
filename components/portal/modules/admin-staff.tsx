@@ -43,9 +43,10 @@ import {
 } from '@/lib/services/user.service'
 
 const ROLE_PRIORITY: Record<string, number> = {
-  admin: 4,
-  manager: 3,
-  driver: 2,
+  admin: 5,
+  manager: 4,
+  driver: 3,
+  conductor: 2,
   passenger: 1,
 }
 
@@ -67,16 +68,19 @@ export function AdminStaff() {
   const [confirmCleanOpen, setConfirmCleanOpen] = useState(false)
   const [deletingUser, setDeletingUser] = useState<BackendUser | null>(null)
 
-  // 1. Cấp tài khoản tài xế mới
-  const [isCreateDriverOpen, setIsCreateDriverOpen] = useState(false)
-  const [newDriverName, setNewDriverName] = useState('')
-  const [newDriverPhone, setNewDriverPhone] = useState('')
-  const [newDriverIdCard, setNewDriverIdCard] = useState('')
+  // 1. Cấp tài khoản nhân sự tổ xe (Tài xế / Phụ xe)
+  const [isCreateCrewOpen, setIsCreateCrewOpen] = useState(false)
+  const [crewRole, setCrewRole] = useState<'driver' | 'conductor'>('driver')
+  const [newCrewName, setNewCrewName] = useState('')
+  const [newCrewPhone, setNewCrewPhone] = useState('')
+  const [newCrewIdCard, setNewCrewIdCard] = useState('')
+  const [newCrewBirthYear, setNewCrewBirthYear] = useState('')
   const [newDriverLicense, setNewDriverLicense] = useState('Hạng D (Xe buýt 29-45 chỗ)')
-  const [newDriverEmail, setNewDriverEmail] = useState('')
-  const [newDriverPassword, setNewDriverPassword] = useState('Driver@123')
+  const [newConductorDuty, setNewConductorDuty] = useState('Soát vé & Hỗ trợ hành khách (Tuyến CT-01)')
+  const [newCrewEmail, setNewCrewEmail] = useState('')
+  const [newCrewPassword, setNewCrewPassword] = useState('Driver@123')
   const [showPassword, setShowPassword] = useState(false)
-  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false)
+  const [isSubmittingCrew, setIsSubmittingCrew] = useState(false)
 
   // 2. Theo dõi hồ sơ & hoạt động tài xế
   const [viewingDriver, setViewingDriver] = useState<BackendUser | null>(null)
@@ -198,8 +202,8 @@ export function AdminStaff() {
     }
   }
 
-  const handleDriverNameChange = (name: string) => {
-    setNewDriverName(name)
+  const handleCrewNameChange = (name: string, role = crewRole) => {
+    setNewCrewName(name)
     if (!name.trim()) return
     const parts = name.trim().toLowerCase().split(/\s+/)
     const lastName = parts[parts.length - 1]
@@ -208,47 +212,63 @@ export function AdminStaff() {
       .replace(/đ/g, 'd')
       .replace(/[^a-z0-9]/g, '')
     if (lastName) {
-      setNewDriverEmail(`driver.${lastName}@smartbus.ictu.vn`)
+      const prefix = role === 'conductor' ? 'conductor' : 'driver'
+      setNewCrewEmail(`${prefix}.${lastName}@smartbus.ictu.vn`)
     }
   }
 
-  const handleCreateDriver = async (e: React.FormEvent) => {
+  const handleRoleTabChange = (role: 'driver' | 'conductor') => {
+    setCrewRole(role)
+    setNewCrewPassword(role === 'conductor' ? 'Staff@123' : 'Driver@123')
+    if (newCrewName.trim()) {
+      handleCrewNameChange(newCrewName, role)
+    } else {
+      setNewCrewEmail('')
+    }
+  }
+
+  const handleCreateCrew = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newDriverName.trim() || !newDriverEmail.trim()) {
-      setErrorFeedback('Vui lòng nhập họ tên và email nội bộ cho tài xế.')
+    if (!newCrewName.trim() || !newCrewEmail.trim()) {
+      setErrorFeedback(`Vui lòng nhập họ tên và email nội bộ cho ${crewRole === 'conductor' ? 'phụ xe' : 'tài xế'}.`)
       return
     }
 
-    setIsSubmittingDriver(true)
+    setIsSubmittingCrew(true)
     try {
       const res = await userService.createUser({
-        fullName: newDriverName.trim(),
-        email: newDriverEmail.trim().toLowerCase(),
-        password: newDriverPassword.trim() || 'Driver@123',
-        role: 'driver',
-        phoneNumber: newDriverPhone.trim() || undefined,
-        idCardNumber: newDriverIdCard.trim() || undefined,
-        faculty: newDriverLicense,
+        fullName: newCrewName.trim(),
+        email: newCrewEmail.trim().toLowerCase(),
+        password: newCrewPassword.trim() || (crewRole === 'conductor' ? 'Staff@123' : 'Driver@123'),
+        role: crewRole,
+        phoneNumber: newCrewPhone.trim() || undefined,
+        idCardNumber: newCrewIdCard.trim() || undefined,
+        faculty:
+          crewRole === 'conductor'
+            ? `${newConductorDuty.trim()}${newCrewBirthYear ? ` (Năm sinh: ${newCrewBirthYear.trim()})` : ''}`
+            : newDriverLicense,
       })
 
       if (res.success) {
+        const roleLabel = crewRole === 'conductor' ? 'Phụ xe / Soát vé' : 'Tài xế'
         setFeedback(
-          `Cấp tài khoản tài xế [${newDriverEmail}] thành công! Mật khẩu khởi tạo: ${newDriverPassword}`,
+          `Cấp tài khoản ${roleLabel} [${newCrewEmail}] thành công! Mật khẩu khởi tạo: ${newCrewPassword}`,
         )
-        setIsCreateDriverOpen(false)
-        setNewDriverName('')
-        setNewDriverEmail('')
-        setNewDriverPhone('')
-        setNewDriverIdCard('')
-        setNewDriverPassword('Driver@123')
+        setIsCreateCrewOpen(false)
+        setNewCrewName('')
+        setNewCrewEmail('')
+        setNewCrewPhone('')
+        setNewCrewIdCard('')
+        setNewCrewBirthYear('')
+        setNewCrewPassword(crewRole === 'conductor' ? 'Staff@123' : 'Driver@123')
         await fetchUsers()
       } else {
-        setErrorFeedback(res.message || 'Không thể cấp tài khoản tài xế.')
+        setErrorFeedback(res.message || `Không thể cấp tài khoản ${crewRole === 'conductor' ? 'phụ xe' : 'tài xế'}.`)
       }
     } catch (err: any) {
-      setErrorFeedback(err?.message || 'Lỗi hệ thống khi tạo tài khoản tài xế.')
+      setErrorFeedback(err?.message || 'Lỗi hệ thống khi tạo tài khoản nhân sự.')
     } finally {
-      setIsSubmittingDriver(false)
+      setIsSubmittingCrew(false)
       setTimeout(() => {
         setFeedback(null)
         setErrorFeedback(null)
@@ -352,8 +372,15 @@ export function AdminStaff() {
     () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'driver').length,
     [users],
   )
+  const conductorCount = useMemo(
+    () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'conductor').length,
+    [users],
+  )
   const passengerCount = useMemo(
-    () => users.filter((u) => (u.role?.name || 'passenger').toLowerCase() === 'passenger').length,
+    () => users.filter((u) => {
+      const r = (u.role?.name || 'passenger').toLowerCase()
+      return r === 'passenger' || (!['admin', 'manager', 'driver', 'conductor'].includes(r))
+    }).length,
     [users],
   )
 
@@ -387,20 +414,20 @@ export function AdminStaff() {
             Nhân Sự & Phân Quyền Hệ Thống (RBAC)
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Dữ liệu tài khoản thực tế từ PostgreSQL: Quản trị viên, Điều hành viên, Tài xế và Sinh viên ICTU.
+            Dữ liệu tài khoản thực tế từ PostgreSQL: Quản trị viên, Điều hành viên, Tài xế, Phụ xe và Sinh viên ICTU.
           </p>
         </div>
 
         {/* Nút tác vụ */}
         <div className="flex items-center gap-2">
-          {/* Nút Cấp tài khoản Tài xế */}
+          {/* Nút Cấp tài khoản Nhân sự Tổ xe (Tài xế / Phụ xe) */}
           <button
             type="button"
-            onClick={() => setIsCreateDriverOpen(true)}
+            onClick={() => setIsCreateCrewOpen(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all cursor-pointer hover:shadow-emerald-600/20 hover:shadow-md active:scale-95"
           >
             <UserPlus size={14} />
-            <span>+ Cấp tài khoản Tài xế</span>
+            <span>+ Cấp Nhân Sự Tổ Xe</span>
           </button>
 
           {/* Nút Dọn dẹp dữ liệu kiểm thử */}
@@ -476,6 +503,7 @@ export function AdminStaff() {
               { key: 'admin', label: `Super Admin (${adminCount})` },
               { key: 'manager', label: `Điều hành (${managerCount})` },
               { key: 'driver', label: `Tài xế (${driverCount})` },
+              { key: 'conductor', label: `Phụ xe (${conductorCount})` },
               { key: 'passenger', label: `Hành khách / HSSV (${passengerCount})` },
             ].map((tab) => (
               <button
@@ -732,6 +760,8 @@ export function AdminStaff() {
                               ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40'
                               : roleName === 'driver'
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40'
+                              : roleName === 'conductor'
+                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800/40'
                               : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                           }`}
                         >
@@ -741,6 +771,8 @@ export function AdminStaff() {
                             ? 'Điều hành viên'
                             : roleName === 'driver'
                             ? 'Tài xế'
+                            : roleName === 'conductor'
+                            ? 'Phụ xe / Soát vé'
                             : 'Hành khách / HSSV'}
                         </span>
                       </td>
@@ -764,6 +796,7 @@ export function AdminStaff() {
                             <option value="admin">Super Admin</option>
                             <option value="manager">Điều hành</option>
                             <option value="driver">Tài xế</option>
+                            <option value="conductor">Phụ xe / Soát vé</option>
                             <option value="passenger">Hành khách / HSSV</option>
                           </select>
 
@@ -875,46 +908,84 @@ export function AdminStaff() {
         </div>
       )}
 
-      {/* MODAL 1: CẤP TÀI KHOẢN TÀI XẾ NỘI BỘ */}
-      {isCreateDriverOpen && (
+      {/* MODAL 1: CẤP TÀI KHOẢN NHÂN SỰ TỔ XE (TÀI XẾ / PHỤ XE) */}
+      {isCreateCrewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in overflow-y-auto">
           <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl my-8">
             <div className="flex items-start justify-between gap-3 mb-5">
               <div className="flex items-center gap-3">
-                <div className="size-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Bus size={22} />
+                <div
+                  className={`size-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    crewRole === 'conductor'
+                      ? 'bg-teal-100 dark:bg-teal-950/60 text-teal-600'
+                      : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600'
+                  }`}
+                >
+                  {crewRole === 'conductor' ? <UserCheck size={22} /> : <Bus size={22} />}
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Cấp Tài Khoản Tài Xế Nội Bộ
+                    Cấp Tài Khoản Nhân Sự Tổ Xe
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Khởi tạo tài khoản lái xe buýt ICTU Transit và lưu trữ CSDL Supabase
+                    Khởi tạo hồ sơ ứng tuyển Tài xế hoặc Phụ xe & lưu trữ CSDL Supabase
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsCreateDriverOpen(false)}
+                onClick={() => setIsCreateCrewOpen(false)}
                 className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateDriver} className="space-y-4">
+            {/* Segmented Control: Chọn vị trí ứng tuyển */}
+            <div className="mb-5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleRoleTabChange('driver')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  crewRole === 'driver'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Bus size={14} />
+                <span>Tài xế Cầm lái</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRoleTabChange('conductor')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  crewRole === 'conductor'
+                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <UserCheck size={14} />
+                <span>Phụ xe / Soát vé</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCrew} className="space-y-4">
               {/* Họ và tên */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Họ và tên tài xế <span className="text-rose-500">*</span>
+                  Họ và tên {crewRole === 'conductor' ? 'phụ xe' : 'tài xế'} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Nguyễn Văn Tuấn"
-                  value={newDriverName}
-                  onChange={(e) => handleDriverNameChange(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder={crewRole === 'conductor' ? 'Ví dụ: Lê Thị Mai' : 'Ví dụ: Nguyễn Văn Tuấn'}
+                  value={newCrewName}
+                  onChange={(e) => handleCrewNameChange(e.target.value)}
+                  className={`w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 ${
+                    crewRole === 'conductor'
+                      ? 'focus:border-teal-500 focus:ring-teal-500'
+                      : 'focus:border-emerald-500 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 
@@ -922,14 +993,14 @@ export function AdminStaff() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Số điện thoại
+                    Số điện thoại liên hệ
                   </label>
                   <input
                     type="tel"
                     placeholder="0912 345 678"
-                    value={newDriverPhone}
-                    onChange={(e) => setNewDriverPhone(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+                    value={newCrewPhone}
+                    onChange={(e) => setNewCrewPhone(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
                   />
                 </div>
                 <div>
@@ -939,29 +1010,71 @@ export function AdminStaff() {
                   <input
                     type="text"
                     placeholder="019203001234"
-                    value={newDriverIdCard}
-                    onChange={(e) => setNewDriverIdCard(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+                    value={newCrewIdCard}
+                    onChange={(e) => setNewCrewIdCard(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
                   />
                 </div>
               </div>
 
-              {/* Hạng giấy phép lái xe */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Hạng giấy phép lái xe
-                </label>
-                <select
-                  value={newDriverLicense}
-                  onChange={(e) => setNewDriverLicense(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="Hạng D (Xe buýt 29-45 chỗ)">Hạng D (Xe buýt 29-45 chỗ)</option>
-                  <option value="Hạng E (Xe buýt trên 45 chỗ / nối toa)">Hạng E (Xe buýt trên 45 chỗ / nối toa)</option>
-                  <option value="Hạng C (Xe tải / trung chuyển)">Hạng C (Xe tải / trung chuyển)</option>
-                  <option value="Hạng B2 (Xe điều hành nội bộ)">Hạng B2 (Xe điều hành nội bộ)</option>
-                </select>
-              </div>
+              {/* Ràng buộc riêng theo vị trí */}
+              {crewRole === 'driver' ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Hạng giấy phép lái xe (GPLX) <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newDriverLicense}
+                    onChange={(e) => setNewDriverLicense(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Hạng D (Xe buýt 29-45 chỗ)">Hạng D (Xe buýt 29-45 chỗ)</option>
+                    <option value="Hạng E (Xe buýt trên 45 chỗ / nối toa)">Hạng E (Xe buýt trên 45 chỗ / nối toa)</option>
+                    <option value="Hạng C (Xe tải / trung chuyển)">Hạng C (Xe tải / trung chuyển)</option>
+                    <option value="Hạng B2 (Xe điều hành nội bộ)">Hạng B2 (Xe điều hành nội bộ)</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Bắt buộc có bằng D/E hợp lệ để hệ thống cho phép phân công điều phối xe buýt.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Năm sinh ứng viên
+                      </label>
+                      <input
+                        type="number"
+                        min="1950"
+                        max="2010"
+                        placeholder="Ví dụ: 1998"
+                        value={newCrewBirthYear}
+                        onChange={(e) => setNewCrewBirthYear(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Tuyến / Vị trí dự kiến
+                      </label>
+                      <select
+                        value={newConductorDuty}
+                        onChange={(e) => setNewConductorDuty(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:border-teal-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-01)">Tuyến CT-01 (ĐH CNTT - Trung Tâm)</option>
+                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-02)">Tuyến CT-02 (Tuyến Cố Định - Bến Xe)</option>
+                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-03)">Tuyến CT-03 (Nội thành Thái Nguyên)</option>
+                        <option value="Đội hỗ trợ soát vé lưu động">Đội hỗ trợ soát vé lưu động</option>
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-teal-600 dark:text-teal-400">
+                    Phụ xe không bắt buộc GPLX Hạng D/E. Hồ sơ sẽ xuất hiện trực tiếp trong danh sách chọn Phụ xe của bảng Điều phối.
+                  </p>
+                </div>
+              )}
 
               {/* Email nội bộ */}
               <div>
@@ -969,21 +1082,23 @@ export function AdminStaff() {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     Email nội bộ đăng nhập <span className="text-rose-500">*</span>
                   </label>
-                  <span className="text-[10px] text-emerald-600 font-semibold">Tự động gợi ý</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">Tự động gợi ý theo họ tên</span>
                 </div>
                 <div className="relative">
                   <input
                     type="email"
                     required
-                    placeholder="driver.tuan@smartbus.ictu.vn"
-                    value={newDriverEmail}
-                    onChange={(e) => setNewDriverEmail(e.target.value)}
+                    placeholder={crewRole === 'conductor' ? 'conductor.mai@smartbus.ictu.vn' : 'driver.tuan@smartbus.ictu.vn'}
+                    value={newCrewEmail}
+                    onChange={(e) => setNewCrewEmail(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
                   />
                   <Mail size={14} className="absolute right-3.5 top-3 text-slate-400" />
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Tài xế sẽ dùng email này đăng nhập vào Dashboard Buồng lái & Máy quét vé.
+                  {crewRole === 'conductor'
+                    ? 'Nhân viên phụ xe sẽ dùng email này để nhận thông báo phân công và kiểm tra ca trực.'
+                    : 'Tài xế sẽ dùng email này đăng nhập vào Dashboard Buồng lái & Máy quét vé.'}
                 </p>
               </div>
 
@@ -996,9 +1111,9 @@ export function AdminStaff() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    value={newDriverPassword}
-                    onChange={(e) => setNewDriverPassword(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none"
+                    value={newCrewPassword}
+                    onChange={(e) => setNewCrewPassword(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
                   />
                   <button
                     type="button"
@@ -1009,7 +1124,7 @@ export function AdminStaff() {
                   </button>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Mặc định: <code className="font-bold text-emerald-600">Driver@123</code> (Có thể đổi sau khi đăng nhập).
+                  Mặc định: <code className="font-bold text-emerald-600">{crewRole === 'conductor' ? 'Staff@123' : 'Driver@123'}</code> (Người dùng có thể đổi sau khi đăng nhập).
                 </p>
               </div>
 
@@ -1017,17 +1132,21 @@ export function AdminStaff() {
               <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsCreateDriverOpen(false)}
+                  onClick={() => setIsCreateCrewOpen(false)}
                   className="px-4 py-2.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingDriver}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                  disabled={isSubmittingCrew}
+                  className={`inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50 ${
+                    crewRole === 'conductor'
+                      ? 'bg-teal-600 hover:bg-teal-500 shadow-teal-600/20'
+                      : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+                  }`}
                 >
-                  {isSubmittingDriver ? (
+                  {isSubmittingCrew ? (
                     <>
                       <RefreshCw size={14} className="animate-spin" />
                       <span>Đang tạo tài khoản...</span>

@@ -24,7 +24,7 @@ export interface BackendUser {
   updatedAt: string
   role?: {
     id: string
-    name: 'admin' | 'manager' | 'driver' | 'passenger' | string
+    name: 'admin' | 'manager' | 'driver' | 'conductor' | 'passenger' | string
     description?: string
   }
   isTestAccount?: boolean
@@ -193,7 +193,7 @@ class UserService {
     fullName: string
     email: string
     password?: string
-    role: 'admin' | 'manager' | 'driver' | 'passenger' | string
+    role: 'admin' | 'manager' | 'driver' | 'conductor' | 'passenger' | string
     phoneNumber?: string
     idCardNumber?: string
     faculty?: string

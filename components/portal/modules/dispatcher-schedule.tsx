@@ -166,7 +166,9 @@ export function DispatcherSchedule() {
         setRoutes(rRes.data.filter((r) => r.status === 'active'))
       }
       if (cRes?.success && cRes.data?.items && Array.isArray(cRes.data.items)) {
-        setConductors(cRes.data.items.filter((u) => u.status === 'active'))
+        const activeUsers = cRes.data.items.filter((u) => u.status === 'active')
+        const dedicatedConductors = activeUsers.filter((u) => u.role?.name === 'conductor')
+        setConductors(dedicatedConductors.length > 0 ? dedicatedConductors : activeUsers)
       }
     } catch (err) {
       console.error('Error loading dispatch resources:', err)
