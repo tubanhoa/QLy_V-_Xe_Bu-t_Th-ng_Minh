@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   forwardRef,
   Optional,
@@ -28,6 +29,7 @@ import {
   VehicleStatus,
   UserStatus,
 } from '../../common/constants/status.constant.js';
+import { Role } from '../../common/constants/roles.constant.js';
 import { verifyQrData } from '../../common/utils/qr-code.util.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationCenterService } from '../notification/notification-center.service.js';
@@ -1076,6 +1078,23 @@ export class TripsService {
       );
     }
 
+    // 0.1. Kiểm tra quyền soát vé: Nếu tài khoản là Tài xế/Phụ xe thì bắt buộc phải được phân công cho chuyến này
+    if (currentTrip && conductorId) {
+      const staffUser = await this.userRepository.findOne({
+        where: { id: conductorId },
+        relations: { role: true },
+      });
+      if (staffUser && (staffUser.role?.name === Role.DRIVER || staffUser.role?.name === Role.CONDUCTOR)) {
+        const isAssigned =
+          currentTrip.driverId === conductorId || currentTrip.conductorId === conductorId;
+        if (!isAssigned) {
+          throw new ForbiddenException(
+            `Tài xế/Phụ xe ${staffUser.fullName} không được phân công phụ trách chuyến xe này. Không thể thực hiện soát vé!`,
+          );
+        }
+      }
+    }
+
     let ticketCode = '';
     let passCode = '';
 
@@ -1258,7 +1277,22 @@ export class TripsService {
     // Kiểm tra vé có thuộc đúng chuyến xe hiện tại không
     const ticketTripId = ticket.booking?.tripId || ticket.booking?.trip?.id;
     if (dto.tripId && ticketTripId && ticketTripId !== dto.tripId) {
-      throw new BadRequestException('Mã vé này không thuộc về chuyến xe hiện tại');
+      return {
+        valid: false,
+        success: false,
+        isWrongTrip: true,
+        alreadyCheckedIn: false,
+        message: 'CẢNH BÁO: Mã vé này không thuộc về chuyến xe hiện tại!',
+        passenger: ticket.passengerName,
+        seat: ticket.seat?.seatNumber,
+        ticketCode: ticket.ticketCode,
+        correctTrip: {
+          tripId: ticketTripId,
+          routeName: ticket.booking?.trip?.route?.name || 'Chuyến xe khác',
+          departureTime: ticket.booking?.trip?.departureTime?.toISOString(),
+          vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+        },
+      };
     }
 
     // Kiểm tra vé đã được soát trước đó (Trùng lặp check-in)
