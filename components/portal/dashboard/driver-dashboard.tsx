@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, memo } from 'react'
+import Link from 'next/link'
 import {
   Armchair,
   Bus,
@@ -16,6 +17,7 @@ import {
   CheckCheck,
   ChevronRight,
   Send,
+  Smartphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { driverService, DriverTripItem } from '@/lib/services/driver.service'
@@ -540,6 +542,18 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 <Armchair size={18} strokeWidth={1.75} aria-hidden="true" />
                 <span>Sĩ số: {manifestCount}/28 Khách</span>
               </button>
+            </div>
+
+            {/* Liên kết mở ứng dụng Mobile Scanner riêng */}
+            <div className="relative mt-3 flex justify-end">
+              <Link
+                href="/mobile/scanner"
+                target="_blank"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <Smartphone size={13} />
+                <span>Mở Giao Diện Mobile App Riêng</span>
+              </Link>
             </div>
           </article>
 
