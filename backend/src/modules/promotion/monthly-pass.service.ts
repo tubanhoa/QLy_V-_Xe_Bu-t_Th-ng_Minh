@@ -25,7 +25,9 @@ import {
   MonthlyPassPaymentStatus,
   PaymentMethod,
 } from '../../common/constants/status.constant.js';
+import * as crypto from 'node:crypto';
 import { generateMonthlyPassCode } from '../../common/utils/booking-code.util.js';
+import { generateQrDataUrl } from '../../common/utils/qr-code.util.js';
 import { NotificationCenterService } from '../notification/notification-center.service.js';
 
 export interface MonthlyPassPriceBreakdown {
@@ -194,7 +196,65 @@ export class MonthlyPassService {
   }
 
   /**
-   * Tạo yêu cầu thanh toán cho vé tháng (VietQR / MoMo / VNPAY)
+   * Tạo URL thanh toán VNPay Sandbox với chữ ký bảo mật HMAC-SHA512
+   */
+  private buildVNPayUrl(params: {
+    amount: number;
+    txnRef: string;
+    orderInfo: string;
+    ipAddr: string;
+    bankCode?: string;
+    returnUrl?: string;
+  }): string {
+    const tmnCode = process.env.VNPAY_TMN_CODE || 'BDCDEH71';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
+    const vnpUrl = process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+    const returnUrl = params.returnUrl || process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payment/result';
+
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const createDate = `${year}${month}${day}${hours}${minutes}${seconds}`;
+
+    const vnp_Params: Record<string, string> = {
+      vnp_Version: '2.1.0',
+      vnp_Command: 'pay',
+      vnp_TmnCode: tmnCode,
+      vnp_Locale: 'vn',
+      vnp_CurrCode: 'VND',
+      vnp_TxnRef: params.txnRef,
+      vnp_OrderInfo: params.orderInfo,
+      vnp_OrderType: 'other',
+      vnp_Amount: (params.amount * 100).toString(),
+      vnp_ReturnUrl: returnUrl,
+      vnp_IpAddr: params.ipAddr,
+      vnp_CreateDate: createDate,
+    };
+
+    if (params.bankCode) {
+      vnp_Params['vnp_BankCode'] = params.bankCode;
+    }
+
+    const sortedKeys = Object.keys(vnp_Params).sort();
+    const sortedParams: Record<string, string> = {};
+    for (const key of sortedKeys) {
+      sortedParams[key] = vnp_Params[key];
+    }
+
+    const signData = new URLSearchParams(sortedParams).toString();
+    const hmac = crypto.createHmac('sha512', secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
+
+    sortedParams['vnp_SecureHash'] = signed;
+    return `${vnpUrl}?${new URLSearchParams(sortedParams).toString()}`;
+  }
+
+  /**
+   * Tạo yêu cầu thanh toán cho vé tháng (VNPAY Sandbox / VietQR / MoMo)
    */
   async createPayment(id: string, dto: CreateMonthlyPassPaymentDto, userId: string) {
     const pass = await this.monthlyPassRepository.findOne({
@@ -221,10 +281,26 @@ export class MonthlyPassService {
     }
 
     const amount = Number(pass.price) || 100000;
-    const paymentMethod = dto.paymentMethod || PaymentMethod.VIETQR;
+    const paymentMethod = dto.paymentMethod || PaymentMethod.VNPAY;
     const paymentDesc = `ICTU MP ${pass.passCode}`;
 
-    // Tạo link VietQR chuẩn NAPAS 24/7
+    // 1. Tạo link VNPay Sandbox chính thức
+    const vnpayPaymentUrl = this.buildVNPayUrl({
+      amount,
+      txnRef: pass.passCode,
+      orderInfo: `Thanh toan ve thang ICTU MP ${pass.passCode}`,
+      ipAddr: '127.0.0.1',
+    });
+
+    // 2. Sinh ảnh mã QR Data URL Base64 render trực tiếp
+    let qrDataUrl = '';
+    try {
+      qrDataUrl = await generateQrDataUrl(vnpayPaymentUrl);
+    } catch {
+      qrDataUrl = '';
+    }
+
+    // 3. Tạo link VietQR chuẩn NAPAS 24/7
     const vietQrUrl = `https://img.vietqr.io/image/TCB-1903678999999-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(
       paymentDesc,
     )}&accountName=${encodeURIComponent('CONG TY XE BUYT DIEN ICTU')}`;
@@ -235,12 +311,22 @@ export class MonthlyPassService {
       amount,
       paymentMethod,
       description: paymentDesc,
+      paymentUrl: vnpayPaymentUrl,
+      qrCodeUrl: vnpayPaymentUrl,
+      qrDataUrl,
+      vietQrUrl,
       bankAccount: {
         bankName: 'Techcombank',
         accountNo: '1903678999999',
         accountName: 'CONG TY XE BUYT DIEN ICTU',
       },
-      qrCodeUrl: vietQrUrl,
+      testCard: {
+        bank: 'NCB (Ngan hang Quoc Dan)',
+        cardNumber: '9704198526191432198',
+        cardHolder: 'NGUYEN VAN A',
+        issueDate: '07/15',
+        otp: '123456',
+      },
       quickPayAvailable: true,
     };
   }
@@ -428,6 +514,21 @@ export class MonthlyPassService {
       paymentDesc,
     )}&accountName=${encodeURIComponent('CONG TY XE BUYT DIEN ICTU')}`;
 
+    // 1. Tạo link VNPay Sandbox gia hạn
+    const vnpayPaymentUrl = this.buildVNPayUrl({
+      amount,
+      txnRef: pass.passCode,
+      orderInfo: `Gia han ve thang ICTU MP ${pass.passCode}`,
+      ipAddr: '127.0.0.1',
+    });
+
+    let qrDataUrl = '';
+    try {
+      qrDataUrl = await generateQrDataUrl(vnpayPaymentUrl);
+    } catch {
+      qrDataUrl = '';
+    }
+
     return {
       passId: pass.id,
       passCode: pass.passCode,
@@ -438,12 +539,22 @@ export class MonthlyPassService {
       paymentInfo: {
         amount,
         description: paymentDesc,
+        paymentUrl: vnpayPaymentUrl,
+        qrCodeUrl: vnpayPaymentUrl,
+        qrDataUrl,
+        vietQrUrl,
         bankAccount: {
           bankName: 'Techcombank',
           accountNo: '1903678999999',
           accountName: 'CONG TY XE BUYT DIEN ICTU',
         },
-        qrCodeUrl: vietQrUrl,
+        testCard: {
+          bank: 'NCB (Ngan hang Quoc Dan)',
+          cardNumber: '9704198526191432198',
+          cardHolder: 'NGUYEN VAN A',
+          issueDate: '07/15',
+          otp: '123456',
+        },
       },
     };
   }

@@ -301,15 +301,18 @@ async function runTestSuite() {
 
       const valid =
         payData?.amount > 0 &&
-        payData?.qrCodeUrl?.includes('vietqr.io') &&
+        payData?.paymentUrl?.includes('sandbox.vnpayment.vn') &&
+        payData?.paymentUrl?.includes('vnp_TmnCode=BDCDEH71') &&
+        payData?.qrDataUrl?.startsWith('data:image/png;base64,') &&
+        payData?.testCard?.cardNumber === '9704198526191432198' &&
         payData?.quickPayAvailable === true;
 
       recordResult(
         'TC-04',
-        'Tao yeu cau thanh toan VietQR (Ma QR chuyen khoan & quickPayAvailable)',
+        'Tao yeu cau thanh toan VNPAY Sandbox (vnp_TmnCode: BDCDEH71, QR Data URL & The test NCB)',
         valid ? 'PASSED' : 'FAILED',
         performance.now() - start,
-        `So tien: ${payData?.amount}d, VietQR: ${payData?.qrCodeUrl ? 'Hop le' : 'Khong hop le'}`
+        `Amount: ${payData?.amount}d, TMN: BDCDEH71, VNPAY URL: Hop le, QR: Base64 PNG`
       );
     }
 
