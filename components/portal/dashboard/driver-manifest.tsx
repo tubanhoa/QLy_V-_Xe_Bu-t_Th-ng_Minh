@@ -103,7 +103,7 @@ export function DriverManifest({ onBack, tripId }: DriverManifestProps) {
   const busCapacity = activeTrip?.vehicle?.capacity || 28
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+    <div className="w-full max-w-6xl mx-auto flex flex-col gap-6">
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -196,7 +196,7 @@ export function DriverManifest({ onBack, tripId }: DriverManifestProps) {
       </div>
 
       {/* Passenger List */}
-      <div className="flex flex-col gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {isLoading ? (
           <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
             <RefreshCw size={24} className="animate-spin text-emerald-500" />

@@ -322,7 +322,7 @@ export function DriverIncident({
     new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 sm:gap-5 pb-16 sm:pb-8">
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-5 pb-12">
       {/* 1. Header Bar: Ergonomic Back & Title */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-card p-4 sm:p-5 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3 min-w-0">

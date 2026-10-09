@@ -108,7 +108,14 @@ export class VoucherService {
       discountAmount = Number(voucher.discountValue);
     }
 
-    const finalAmount = Math.max(0, dto.orderAmount - discountAmount);
+    // Khống chế mức giảm giá (Cap Discount): Giới hạn không để số tiền sau giảm tụt dưới 10.000 VNĐ
+    // Đảm bảo đáp ứng hạn mức chuyển tiền/thanh toán tối thiểu của ngân hàng và VNPay Sandbox
+    const maxAllowedDiscount = Math.max(0, dto.orderAmount - 10000);
+    if (discountAmount > maxAllowedDiscount) {
+      discountAmount = maxAllowedDiscount;
+    }
+
+    const finalAmount = Math.max(10000, dto.orderAmount - discountAmount);
 
     return {
       valid: true,

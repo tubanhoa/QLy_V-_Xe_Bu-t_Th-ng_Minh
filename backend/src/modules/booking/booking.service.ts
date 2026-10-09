@@ -199,8 +199,8 @@ export class BookingService {
         arrivalTime: trip.arrivalTime,
         status: trip.status,
         isBookable,
-        basePrice: Number(trip.route?.basePrice) || 10000,
-        studentPrice: Number(trip.route?.studentPrice) || 5000,
+        basePrice: Number(trip.route?.basePrice) || 20000,
+        studentPrice: Number(trip.route?.studentPrice) || 10000,
         totalSeats: capacity,
         availableSeats,
         vehiclePlate: trip.vehicle?.licensePlate,
@@ -504,6 +504,14 @@ export class BookingService {
               } else {
                 discountAmount = Number(voucher.discountValue);
               }
+
+              // Khống chế mức giảm giá (Cap Discount): Giới hạn không để số tiền sau giảm tụt dưới 10.000 VNĐ
+              // Đảm bảo đáp ứng hạn mức chuyển tiền/thanh toán tối thiểu của ngân hàng và VNPay Sandbox
+              const maxAllowedDiscount = Math.max(0, totalAmount - 10000);
+              if (discountAmount > maxAllowedDiscount) {
+                discountAmount = maxAllowedDiscount;
+              }
+
               // Increment usage
               voucher.usedCount += 1;
               await voucherRepo.save(voucher);
@@ -512,7 +520,7 @@ export class BookingService {
         }
       }
 
-      const finalAmount = Math.max(0, totalAmount - discountAmount);
+      const finalAmount = Math.max(10000, totalAmount - discountAmount);
       const bookingCode = generateBookingCode();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 

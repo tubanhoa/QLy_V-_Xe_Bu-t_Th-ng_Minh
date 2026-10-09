@@ -101,9 +101,9 @@ export class CreateRouteDto {
 
   @ApiPropertyOptional({
     example: [
-      { minKm: 0, maxKm: 5, price: 7000, studentPrice: 4000 },
-      { minKm: 5, maxKm: 10, price: 10000, studentPrice: 5000 },
-      { minKm: 10, maxKm: 999, price: 15000, studentPrice: 8000 },
+      { minKm: 0, maxKm: 5, price: 20000, studentPrice: 10000 },
+      { minKm: 5, maxKm: 10, price: 25000, studentPrice: 12000 },
+      { minKm: 10, maxKm: 999, price: 30000, studentPrice: 15000 },
     ],
     description: 'Quy tắc biểu phí chi tiết theo khoảng cách hoặc số chặng',
   })
@@ -223,9 +223,9 @@ export class UpdatePricingDto {
 
   @ApiPropertyOptional({
     example: [
-      { minKm: 0, maxKm: 5, price: 7000, studentPrice: 4000 },
-      { minKm: 5, maxKm: 10, price: 10000, studentPrice: 5000 },
-      { minKm: 10, maxKm: 999, price: 15000, studentPrice: 8000 },
+      { minKm: 0, maxKm: 5, price: 20000, studentPrice: 10000 },
+      { minKm: 5, maxKm: 10, price: 25000, studentPrice: 12000 },
+      { minKm: 10, maxKm: 999, price: 30000, studentPrice: 15000 },
     ],
     description: 'Bảng quy tắc bậc thang tính theo cự ly km hoặc số chặng',
   })

@@ -15,6 +15,8 @@ import { RefundLogEntity } from '../../database/entities/refund-log.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
+import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
+import { MonthlyPassTransactionEntity } from '../../database/entities/monthly-pass-transaction.entity.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { InvoiceService } from '../invoice/invoice.service.js';
@@ -34,6 +36,8 @@ import {
   TicketStatus,
   TripStatus,
   PaymentMethod,
+  MonthlyPassPaymentStatus,
+  ApprovalStatus,
 } from '../../common/constants/status.constant.js';
 import { Role } from '../../common/constants/roles.constant.js';
 
@@ -65,6 +69,12 @@ export class PaymentService {
     private readonly notificationService?: NotificationService,
     @Optional()
     private readonly invoiceService?: InvoiceService,
+    @Optional()
+    @InjectRepository(MonthlyPassEntity)
+    private readonly monthlyPassRepository?: Repository<MonthlyPassEntity>,
+    @Optional()
+    @InjectRepository(MonthlyPassTransactionEntity)
+    private readonly monthlyPassTransactionRepository?: Repository<MonthlyPassTransactionEntity>,
   ) {}
 
   async logPaymentEvent(params: {
@@ -244,6 +254,11 @@ export class PaymentService {
     const date = new Date();
     const createDate = this.formatDate(date);
 
+    const ipAddr =
+      params.ipAddr === '::1' || !params.ipAddr || params.ipAddr === 'localhost'
+        ? '127.0.0.1'
+        : params.ipAddr.replace('::ffff:', '');
+
     const vnp_Params: Record<string, string> = {
       vnp_Version: '2.1.0',
       vnp_Command: 'pay',
@@ -255,7 +270,7 @@ export class PaymentService {
       vnp_OrderType: 'other',
       vnp_Amount: (params.amount * 100).toString(),
       vnp_ReturnUrl: returnUrl,
-      vnp_IpAddr: params.ipAddr,
+      vnp_IpAddr: ipAddr,
       vnp_CreateDate: createDate,
     };
 
@@ -264,12 +279,12 @@ export class PaymentService {
     }
 
     const sortedParams = this.sortObject(vnp_Params);
-    const signData = new URLSearchParams(sortedParams).toString();
+    const signData = this.stringifySortedParams(sortedParams);
     const hmac = crypto.createHmac('sha512', secretKey);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
     sortedParams['vnp_SecureHash'] = signed;
-    return `${vnpUrl}?${new URLSearchParams(sortedParams).toString()}`;
+    return `${vnpUrl}?${this.stringifySortedParams(sortedParams)}`;
   }
 
   private buildMoMoUrl(params: {
@@ -344,7 +359,7 @@ export class PaymentService {
 
     const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
-    const signData = new URLSearchParams(sorted).toString();
+    const signData = this.stringifySortedParams(sorted);
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
 
     const isValid = secureHash === checkHash;
@@ -359,12 +374,17 @@ export class PaymentService {
       }
     }
 
+    const isMonthlyPass = Boolean(txnRef && txnRef.startsWith('MP-'));
     return {
       isValid,
       isSuccess,
+      isMonthlyPass,
       responseCode: queryParams['vnp_ResponseCode'],
-      bookingCode: txnRef ? txnRef.split('-').slice(0, 3).join('-') : null,
-      message: isSuccess ? 'Thanh toán thành công' : 'Giao dịch không thành công hoặc đã bị hủy',
+      bookingCode: isMonthlyPass ? txnRef : (txnRef ? txnRef.split('-').slice(0, 3).join('-') : null),
+      txnRef,
+      message: isSuccess
+        ? (isMonthlyPass ? 'Thanh toán thẻ tháng thành công, hồ sơ đang chờ xét duyệt' : 'Thanh toán thành công')
+        : 'Giao dịch không thành công hoặc đã bị hủy',
     };
   }
 
@@ -375,7 +395,7 @@ export class PaymentService {
 
     const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
-    const signData = new URLSearchParams(sorted).toString();
+    const signData = this.stringifySortedParams(sorted);
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
 
     if (secureHash !== checkHash) {
@@ -559,6 +579,86 @@ export class PaymentService {
   }
 
   async confirmPayment(txnRef: string, details: Record<string, any>) {
+    if (txnRef && txnRef.startsWith('MP-')) {
+      if (this.monthlyPassRepository) {
+        const pass = await this.monthlyPassRepository.findOne({
+          where: { passCode: txnRef },
+          relations: { user: true, route: true },
+        });
+
+        if (pass) {
+          pass.paymentStatus = MonthlyPassPaymentStatus.PAID;
+          if (!pass.qrPayload) {
+            pass.qrPayload = `ICTU-MONTHLY:${pass.passCode}:${pass.endDate}`;
+          }
+          await this.monthlyPassRepository.save(pass);
+
+          const passAmount = Number(pass.price) || (details['vnp_Amount'] ? Number(details['vnp_Amount']) / 100 : 100000);
+          const txnCode = details['vnp_TransactionNo'] || `MP-VNPAY-${Date.now().toString().slice(-6)}`;
+
+          if (this.monthlyPassTransactionRepository) {
+            const existingTxn = await this.monthlyPassTransactionRepository.findOne({
+              where: { transactionCode: txnCode },
+            });
+            if (!existingTxn) {
+              const transaction = this.monthlyPassTransactionRepository.create({
+                monthlyPassId: pass.id,
+                userId: pass.userId,
+                type: 'register',
+                durationMonths: pass.durationMonths || 1,
+                previousEndDate: undefined,
+                newEndDate: pass.endDate,
+                amount: passAmount,
+                paymentMethod: PaymentMethod.VNPAY,
+                paymentStatus: 'completed',
+                transactionCode: txnCode,
+                notes: `Thanh toán thẻ tháng qua VNPay Sandbox thành công (Mã GD: ${txnCode})`,
+              });
+              await this.monthlyPassTransactionRepository.save(transaction);
+            }
+          }
+
+          let payment = await this.paymentRepository.findOne({
+            where: { transactionId: txnRef },
+          });
+          if (!payment) {
+            payment = this.paymentRepository.create({
+              transactionId: txnRef,
+              paymentMethod: PaymentMethod.VNPAY,
+              amount: passAmount,
+              status: PaymentStatus.SUCCESS,
+              paymentTime: new Date(),
+              paymentDetails: {
+                ...details,
+                type: 'monthly_pass',
+                passCode: pass.passCode,
+                userId: pass.userId,
+              },
+            });
+          } else {
+            payment.status = PaymentStatus.SUCCESS;
+            payment.paymentTime = new Date();
+            payment.paymentDetails = {
+              ...payment.paymentDetails,
+              ...details,
+              type: 'monthly_pass',
+            };
+          }
+          await this.paymentRepository.save(payment);
+
+          await this.logPaymentEvent({
+            paymentId: payment.id,
+            bookingCode: pass.passCode,
+            gateway: PaymentMethod.VNPAY,
+            eventType: 'monthly_pass_payment_success',
+            responseData: details,
+            status: 'success',
+          });
+        }
+      }
+      return;
+    }
+
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: txnRef },
       relations: {
@@ -792,6 +892,26 @@ export class PaymentService {
   }
 
   async failPayment(txnRef: string, details?: Record<string, any>) {
+    if (txnRef && txnRef.startsWith('MP-')) {
+      let payment = await this.paymentRepository.findOne({
+        where: { transactionId: txnRef },
+      });
+      if (payment) {
+        payment.status = PaymentStatus.FAILED;
+        payment.paymentDetails = details || {};
+        await this.paymentRepository.save(payment);
+      }
+      await this.logPaymentEvent({
+        bookingCode: txnRef,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'monthly_pass_payment_failed',
+        responseData: details,
+        status: 'failed',
+        errorMessage: details?.message || 'Thanh toán thẻ tháng thất bại hoặc bị hủy',
+      });
+      return;
+    }
+
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: txnRef },
       relations: { booking: { tickets: true } },
@@ -1420,6 +1540,12 @@ export class PaymentService {
       logs,
       summaryByGateway,
     };
+  }
+
+  private stringifySortedParams(sorted: Record<string, string>): string {
+    return Object.entries(sorted)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
   }
 
   private sortObject(obj: Record<string, string>): Record<string, string> {

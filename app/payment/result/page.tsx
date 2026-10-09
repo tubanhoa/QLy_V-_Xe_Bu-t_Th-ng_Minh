@@ -115,6 +115,8 @@ function PaymentResultContent() {
     )
   }
 
+  const isMonthlyPass = Boolean(txnRef && txnRef.startsWith('MP-'))
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 px-4 sm:px-6 flex flex-col items-center justify-center">
       <div className="w-full max-w-lg space-y-6">
@@ -125,7 +127,9 @@ function PaymentResultContent() {
             <div
               className={`size-16 sm:size-20 mx-auto rounded-3xl flex items-center justify-center shadow-lg border ${
                 isSuccess
-                  ? 'bg-emerald-100 text-emerald-600 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800'
+                  ? isMonthlyPass
+                    ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:border-amber-800'
+                    : 'bg-emerald-100 text-emerald-600 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800'
                   : 'bg-rose-100 text-rose-600 border-rose-200 dark:bg-rose-950/60 dark:border-rose-800'
               }`}
             >
@@ -136,20 +140,32 @@ function PaymentResultContent() {
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
                   isSuccess
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    ? isMonthlyPass
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                     : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                 }`}
               >
                 <ShieldCheck size={14} />
-                {isSuccess ? 'Thanh Toán Thành Công' : 'Thanh Toán Thất Bại'}
+                {isSuccess
+                  ? isMonthlyPass
+                    ? 'ĐÃ THANH TOÁN — CHỜ XÉT DUYỆT THẺ'
+                    : 'Thanh Toán Thành Công'
+                  : 'Thanh Toán Thất Bại'}
               </span>
               <h1 className="mt-2 text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                {isSuccess ? 'Đặt Vé Xe Buýt Thành Công!' : 'Giao Dịch Bị Hủy Hoặc Lỗi'}
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 {isSuccess
-                  ? 'Vé điện tử đã được phát hành và lưu vết đối soát trên Supabase Cloud.'
-                  : errorMessage || 'Giao dịch chưa hoàn tất. Ghế của bạn sẽ được giải phóng an toàn.'}
+                  ? isMonthlyPass
+                    ? 'Thanh Toán Thẻ Tháng Thành Công!'
+                    : 'Đặt Vé Xe Buýt Thành Công!'
+                  : 'Giao Dịch Bị Hủy Hoặc Lỗi'}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                {isSuccess
+                  ? isMonthlyPass
+                    ? 'Giao dịch thanh toán đã được ghi nhận. Ban Quản Lý ICTU Transit sẽ đối soát thẻ sinh viên trong vòng 2–4 giờ làm việc trước khi kích hoạt mã QR lên xe.'
+                    : 'Vé điện tử đã được phát hành và lưu vết đối soát trên Supabase Cloud.'
+                  : errorMessage || 'Giao dịch chưa hoàn tất. Vui lòng kiểm tra lại phương thức thanh toán.'}
               </p>
             </div>
           </div>
@@ -165,14 +181,16 @@ function PaymentResultContent() {
             </div>
 
             <div className="flex justify-between items-center border-b border-slate-200/60 dark:border-slate-800 pb-2">
-              <span className="text-slate-500 dark:text-slate-400">Mã đơn đặt vé:</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {isMonthlyPass ? 'Mã hồ sơ thẻ tháng:' : 'Mã đơn đặt vé:'}
+              </span>
               <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900 dark:text-white">
                 <span>{txnRef}</span>
                 <button
                   type="button"
                   onClick={copyBookingCode}
                   className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors"
-                  title="Sao chép mã đơn"
+                  title="Sao chép mã"
                 >
                   {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                 </button>
@@ -197,48 +215,99 @@ function PaymentResultContent() {
             </div>
           </div>
 
-          {/* Vé điện tử & QR Soát vé (Nếu thành công) */}
+          {/* Phân nhánh nội dung thẻ / vé nếu thành công */}
           {isSuccess && (
-            <div className="mt-6 rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50 p-4 text-center space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                <QrCode size={12} />
-                MÃ QR SOÁT VÉ LÊN XE BUÝT ICTU
-              </div>
+            isMonthlyPass ? (
+              /* THẺ THÁNG ĐIỆN TỬ PREVIEW */
+              <div className="mt-6 rounded-2xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-amber-50/50 to-orange-50/30 dark:from-amber-950/30 dark:via-slate-900 dark:to-slate-900 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="size-6 rounded-md bg-amber-500 text-amber-950 font-black text-[9px] flex items-center justify-center">
+                      NFC
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Thẻ Tháng Sinh Viên ICTU
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-300">
+                    Chờ Duyệt Thẻ
+                  </span>
+                </div>
 
-              <div className="size-44 mx-auto bg-white p-2.5 rounded-2xl border-2 border-emerald-300 shadow-sm flex items-center justify-center">
-                <QRCodeSVG
-                  value={`ICTU-TICKET:${txnRef}:${amount}:${Date.now()}`}
-                  size={155}
-                  level="M"
-                  includeMargin={false}
-                />
+                <div className="rounded-xl bg-white dark:bg-slate-800/80 p-3 border border-amber-200/60 dark:border-slate-700 space-y-1">
+                  <p className="font-mono text-xs font-black text-slate-800 dark:text-slate-200">
+                    {txnRef}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Trạng thái thanh toán: <strong className="text-emerald-600 dark:text-emerald-400">Đã thanh toán ({amount.toLocaleString('vi-VN')} đ)</strong>
+                  </p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium pt-1 border-t border-slate-100 dark:border-slate-700">
+                    ⏳ Mã QR soát vé xe buýt sẽ tự động kích hoạt sau khi Điều hành viên đối soát ảnh thẻ sinh viên.
+                  </p>
+                </div>
               </div>
+            ) : (
+              /* VÉ ĐIỆN TỬ & QR SOÁT VÉ XE BUÝT */
+              <div className="mt-6 rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50 p-4 text-center space-y-3">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                  <QrCode size={12} />
+                  MÃ QR SOÁT VÉ LÊN XE BUÝT ICTU
+                </div>
 
-              <p className="text-[11px] text-slate-500">
-                Xuất trình mã QR này cho tài xế hoặc máy quét POS khi lên xe buýt.
-              </p>
-            </div>
+                <div className="size-44 mx-auto bg-white p-2.5 rounded-2xl border-2 border-emerald-300 shadow-sm flex items-center justify-center">
+                  <QRCodeSVG
+                    value={`ICTU-TICKET:${txnRef}:${amount}:${Date.now()}`}
+                    size={155}
+                    level="M"
+                    includeMargin={false}
+                  />
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Xuất trình mã QR này cho tài xế hoặc máy quét POS khi lên xe buýt.
+                </p>
+              </div>
+            )
           )}
 
           {/* Nút hành động */}
           <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
             {isSuccess ? (
-              <>
-                <Link
-                  href="/my-tickets"
-                  className="flex-1 py-3 px-4 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all"
-                >
-                  <Ticket size={16} />
-                  <span>Xem Vé Của Tôi</span>
-                </Link>
-                <Link
-                  href="/"
-                  className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-800 dark:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
-                >
-                  <Home size={16} />
-                  <span>Trang Chủ</span>
-                </Link>
-              </>
+              isMonthlyPass ? (
+                <>
+                  <Link
+                    href="/monthly-pass"
+                    className="flex-1 py-3 px-4 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all"
+                  >
+                    <CreditCard size={16} />
+                    <span>Quản Lý Thẻ Tháng Của Tôi</span>
+                  </Link>
+                  <Link
+                    href="/"
+                    className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-800 dark:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Home size={16} />
+                    <span>Trang Chủ</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/my-tickets"
+                    className="flex-1 py-3 px-4 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Ticket size={16} />
+                    <span>Xem Vé Của Tôi</span>
+                  </Link>
+                  <Link
+                    href="/"
+                    className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-800 dark:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Home size={16} />
+                    <span>Trang Chủ</span>
+                  </Link>
+                </>
+              )
             ) : (
               <>
                 <Link
@@ -246,7 +315,7 @@ function PaymentResultContent() {
                   className="flex-1 py-3 px-4 rounded-xl bg-[#005A36] hover:bg-[#004529] text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all"
                 >
                   <ArrowRight size={16} />
-                  <span>Đặt Vé Lại</span>
+                  <span>{isMonthlyPass ? 'Thử Lại Thanh Toán' : 'Đặt Vé Lại'}</span>
                 </Link>
                 <Link
                   href="/"

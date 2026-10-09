@@ -58,7 +58,7 @@ function SeatLockTimerComponent({
       role="timer"
       aria-live="polite"
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-mono font-black shadow-xs transition-all duration-300',
+        'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-mono font-black shadow-xs transition-all duration-300',
         isUrgent
           ? 'bg-rose-500 text-white border border-rose-600 animate-bounce'
           : isWarning
@@ -69,14 +69,14 @@ function SeatLockTimerComponent({
       title="Thời gian giữ chỗ ghế của bạn trên hệ thống"
     >
       {isUrgent ? (
-        <Flame size={13} className="text-white fill-white" />
+        <Flame size={15} className="text-white fill-white shrink-0" />
       ) : isWarning ? (
-        <AlertCircle size={13} className="text-amber-700" />
+        <AlertCircle size={15} className="text-amber-700 shrink-0" />
       ) : (
-        <Clock size={13} className="text-[#005A36]" />
+        <Clock size={15} className="text-[#005A36] shrink-0" />
       )}
-      <span className="font-sans font-extrabold text-[11px] tracking-tight">Giữ ghế:</span>
-      <span className="text-xs font-black tracking-wider">{formattedTime}</span>
+      <span className="font-sans font-extrabold text-xs sm:text-sm tracking-tight">Giữ ghế:</span>
+      <span className="text-xs sm:text-sm font-black tracking-wider">{formattedTime}</span>
     </div>
   )
 }

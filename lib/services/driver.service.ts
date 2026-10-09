@@ -114,7 +114,29 @@ class DriverService {
         }
       }
       const data = json?.data || json || []
-      return { success: true, data: Array.isArray(data) ? data : [] }
+      if (Array.isArray(data) && data.length > 0) {
+        return { success: true, data }
+      }
+
+      // Fallback: Lấy danh sách chuyến xe hoạt động hôm nay để tài xế có thể chọn ca trực và làm việc
+      try {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const fallbackRes = await fetch(`${this.baseUrl}/trips?date=${todayStr}&limit=20`, {
+          headers: this.getHeaders(),
+          cache: 'no-store',
+        })
+        if (fallbackRes.ok) {
+          const fbJson = await fallbackRes.json().catch(() => null)
+          const fallbackList = fbJson?.data?.trips || fbJson?.data || (Array.isArray(fbJson) ? fbJson : [])
+          if (Array.isArray(fallbackList) && fallbackList.length > 0) {
+            return { success: true, data: fallbackList }
+          }
+        }
+      } catch (err) {
+        console.warn('[DriverService] Fallback to all trips failed:', err)
+      }
+
+      return { success: true, data: [] }
     } catch (e: any) {
       return { success: false, message: e?.message || 'Lỗi kết nối máy chủ', data: [] }
     }
