@@ -848,10 +848,27 @@ export class PaymentService {
   }
 
   async mockConfirmPayment(bookingId: string, userId?: string) {
-    const payment = await this.paymentRepository.findOne({
+    let payment = await this.paymentRepository.findOne({
       where: { bookingId },
       order: { createdAt: 'DESC' },
     });
+
+    if (!payment) {
+      const booking = await this.bookingRepository.findOne({
+        where: { id: bookingId },
+      });
+      if (booking) {
+        const txnRef = `TXN_MOCK_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        payment = this.paymentRepository.create({
+          bookingId,
+          amount: booking.finalAmount || booking.totalAmount || 10000,
+          paymentMethod: PaymentMethod.VNPAY,
+          status: PaymentStatus.PENDING,
+          transactionId: txnRef,
+        });
+        payment = await this.paymentRepository.save(payment);
+      }
+    }
 
     if (payment) {
       await this.confirmPayment(payment.transactionId, {

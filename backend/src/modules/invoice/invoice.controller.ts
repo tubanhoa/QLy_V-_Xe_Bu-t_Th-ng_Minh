@@ -11,10 +11,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { IsEmail, IsOptional } from 'class-validator';
 import { InvoiceService } from './invoice.service.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 
 export class ResendEmailDto {
+  @IsOptional()
+  @IsEmail({}, { message: 'Địa chỉ email nhận hóa đơn không hợp lệ' })
   email?: string;
 }
 

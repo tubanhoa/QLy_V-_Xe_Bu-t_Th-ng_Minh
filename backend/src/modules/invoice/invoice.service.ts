@@ -258,6 +258,26 @@ export class InvoiceService {
             routeName: invData?.routeName || 'Tuyến xe buýt ICTU',
             totalAmount: Number(invoice.totalAmount),
             pdfBuffer: buffer,
+            lookupCode: invoice.lookupCode,
+            issuedAt: invoice.issuedAt,
+            subtotalAmount: Number(invoice.subtotalAmount),
+            vatAmount: Number(invoice.vatAmount),
+            vatRate: Number(invoice.vatRate),
+            items: invData?.items?.map((it) => ({
+              itemNumber: it.itemNumber,
+              description: it.description,
+              ticketCode: it.ticketCode,
+              seatNumber: it.seatNumber,
+              unitPrice: Number(it.unitPrice),
+              quantity: Number(it.quantity),
+              totalAmount: Number(it.totalAmount),
+            })),
+            sellerName: invData?.seller?.name,
+            sellerTaxCode: invData?.seller?.taxCode,
+            buyerName: invData?.buyer?.fullName,
+            buyerPhone: invData?.buyer?.phone,
+            studentId: invData?.buyer?.studentId,
+            faculty: invData?.buyer?.faculty,
           });
           this.logger.log(`[InvoiceQueue] Tác vụ gửi hóa đơn ${invoice.invoiceNumber} qua email ${recipientEmail}: ${sent ? 'Thành công' : 'Đã lưu log'}`);
         }
@@ -513,6 +533,26 @@ export class InvoiceService {
       routeName: invData.routeName || 'Tuyến xe buýt ICTU',
       totalAmount: Number(invoice.totalAmount),
       pdfBuffer: buffer,
+      lookupCode: invoice.lookupCode,
+      issuedAt: invoice.issuedAt,
+      subtotalAmount: Number(invoice.subtotalAmount),
+      vatAmount: Number(invoice.vatAmount),
+      vatRate: Number(invoice.vatRate),
+      items: invData?.items?.map((it) => ({
+        itemNumber: it.itemNumber,
+        description: it.description,
+        ticketCode: it.ticketCode,
+        seatNumber: it.seatNumber,
+        unitPrice: Number(it.unitPrice),
+        quantity: Number(it.quantity),
+        totalAmount: Number(it.totalAmount),
+      })),
+      sellerName: invData?.seller?.name,
+      sellerTaxCode: invData?.seller?.taxCode,
+      buyerName: invData?.buyer?.fullName,
+      buyerPhone: invData?.buyer?.phone,
+      studentId: invData?.buyer?.studentId,
+      faculty: invData?.buyer?.faculty,
     });
 
     return {

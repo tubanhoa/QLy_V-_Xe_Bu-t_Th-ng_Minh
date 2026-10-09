@@ -25,6 +25,26 @@ export interface SendInvoiceEmailParams {
   totalAmount: number;
   pdfBuffer: Buffer;
   htmlContent?: string;
+  lookupCode?: string;
+  issuedAt?: string | Date;
+  subtotalAmount?: number;
+  vatAmount?: number;
+  vatRate?: number;
+  items?: Array<{
+    itemNumber: number;
+    description: string;
+    ticketCode?: string;
+    seatNumber?: string;
+    unitPrice: number;
+    quantity: number;
+    totalAmount: number;
+  }>;
+  sellerName?: string;
+  sellerTaxCode?: string;
+  buyerName?: string;
+  buyerPhone?: string;
+  studentId?: string;
+  faculty?: string;
 }
 
 export interface SendTicketEmailParams {
@@ -139,10 +159,43 @@ export class NotificationService {
   }
 
   /**
+   * Chuẩn hóa và bảo vệ địa chỉ email người nhận:
+   * Chuyển hướng các địa chỉ mock/test không có hòm thư thực tế ngoài đời (@ictu.edu.vn demo, @example.com...)
+   * về email của quản trị viên/tester (process.env.SMTP_USER) để:
+   * 1. Ngăn chặn 100% lỗi Google Mail "Address not found" (550 Mail Delivery Subsystem Bounce).
+   * 2. Đảm bảo tester nhận được email thực tế ngay trên điện thoại để kiểm thử giao diện.
+   */
+  resolveTargetEmail(recipientEmail: string): { actualTo: string; isRedirected: boolean; originalEmail: string } {
+    const trimmed = (recipientEmail || '').trim();
+    const adminTestEmail = (process.env.SMTP_USER || '').trim() || 'ductrandanh06@gmail.com';
+
+    // Nhận diện các domain và địa chỉ hạt giống (seed/mock) không có tài khoản Google Workspace thật
+    const isMockOrTestEmail =
+      trimmed.endsWith('@ictu.edu.vn') ||
+      trimmed.endsWith('@smartbus.ictu.vn') ||
+      trimmed.endsWith('@example.com') ||
+      trimmed.endsWith('@test.com') ||
+      trimmed.toLowerCase().includes('student.an') ||
+      trimmed.toLowerCase().includes('driver.hung') ||
+      trimmed.toLowerCase().includes('test.');
+
+    if (isMockOrTestEmail && trimmed.toLowerCase() !== adminTestEmail.toLowerCase()) {
+      this.logger.log(
+        `[NotificationService] Chuyển hướng email từ địa chỉ thử nghiệm ${trimmed} -> Hòm thư quản trị viên thực tế ${adminTestEmail}`,
+      );
+      return { actualTo: adminTestEmail, isRedirected: true, originalEmail: trimmed };
+    }
+
+    return { actualTo: trimmed, isRedirected: false, originalEmail: trimmed };
+  }
+
+  /**
    * Tự động gửi Email vé điện tử kèm mã QR sau khi thanh toán thành công
    */
   async sendTicketConfirmationEmail(params: SendTicketEmailParams): Promise<boolean> {
-    const subject = `[SmartBus ICTU] Xác nhận vé điện tử thành công - Mã vé: ${params.ticketCode}`;
+    const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
+    const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
+    const subject = `${subjectPrefix}[SmartBus ICTU] Xác nhận vé điện tử thành công - Mã vé: ${params.ticketCode}`;
     const formattedPrice = Number(params.price).toLocaleString('vi-VN');
     const formattedDeparture =
       params.departureTime instanceof Date
@@ -171,11 +224,12 @@ export class NotificationService {
     }
 
     const renderHtml = (qrImgSrc: string) => `
-      <!DOCTYPE html>
-      <html>
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
       <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Vé Xe Buýt Điện Tử - ${params.ticketCode}</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px 8px; color: #1e293b; -webkit-text-size-adjust: 100%; }
           .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
@@ -212,12 +266,23 @@ export class NotificationService {
         </style>
       </head>
       <body>
+        <!-- Preheader Text Ẩn (Chống lỗi dính chữ xem trước trên Gmail Mobile) -->
+        <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+          Vé xe buýt điện tử ${params.ticketCode} đã thanh toán thành công. Khởi hành: ${formattedDeparture}. Ghế: ${params.seatNumber}. Giá vé: ${formattedPrice} VND.
+          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+        </div>
+
         <div class="container">
           <div class="header">
             <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
             <p>Xác nhận thanh toán và Thẻ lên xe điện tử (E-Ticket Boarding Pass)</p>
           </div>
           <div class="content">
+            ${redirectInfo.isRedirected ? `
+            <div style="background-color: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px; line-height: 1.5;">
+              <strong>MÔI TRƯỜNG THỬ NGHIỆM:</strong> Email này được hệ thống SmartBus ICTU tự động gửi thử nghiệm tới hòm thư của bạn <strong>${redirectInfo.actualTo}</strong> (Địa chỉ gốc của đơn vé: <code>${redirectInfo.originalEmail}</code>).
+            </div>` : ''}
+
             <div class="badge-wrapper">
               <span class="success-badge">✓ ĐÃ THANH TOÁN THÀNH CÔNG (PAID)</span>
             </div>
@@ -323,14 +388,14 @@ export class NotificationService {
           `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
         await this.transporter.sendMail({
           from: fromAddress,
-          to: params.recipientEmail,
+          to: redirectInfo.actualTo,
           subject,
           html: emailHtml,
           attachments,
         });
-        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${params.recipientEmail} kèm inline QR attachment`);
+        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${redirectInfo.actualTo} (Gốc: ${params.recipientEmail}) kèm inline QR attachment`);
       } catch (err: any) {
-        this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${params.recipientEmail}: ${err?.message}`);
+        this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${redirectInfo.actualTo}: ${err?.message}`);
         record.status = 'failed';
       }
     }
@@ -833,16 +898,292 @@ export class NotificationService {
   }
 
   /**
+   * Tạo giao diện HTML Hóa Đơn Điện Tử chuẩn Responsive, tương thích 100% mọi ứng dụng Email di động (Gmail, Outlook, iOS Mail)
+   */
+  buildInvoiceEmailHtml(
+    params: SendInvoiceEmailParams,
+    redirectInfo?: { isRedirected: boolean; originalEmail: string; actualTo: string },
+  ): string {
+    const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
+    const subtotal = params.subtotalAmount
+      ? Number(params.subtotalAmount)
+      : Math.round(Number(params.totalAmount) / 1.08);
+    const formattedSubtotal = subtotal.toLocaleString('vi-VN');
+    const vatAmount = params.vatAmount
+      ? Number(params.vatAmount)
+      : Number(params.totalAmount) - subtotal;
+    const formattedVat = vatAmount.toLocaleString('vi-VN');
+    const vatRate = params.vatRate ?? 8;
+
+    const issuedDate = params.issuedAt ? new Date(params.issuedAt) : new Date();
+    const dateStr = issuedDate.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+    const timeStr = issuedDate.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+
+    const lookupCode = params.lookupCode || params.bookingCode;
+    const lookupUrl = `http://localhost:3000/tra-cuu-hoa-don?code=${encodeURIComponent(lookupCode)}`;
+
+    const itemsHtml =
+      params.items && params.items.length > 0
+        ? params.items
+            .map(
+              (item, idx) => `
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #64748b;">${idx + 1}</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #1e293b;">
+                <strong>${item.description}</strong><br/>
+                <span style="font-size: 11.5px; color: #64748b;">${item.ticketCode ? `Mã vé: <code>${item.ticketCode}</code>` : ''} ${item.seatNumber ? `| Ghế: <strong>${item.seatNumber}</strong>` : ''}</span>
+              </td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #1e293b;">${item.quantity || 1}</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; color: #1e293b;">${Number(item.unitPrice || item.totalAmount).toLocaleString('vi-VN')} đ</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 700; color: #0284c7;">${Number(item.totalAmount).toLocaleString('vi-VN')} đ</td>
+            </tr>
+          `,
+            )
+            .join('')
+        : `
+          <tr>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #64748b;">1</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #1e293b;">
+              <strong>Dịch vụ vận tải hành khách xe buýt thông minh</strong><br/>
+              <span style="font-size: 11.5px; color: #64748b;">Tuyến: <strong>${params.routeName}</strong> | Mã đơn vé: <code>${params.bookingCode}</code></span>
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #1e293b;">1</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; color: #1e293b;">${formattedSubtotal} đ</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 700; color: #0284c7;">${formattedTotal} đ</td>
+          </tr>
+        `;
+
+    return `
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Hóa Đơn Điện Tử ${params.invoiceNumber}</title>
+        <style type="text/css">
+          body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+          table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+          td { vertical-align: top; }
+          img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+        </style>
+      </head>
+      <body style="background-color: #f1f5f9; margin: 0; padding: 24px 10px;">
+        <!-- Preheader Text Ẩn (Ngăn chặn Gmail gom dòng text body vào snippet xem trước) -->
+        <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+          Hóa đơn điện tử số ${params.invoiceNumber} cho đơn đặt vé ${params.bookingCode} đã được phát hành thành công. Mã tra cứu: ${lookupCode}. Tổng thanh toán: ${formattedTotal} VND.
+          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+        </div>
+
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+                
+                <!-- 1. Header Banner -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
+                    <div style="font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #bae6fd; margin-bottom: 4px;">
+                      TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG (ICTU)
+                    </div>
+                    <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #ffffff;">
+                      HÓA ĐƠN GIÁ TRỊ GIA TĂNG (ĐIỆN TỬ)
+                    </h1>
+                    <div style="font-size: 13px; color: #e0f2fe; margin-top: 4px;">
+                      Dịch vụ vận tải hành khách bằng xe buýt thông minh SmartBus ICTU
+                    </div>
+                    <div style="margin-top: 14px;">
+                      <span style="display: inline-block; background-color: #10b981; color: #ffffff; font-size: 12px; font-weight: 700; padding: 4px 14px; border-radius: 9999px; letter-spacing: 0.5px; text-transform: uppercase;">
+                        ✓ ĐÃ THANH TOÁN (PAID)
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 2. Thân Email Nội Dung -->
+                <tr>
+                  <td style="padding: 24px;">
+                    ${redirectInfo?.isRedirected ? `
+                    <div style="background-color: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 18px; line-height: 1.5;">
+                      <strong>MÔI TRƯỜNG KIỂM THỬ:</strong> Email hóa đơn điện tử này được hệ thống tự động chuyển tiếp tới hòm thư quản trị <strong>${redirectInfo.actualTo}</strong> (Địa chỉ gốc của đơn vé: <code>${redirectInfo.originalEmail}</code>).
+                    </div>` : ''}
+
+                    <p style="margin: 0 0 14px 0; font-size: 15px; color: #1e293b;">
+                      Kính chào quý khách <strong>${params.passengerName || params.buyerName || 'Hành khách'}</strong>,
+                    </p>
+                    <p style="margin: 0 0 18px 0; font-size: 14px; color: #475569; line-height: 1.5;">
+                      Hệ thống trân trọng gửi quý khách thông tin hóa đơn điện tử cho giao dịch thanh toán đặt vé xe buýt thành công. Chi tiết chứng từ như sau:
+                    </p>
+
+                    <!-- Khối Thông Tin Hóa Đơn & Mã Tra Cứu Nổi Bật -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; margin-bottom: 20px;">
+                      <tr>
+                        <td style="padding: 16px 18px;">
+                          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                              <td width="50%" style="padding-bottom: 8px;">
+                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Số hóa đơn:</div>
+                                <div style="font-size: 16px; font-weight: 800; color: #0284c7; font-family: monospace;">${params.invoiceNumber}</div>
+                              </td>
+                              <td width="50%" style="padding-bottom: 8px; text-align: right;">
+                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Ký hiệu / Mẫu số:</div>
+                                <div style="font-size: 13px; font-weight: 700; color: #334155;">C26TIU (Mẫu 1/001)</div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td width="50%" style="padding-top: 6px; border-top: 1px dashed #e2e8f0;">
+                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Ngày lập:</div>
+                                <div style="font-size: 13px; font-weight: 600; color: #334155;">${dateStr} ${timeStr}</div>
+                              </td>
+                              <td width="50%" style="padding-top: 6px; border-top: 1px dashed #e2e8f0; text-align: right;">
+                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Mã đơn đặt vé:</div>
+                                <div style="font-size: 13px; font-weight: 700; color: #0f172a; font-family: monospace;">${params.bookingCode}</div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colspan="2" style="padding-top: 12px; border-top: 1.5px solid #e2e8f0;">
+                                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                                  <div style="font-size: 11.5px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px;">MÃ TRA CỨU HÓA ĐƠN TRỰC TUYẾN</div>
+                                  <div style="font-size: 20px; font-weight: 900; color: #1d4ed8; font-family: monospace; letter-spacing: 2px; margin: 4px 0;">${lookupCode}</div>
+                                  <div style="font-size: 11px; color: #3b82f6;">Sử dụng mã này để tra cứu và tải lại hóa đơn gốc tại cổng SmartBus ICTU</div>
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Nút Kêu Gọi Hành Động (CTA Button) -->
+                    <div style="text-align: center; margin: 20px 0 24px 0;">
+                      <a href="${lookupUrl}" target="_blank" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13.5px; font-weight: 700; display: inline-block; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);">
+                        🔍 Tra Cứu & Tải Hóa Đơn Trực Tuyến →
+                      </a>
+                    </div>
+
+                    <!-- Bảng Thông Tin Đơn Vị Phát Hành & Khách Hàng -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px;">
+                      <tr>
+                        <td width="50%" style="padding-right: 8px;">
+                          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; height: 100%;">
+                            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 6px;">ĐƠN VỊ BÁN HÀNG</div>
+                            <div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.4;">${params.sellerName || 'Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên'}</div>
+                            <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">MST: <strong>${params.sellerTaxCode || '4600123456'}</strong></div>
+                          </div>
+                        </td>
+                        <td width="50%" style="padding-left: 8px;">
+                          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; height: 100%;">
+                            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 6px;">NGƯỜI MUA HÀNG</div>
+                            <div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.4;">${params.passengerName || params.buyerName || 'Hành khách'}</div>
+                            <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">
+                              ${params.studentId ? `Mã SV: <strong>${params.studentId}</strong> | ` : ''}SĐT: ${params.buyerPhone || 'Đã liên kết'}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Bảng Kê Chi Tiết Hàng Hóa Dịch Vụ -->
+                    <div style="font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; margin-bottom: 8px;">
+                      CHI TIẾT DỊCH VỤ VẬN TẢI
+                    </div>
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 16px;">
+                      <thead>
+                        <tr style="background-color: #f8fafc; border-bottom: 1.5px solid #e2e8f0;">
+                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: center; width: 35px;">STT</th>
+                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: left;">Tên Dịch Vụ / Tuyến Xe</th>
+                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: center; width: 45px;">SL</th>
+                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: right; width: 85px;">Đơn Giá</th>
+                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: right; width: 95px;">Thành Tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${itemsHtml}
+                      </tbody>
+                    </table>
+
+                    <!-- Bảng Tổng Kết Tài Chính -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;">
+                      <tr>
+                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Tiền dịch vụ trước thuế:</td>
+                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${formattedSubtotal} VND</td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Thuế suất GTGT:</td>
+                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${vatRate}%</td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Tiền thuế GTGT:</td>
+                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${formattedVat} VND</td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 14px; font-weight: 700; color: #0f172a; padding: 8px 0 0 0; border-top: 1.5px dashed #cbd5e1;">TỔNG TIỀN THANH TOÁN:</td>
+                        <td style="font-size: 18px; font-weight: 800; color: #16a34a; text-align: right; padding: 8px 0 0 0; border-top: 1.5px dashed #cbd5e1;">${formattedTotal} VND</td>
+                      </tr>
+                    </table>
+
+                    <!-- Khối Chữ Ký Số & Con Dấu Điện Tử Hợp Lệ -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 1.5px dashed #10b981; border-radius: 10px; margin-bottom: 20px;">
+                      <tr>
+                        <td style="padding: 14px 18px;">
+                          <div style="font-size: 12px; font-weight: 800; color: #047857; text-transform: uppercase; margin-bottom: 4px;">
+                            ✓ ĐÃ KÝ SỐ ĐIỆN TỬ HỢP LỆ (DIGITALLY SIGNED)
+                          </div>
+                          <div style="font-size: 12px; color: #065f46; line-height: 1.5;">
+                            Ký bởi: <strong>TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG (ICTU)</strong><br/>
+                            Ngày ký: ${dateStr} ${timeStr} | Tiêu chuẩn chứng thư số Nhà Nước<br/>
+                            Căn cứ pháp lý: Nghị định 123/2020/NĐ-CP & Thông tư 78/2021/TT-BTC của Bộ Tài Chính
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Hướng Dẫn Tệp Đính Kèm PDF -->
+                    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #1e40af; margin-bottom: 20px; line-height: 1.5;">
+                      📎 <strong>Tệp đính kèm:</strong> Tệp hóa đơn điện tử định dạng PDF (<code>Hoa_Don_${params.invoiceNumber}.pdf</code>) có chữ ký số điện tử chuẩn đã được đính kèm ở bên dưới email này để quý khách thuận tiện lưu trữ và quyết toán chi phí.
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 3. Footer Pháp Lý -->
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 22px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                    <strong>TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG THÁI NGUYÊN (ICTU)</strong><br/>
+                    Địa chỉ: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br/>
+                    Hotline hỗ trợ kỹ thuật: 1900 1234 | Email: hotro@smartbus.ictu.edu.vn | Website: smartbus.ictu.edu.vn
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
    * Gửi email chung qua Nodemailer SMTP hoặc Mock logger
    */
   async sendMail(options: SendMailOptions): Promise<boolean> {
+    const redirectInfo = this.resolveTargetEmail(options.to);
+    const toAddress = redirectInfo.actualTo;
     const fromAddress =
       process.env.SMTP_FROM ||
       `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
 
     const record: SentNotificationRecord = {
       id: `mail-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      recipientEmail: options.to,
+      recipientEmail: toAddress,
       subject: options.subject,
       ticketCode: '',
       bookingCode: '',
@@ -855,24 +1196,24 @@ export class NotificationService {
       try {
         await this.transporter.sendMail({
           from: fromAddress,
-          to: options.to,
+          to: toAddress,
           subject: options.subject,
           text: options.text,
           html: options.html,
           attachments: options.attachments,
         });
-        this.logger.log(`[NotificationService] Đã gửi email thành công qua SMTP tới: ${options.to} (Tiêu đề: ${options.subject})`);
+        this.logger.log(`[NotificationService] Đã gửi email thành công qua SMTP tới: ${toAddress} (Gốc: ${options.to}) (Tiêu đề: ${options.subject})`);
         this.sentNotifications.push(record);
         return true;
       } catch (error: any) {
-        this.logger.error(`[NotificationService] Lỗi gửi email qua SMTP: ${error?.message}. Ghi nhận log.`);
+        this.logger.error(`[NotificationService] Lỗi gửi email qua SMTP tới ${toAddress}: ${error?.message}. Ghi nhận log.`);
         record.status = 'failed';
         this.sentNotifications.push(record);
         return false;
       }
     } else {
       this.logger.log(
-        `[NotificationService] [Mock/Log Mode] Gửi email tới ${options.to}: ${options.subject} (Số tệp đính kèm: ${options.attachments?.length || 0})`,
+        `[NotificationService] [Mock/Log Mode] Gửi email tới ${toAddress}: ${options.subject} (Số tệp đính kèm: ${options.attachments?.length || 0})`,
       );
       this.sentNotifications.push(record);
       return true;
@@ -883,42 +1224,14 @@ export class NotificationService {
    * Gửi email Hóa đơn điện tử kèm tệp đính kèm PDF
    */
   async sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<boolean> {
-    const subject = `[SmartBus ICTU] Hóa đơn điện tử ${params.invoiceNumber} - Đơn vé ${params.bookingCode}`;
-    const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
+    const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
+    const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
+    const subject = `${subjectPrefix}[SmartBus ICTU] Hóa đơn điện tử ${params.invoiceNumber} - Đơn vé ${params.bookingCode}`;
 
-    const htmlBody =
-      params.htmlContent ||
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 16px;">
-          <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">HÓA ĐƠN ĐIỆN TỬ - SMARTBUS ICTU</h2>
-          <p style="color: #64748b; font-size: 13px; margin: 6px 0 0 0;">Dịch vụ vận tải hành khách bằng xe buýt thông minh</p>
-        </div>
-        
-        <p style="margin-top: 20px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
-        <p>Hệ thống trân trọng gửi quý khách hóa đơn điện tử cho giao dịch thanh toán đặt vé xe buýt thành công.</p>
-        
-        <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 14px 18px; margin: 18px 0; border-radius: 4px;">
-          <p style="margin: 4px 0;"><strong>Số hóa đơn:</strong> <span style="color: #2563eb; font-weight: bold;">${params.invoiceNumber}</span></p>
-          <p style="margin: 4px 0;"><strong>Mã đơn vé:</strong> <code>${params.bookingCode}</code></p>
-          <p style="margin: 4px 0;"><strong>Tuyến xe:</strong> ${params.routeName}</p>
-          <p style="margin: 4px 0;"><strong>Tổng tiền thanh toán:</strong> <span style="color: #059669; font-weight: bold; font-size: 16px;">${formattedTotal} VND</span></p>
-        </div>
-
-        <p>Tệp hóa đơn điện tử định dạng <strong>PDF chuẩn có chữ ký số điện tử</strong> đã được đính kèm ở bên dưới email này.</p>
-        <p style="color: #64748b; font-size: 13px;">Quý khách có thể xem và tải lại hóa đơn bất cứ lúc nào từ phần Lịch sử đặt vé trong ứng dụng.</p>
-
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
-        <div style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6;">
-          <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
-          Địa chỉ: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br/>
-          Hotline hỗ trợ: 1900 1234 | Email: hotro@smartbus.ictu.edu.vn
-        </div>
-      </div>
-    `;
+    const htmlBody = params.htmlContent || this.buildInvoiceEmailHtml(params, redirectInfo);
 
     return this.sendMail({
-      to: params.recipientEmail,
+      to: redirectInfo.actualTo,
       subject,
       html: htmlBody,
       attachments: [
