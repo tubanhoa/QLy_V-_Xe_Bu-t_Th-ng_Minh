@@ -51,7 +51,7 @@ export class MonthlyPassEntity {
   @Column({ name: 'duration_months', type: 'int', default: 1 })
   durationMonths: number;
 
-  @Column({ name: 'proof_image_url', type: 'varchar', length: 500, nullable: true })
+  @Column({ name: 'proof_image_url', type: 'text', nullable: true })
   proofImageUrl: string | null;
 
   @Column({ name: 'approval_status', type: 'varchar', length: 20, default: ApprovalStatus.PENDING })
