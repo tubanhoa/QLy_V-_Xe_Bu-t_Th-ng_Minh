@@ -13,6 +13,9 @@ import type {
   RegisterMonthlyPassPayload,
   ValidateVoucherPayload,
   VoucherValidationResult,
+  VoucherItem,
+  CreateVoucherPayload,
+  UpdateVoucherPayload,
 } from '@/lib/types/promotion'
 import { UnifiedApiResponse } from '@/lib/types/sprint1'
 
@@ -70,6 +73,175 @@ class PromotionService {
         success: false,
         message: error?.message || 'Lỗi kết nối máy chủ',
       }
+    }
+  }
+
+  /**
+   * Danh sách mã voucher khuyến mại (Admin / Marketing / Manager)
+   * Endpoint: GET /api/v1/admin/vouchers
+   */
+  async getAdminVouchers(query?: {
+    search?: string
+    status?: string
+    page?: number
+    limit?: number
+  }): Promise<UnifiedApiResponse<{ items: VoucherItem[]; meta?: any }>> {
+    try {
+      const params = new URLSearchParams()
+      if (query?.search) params.append('search', query.search)
+      if (query?.status && query.status !== 'all') params.append('status', query.status)
+      if (query?.page) params.append('page', String(query.page))
+      if (query?.limit) params.append('limit', String(query.limit))
+
+      const url = `${this.baseUrl}/admin/vouchers${params.toString() ? `?${params.toString()}` : ''}`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải danh sách voucher',
+        }
+      }
+
+      const rawData = resJson?.data || resJson
+      const items = Array.isArray(rawData) ? rawData : rawData?.items || []
+      const meta = rawData?.meta || resJson?.meta
+      return { success: true, data: { items, meta } }
+    } catch (error: any) {
+      console.error('[PromotionService.getAdminVouchers]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Lấy danh sách Voucher khả dụng cho khách hàng (Public / Customer Vault)
+   */
+  async getAvailableVouchers(): Promise<UnifiedApiResponse<VoucherItem[]>> {
+    try {
+      // Thử gọi API admin nếu đang có token hợp lệ
+      const adminRes = await this.getAdminVouchers({ status: 'active', limit: 50 })
+      if (adminRes.success && adminRes.data?.items?.length) {
+        return { success: true, data: adminRes.data.items }
+      }
+      return { success: true, data: [] }
+    } catch (error: any) {
+      return { success: true, data: [] }
+    }
+  }
+
+  /**
+   * Tạo mới mã voucher (Admin / Marketing)
+   * Endpoint: POST /api/v1/admin/vouchers
+   */
+  async createVoucher(payload: CreateVoucherPayload): Promise<UnifiedApiResponse<VoucherItem>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/admin/vouchers`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tạo mã voucher',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.createVoucher]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Cập nhật thông tin voucher
+   * Endpoint: PATCH /api/v1/admin/vouchers/:id
+   */
+  async updateVoucher(id: string, payload: UpdateVoucherPayload): Promise<UnifiedApiResponse<VoucherItem>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/admin/vouchers/${id}`, {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể cập nhật mã voucher',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.updateVoucher]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Bật / Tắt trạng thái kích hoạt voucher (Toggle active / inactive)
+   * Endpoint: PATCH /api/v1/admin/vouchers/:id/toggle-status
+   */
+  async toggleVoucherStatus(id: string): Promise<UnifiedApiResponse<VoucherItem>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/admin/vouchers/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể đổi trạng thái voucher',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.toggleVoucherStatus]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Xóa mã voucher chưa từng được sử dụng
+   * Endpoint: DELETE /api/v1/admin/vouchers/:id
+   */
+  async deleteVoucher(id: string): Promise<UnifiedApiResponse<{ message: string }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/admin/vouchers/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể xóa mã voucher',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.deleteVoucher]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
     }
   }
 

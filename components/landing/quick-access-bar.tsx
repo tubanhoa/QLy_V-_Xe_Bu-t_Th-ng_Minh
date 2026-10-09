@@ -3,6 +3,7 @@
 import {
   CalendarCheck,
   Compass,
+  Gift,
   GraduationCap,
   Megaphone,
   QrCode,
@@ -17,9 +18,15 @@ interface QuickAccessBarProps {
   onOpenSeatPicker: () => void
   onOpenModal: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
   onOpenTicketModal?: () => void
+  onOpenVoucherVault?: () => void
 }
 
-export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModal }: QuickAccessBarProps) {
+export function QuickAccessBar({
+  onOpenSeatPicker,
+  onOpenModal,
+  onOpenTicketModal,
+  onOpenVoucherVault,
+}: QuickAccessBarProps) {
   const items = [
     {
       id: 'suggest',
@@ -31,13 +38,19 @@ export function QuickAccessBar({ onOpenSeatPicker, onOpenModal, onOpenTicketModa
       onClick: () => onOpenModal('routes'),
     },
     {
-      id: 'news',
-      icon: Megaphone,
-      label: 'Tin tức & Lịch xe',
-      sublabel: 'Cập nhật thời gian thực',
-      badge: null,
-      badgeColor: '',
-      onClick: () => onOpenModal('news'),
+      id: 'vouchers',
+      icon: Gift,
+      label: 'Kho Voucher',
+      sublabel: 'Ưu đãi & Khuyến mãi',
+      badge: 'HOT',
+      badgeColor: 'bg-gradient-to-r from-rose-500 to-amber-500 text-white shadow-rose-500/20',
+      onClick: () => {
+        if (onOpenVoucherVault) {
+          onOpenVoucherVault()
+        } else {
+          onOpenModal('news')
+        }
+      },
     },
     {
       id: 'student-pass',

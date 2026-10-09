@@ -52,6 +52,10 @@ const PushPermissionModal = dynamic(
   () => import('@/components/notification/push-permission-modal').then((mod) => mod.PushPermissionModal),
   { ssr: false }
 )
+const VoucherVaultModal = dynamic(
+  () => import('./voucher-vault-modal').then((mod) => mod.VoucherVaultModal),
+  { ssr: false }
+)
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth()
@@ -61,6 +65,8 @@ export function LandingPage() {
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
   const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
   const [isPriorityVerificationModalOpen, setIsPriorityVerificationModalOpen] = useState(false)
+  const [isVoucherVaultOpen, setIsVoucherVaultOpen] = useState(false)
+  const [prefilledVoucherCode, setPrefilledVoucherCode] = useState<string | null>(null)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner' | null>(null)
@@ -77,11 +83,12 @@ export function LandingPage() {
     isTicketModalOpen ||
     isMonthlyPassModalOpen ||
     isPriorityVerificationModalOpen ||
+    isVoucherVaultOpen ||
     isAuthPromptOpen ||
     isNotificationCenterOpen ||
     activeModal !== null
 
-  // Tự động mở Cửa Sổ Nổi Vé Điện Tử hoặc Vé Tháng khi có query param
+  // Tự động mở Cửa Sổ Nổi Vé Điện Tử, Vé Tháng hoặc Kho Voucher khi có query param
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -93,6 +100,9 @@ export function LandingPage() {
       }
       if (params.get('openVerification') === 'true') {
         setIsPriorityVerificationModalOpen(true)
+      }
+      if (params.get('openVouchers') === 'true') {
+        setIsVoucherVaultOpen(true)
       }
     }
   }, [])
@@ -264,6 +274,7 @@ export function LandingPage() {
             }
           }}
           onOpenTicketModal={() => setIsTicketModalOpen(true)}
+          onOpenVoucherVault={() => setIsVoucherVaultOpen(true)}
         />
       </main>
 
@@ -312,13 +323,28 @@ export function LandingPage() {
           onClose={() => {
             setIsSeatPickerOpen(false)
             setSelectedTrip(null)
+            setPrefilledVoucherCode(null)
           }}
           initialOrigin={searchOrigin || 'ĐH CNTT & TT Thái Nguyên'}
           initialDestination={searchDestination || 'Bến Xe Trung Tâm Thái Nguyên'}
           selectedTrip={selectedTrip}
+          initialVoucherCode={prefilledVoucherCode || undefined}
           onViewMyTickets={(tId) => {
             setSelectedTicketId(tId || null)
             setIsTicketModalOpen(true)
+          }}
+        />
+      )}
+
+      {/* Cửa sổ nổi: Kho Voucher & Ưu Đãi Của Tôi */}
+      {isVoucherVaultOpen && (
+        <VoucherVaultModal
+          open={isVoucherVaultOpen}
+          onClose={() => setIsVoucherVaultOpen(false)}
+          onUseVoucher={(code) => {
+            setPrefilledVoucherCode(code)
+            setIsVoucherVaultOpen(false)
+            setIsSeatPickerOpen(true)
           }}
         />
       )}
