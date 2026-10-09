@@ -161,6 +161,18 @@ export class InvoiceService {
 
     const qrLookupUrl = `https://smartbus.ictu.edu.vn/invoices/lookup?code=${lookupCode}&inv=${invoiceNumber}`;
 
+    const primaryTicket = tickets[0];
+    let ticketQrDataUrl = '';
+    try {
+      if (primaryTicket?.qrData) {
+        ticketQrDataUrl = await generateQrDataUrl(primaryTicket.qrData);
+      } else if (primaryTicket?.ticketCode) {
+        ticketQrDataUrl = await generateQrDataUrl(primaryTicket.ticketCode);
+      }
+    } catch {
+      ticketQrDataUrl = '';
+    }
+
     const invoiceData: InvoiceData = {
       id: crypto.randomUUID(),
       invoiceNumber,
@@ -184,6 +196,9 @@ export class InvoiceService {
       totalAmount,
       amountInWords: vietnameseNumberToWords(totalAmount),
       qrLookupData: qrLookupUrl,
+      ticketCode: primaryTicket?.ticketCode,
+      seatNumber: tickets.map((t) => t.seat?.seatNumber).filter(Boolean).join(', ') || 'Ghế tiêu chuẩn',
+      ticketQrDataUrl,
     };
 
     const invoiceEntity = this.invoiceRepository.create({
@@ -258,6 +273,34 @@ export class InvoiceService {
             routeName: invData?.routeName || 'Tuyến xe buýt ICTU',
             totalAmount: Number(invoice.totalAmount),
             pdfBuffer: buffer,
+            lookupCode: invoice.lookupCode,
+            issuedAt: invoice.issuedAt,
+            subtotalAmount: Number(invoice.subtotalAmount),
+            vatAmount: Number(invoice.vatAmount),
+            vatRate: Number(invoice.vatRate),
+            items: invData?.items?.map((it) => ({
+              itemNumber: it.itemNumber,
+              description: it.description,
+              ticketCode: it.ticketCode,
+              seatNumber: it.seatNumber,
+              unitPrice: Number(it.unitPrice),
+              quantity: Number(it.quantity),
+              totalAmount: Number(it.totalAmount),
+            })),
+            sellerName: invData?.seller?.name,
+            sellerTaxCode: invData?.seller?.taxCode,
+            buyerName: invData?.buyer?.fullName,
+            buyerPhone: invData?.buyer?.phone,
+            studentId: invData?.buyer?.studentId,
+            faculty: invData?.buyer?.faculty,
+            ticketCode: invData?.ticketCode || invData?.items?.[0]?.ticketCode,
+            seatNumber: invData?.seatNumber || invData?.items?.[0]?.seatNumber,
+            qrDataUrl: invData?.ticketQrDataUrl,
+            origin: invData?.origin,
+            destination: invData?.destination,
+            departureTime: invData?.departureTime,
+            vehiclePlate: invData?.vehiclePlate,
+            paymentMethod: invData?.paymentMethod,
           });
           this.logger.log(`[InvoiceQueue] Tác vụ gửi hóa đơn ${invoice.invoiceNumber} qua email ${recipientEmail}: ${sent ? 'Thành công' : 'Đã lưu log'}`);
         }
@@ -505,6 +548,26 @@ export class InvoiceService {
     }
 
     const { buffer } = await this.generatePdfBuffer(invoice);
+
+    let ticketQrDataUrl = invData.ticketQrDataUrl;
+    let ticketCode = invData.ticketCode || invData.items?.[0]?.ticketCode;
+    let seatNumber = invData.seatNumber || invData.items?.[0]?.seatNumber;
+    if (!ticketQrDataUrl && invoice.bookingId) {
+      try {
+        const tickets = await this.ticketRepository.find({
+          where: { bookingId: invoice.bookingId },
+          relations: { seat: true },
+        });
+        if (tickets.length > 0) {
+          ticketCode = ticketCode || tickets[0].ticketCode;
+          seatNumber = seatNumber || tickets.map((t) => t.seat?.seatNumber).filter(Boolean).join(', ');
+          ticketQrDataUrl = await generateQrDataUrl(tickets[0].qrData || tickets[0].ticketCode);
+        }
+      } catch {
+        // fallback ignore
+      }
+    }
+
     const sent = await this.notificationService.sendInvoiceEmail({
       recipientEmail,
       passengerName: invData.buyer?.fullName || 'Hành khách',
@@ -513,6 +576,34 @@ export class InvoiceService {
       routeName: invData.routeName || 'Tuyến xe buýt ICTU',
       totalAmount: Number(invoice.totalAmount),
       pdfBuffer: buffer,
+      lookupCode: invoice.lookupCode,
+      issuedAt: invoice.issuedAt,
+      subtotalAmount: Number(invoice.subtotalAmount),
+      vatAmount: Number(invoice.vatAmount),
+      vatRate: Number(invoice.vatRate),
+      items: invData?.items?.map((it) => ({
+        itemNumber: it.itemNumber,
+        description: it.description,
+        ticketCode: it.ticketCode,
+        seatNumber: it.seatNumber,
+        unitPrice: Number(it.unitPrice),
+        quantity: Number(it.quantity),
+        totalAmount: Number(it.totalAmount),
+      })),
+      sellerName: invData?.seller?.name,
+      sellerTaxCode: invData?.seller?.taxCode,
+      buyerName: invData?.buyer?.fullName,
+      buyerPhone: invData?.buyer?.phone,
+      studentId: invData?.buyer?.studentId,
+      faculty: invData?.buyer?.faculty,
+      ticketCode,
+      seatNumber,
+      qrDataUrl: ticketQrDataUrl,
+      origin: invData.origin,
+      destination: invData.destination,
+      departureTime: invData.departureTime,
+      vehiclePlate: invData.vehiclePlate,
+      paymentMethod: invData.paymentMethod,
     });
 
     return {

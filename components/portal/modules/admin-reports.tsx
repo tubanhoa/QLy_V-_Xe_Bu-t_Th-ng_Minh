@@ -181,7 +181,7 @@ export function AdminReports() {
             Báo Cáo Thống Kê & Nhật Ký Kiểm Toán (Audit Trail)
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Dữ liệu tài chính hợp nhất từ 145 vé Supabase, tỷ lệ phụ tải tuyến và lưu vết hệ thống
+            Dữ liệu tài chính hợp nhất thời gian thực từ Supabase Cloud, tỷ lệ phụ tải tuyến và lưu vết hệ thống
           </p>
         </div>
 
@@ -300,10 +300,10 @@ export function AdminReports() {
             <FileBarChart2 className="size-4 text-purple-500" /> Tỷ lệ lấp đầy bình quân
           </span>
           <p className="mt-2 text-3xl font-bold font-mono text-foreground">
-            {occupancyData.overallRate > 0 ? `${occupancyData.overallRate}%` : '78.5%'}
+            {occupancyData.overallRate ?? 0}%
           </p>
           <span className="mt-2 inline-block text-xs font-semibold text-purple-600 dark:text-purple-400">
-            Cao điểm đạt 95.8%
+            {occupancyData.trips?.length > 0 ? `${occupancyData.trips.length} chuyến khai thác` : 'Chưa có chuyến ghi nhận'}
           </span>
         </div>
       </div>
@@ -365,7 +365,7 @@ export function AdminReports() {
 
           <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>Cập nhật trực tiếp từ bảng dữ liệu bán vé</span>
-            <span className="font-semibold text-[#00A86B]">Đạt chỉ tiêu kế hoạch Q4/2026</span>
+            <span className="font-semibold text-[#00A86B]">{revenueData?.revenueByRoute?.length ? 'Dữ liệu vận hành theo tuyến' : 'Chưa có giao dịch theo tuyến'}</span>
           </div>
         </div>
 
@@ -401,10 +401,20 @@ export function AdminReports() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 p-3.5 text-xs text-cyan-900 dark:text-cyan-200">
-            <span className="font-bold block mb-0.5">Thanh toán không tiền mặt: 92%</span>
-            <span>Tối ưu hóa thời gian đón trả khách, giảm độ trễ tại trạm xuống dưới 15 giây.</span>
-          </div>
+          {(() => {
+            const channels = revenueData?.revenueByChannel || []
+            const cashlessShare = channels
+              .filter((c) => !c.channel.toLowerCase().includes('tiền mặt'))
+              .reduce((sum, c) => sum + (c.share || 0), 0)
+            return (
+              <div className="mt-6 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 p-3.5 text-xs text-cyan-900 dark:text-cyan-200">
+                <span className="font-bold block mb-0.5">
+                  Thanh toán không tiền mặt: {channels.length > 0 ? `${cashlessShare}%` : 'Chưa có giao dịch'}
+                </span>
+                <span>Tối ưu hóa thời gian đón trả khách, giảm độ trễ tại trạm qua cổng thanh toán số.</span>
+              </div>
+            )
+          })()}
         </div>
       </div>
 

@@ -51,16 +51,18 @@ export class PaymentController {
   @Public()
   @Get('vnpay-ipn')
   @ApiOperation({ summary: 'Webhook IPN từ VNPay (GET)' })
-  async handleVNPayIpnGet(@Query() query: Record<string, string>) {
-    return this.paymentService.handleVNPayIpn(query);
+  async handleVNPayIpnGet(@Query() query: Record<string, string>, @Req() req: Request) {
+    const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
+    return this.paymentService.handleVNPayIpn(query, ip);
   }
 
   @Public()
   @Post('vnpay-ipn')
   @ApiOperation({ summary: 'Webhook IPN từ VNPay (POST)' })
-  async handleVNPayIpnPost(@Query() query: Record<string, string>, @Body() body: Record<string, string>) {
+  async handleVNPayIpnPost(@Query() query: Record<string, string>, @Body() body: Record<string, string>, @Req() req: Request) {
+    const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
     const params = { ...query, ...body };
-    return this.paymentService.handleVNPayIpn(params);
+    return this.paymentService.handleVNPayIpn(params, ip);
   }
 
   @Public()

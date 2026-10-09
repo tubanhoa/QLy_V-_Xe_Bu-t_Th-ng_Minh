@@ -134,6 +134,9 @@ export function AdminPayments() {
     }
   }, [])
 
+  // Auto-sync real-time biến động IPN (10 giây)
+  const [autoSync, setAutoSync] = useState(true)
+
   useEffect(() => {
     if (activeTab === 'transactions') {
       loadTickets()
@@ -143,6 +146,21 @@ export function AdminPayments() {
       loadLogs()
     }
   }, [activeTab, loadTickets, loadReconciliation, loadLogs])
+
+  // Lắng nghe và cập nhật định kỳ mỗi 10 giây
+  useEffect(() => {
+    if (!autoSync) return
+    const interval = setInterval(() => {
+      if (activeTab === 'transactions') {
+        loadTickets()
+      } else if (activeTab === 'reconciliation') {
+        loadReconciliation()
+      } else if (activeTab === 'logs') {
+        loadLogs()
+      }
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [autoSync, activeTab, loadTickets, loadReconciliation, loadLogs])
 
   // Thực hiện hoàn vé thật
   const handleRefund = async (ticket: AdminTicketItem) => {
@@ -243,47 +261,66 @@ export function AdminPayments() {
             Quản Lý Cổng Thanh Toán & Đối Soát
           </h1>
           <p className="text-sm text-muted-foreground">
-            Đối soát trực tiếp dữ liệu 145 vé thật từ Supabase Cloud qua các cổng VNPay, MoMo, ZaloPay, VietQR và Tiền mặt
+            Đối soát trực tiếp dữ liệu giao dịch vé thời gian thực từ Supabase Cloud qua các cổng VNPay, MoMo, ZaloPay, VietQR và Tiền mặt
           </p>
         </div>
 
-        {/* Tab Switchers */}
-        <div className="flex items-center gap-1.5 rounded-2xl bg-muted/60 p-1 border border-border">
+        {/* Tab Switchers & IPN Realtime Sync Toggle */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('transactions')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'transactions'
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+            onClick={() => setAutoSync(!autoSync)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+              autoSync
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'bg-muted text-muted-foreground border-border hover:text-foreground'
             }`}
+            title="Tự động đồng bộ biến động doanh thu & giao dịch từ VNPay IPN mỗi 10 giây"
           >
-            Giao Dịch Vé ({total})
+            <span className={`relative flex size-2`}>
+              {autoSync && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full size-2 ${autoSync ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
+            </span>
+            <span>{autoSync ? 'IPN Live Sync: Bật' : 'IPN Live Sync: Tắt'}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('reconciliation')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'reconciliation'
-                ? 'bg-card text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <TrendingUp size={13} />
-            Báo Cáo Đối Soát
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('logs')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'logs'
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <History size={13} />
-            Nhật Ký Hoàn Tiền
-          </button>
+
+          <div className="flex items-center gap-1.5 rounded-2xl bg-muted/60 p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setActiveTab('transactions')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'transactions'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Giao Dịch Vé ({total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('reconciliation')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'reconciliation'
+                  ? 'bg-card text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TrendingUp size={13} />
+              Báo Cáo Đối Soát
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'logs'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <History size={13} />
+              Nhật Ký Hoàn Tiền
+            </button>
+          </div>
         </div>
       </div>
 
@@ -433,7 +470,7 @@ export function AdminPayments() {
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
                         <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-emerald-600" />
-                        Đang nạp 145 vé từ Supabase Cloud...
+                        Đang đồng bộ dữ liệu giao dịch từ Supabase Cloud...
                       </td>
                     </tr>
                   ) : tickets.length === 0 ? (
@@ -588,15 +625,27 @@ export function AdminPayments() {
                   { gateway: 'vietqr', name: 'VietQR Chuyển khoản Napas 24/7', code: 'vietqr' },
                   { gateway: 'cash', name: 'Tiền mặt tại quầy / Tài xế', code: 'cash' },
                 ].map((g) => {
-                  const filteredGate = tickets.filter(
-                    (t) => t.paymentMethod?.toLowerCase() === g.code
+                  const gwSummary = reconciliation?.summaryByGateway?.find(
+                    (item: any) => item.gateway === g.code,
                   )
-                  const successCount = filteredGate.filter((t) => t.status === 'paid').length
-                  const failedCount = filteredGate.filter((t) => t.status === 'cancelled' || t.status === 'reserved').length
-                  const refundCount = filteredGate.filter((t) => t.status === 'refunded').length
-                  const revenue = filteredGate
-                    .filter((t) => t.status === 'paid')
-                    .reduce((sum, t) => sum + t.amount, 0)
+                  const filteredGate = tickets.filter(
+                    (t) => t.paymentMethod?.toLowerCase() === g.code,
+                  )
+                  const totalTxn = gwSummary ? gwSummary.total : filteredGate.length
+                  const successCount = gwSummary
+                    ? gwSummary.successCount
+                    : filteredGate.filter((t) => t.status === 'paid').length
+                  const failedCount = gwSummary
+                    ? gwSummary.failedCount
+                    : filteredGate.filter((t) => t.status === 'cancelled' || t.status === 'reserved').length
+                  const refundCount = gwSummary
+                    ? gwSummary.refundCount
+                    : filteredGate.filter((t) => t.status === 'refunded').length
+                  const revenue = gwSummary
+                    ? gwSummary.revenue
+                    : filteredGate
+                        .filter((t) => t.status === 'paid')
+                        .reduce((sum, t) => sum + t.amount, 0)
 
                   return (
                     <tr key={g.gateway} className="hover:bg-muted/20 transition-colors">
@@ -605,7 +654,7 @@ export function AdminPayments() {
                         <span>{g.name}</span>
                       </td>
                       <td className="p-4 text-xs font-mono font-bold text-foreground">
-                        {filteredGate.length}
+                        {totalTxn}
                       </td>
                       <td className="p-4 text-xs font-mono text-emerald-700 font-bold">{successCount}</td>
                       <td className="p-4 text-xs font-mono text-amber-700">{failedCount}</td>

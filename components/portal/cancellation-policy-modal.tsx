@@ -50,9 +50,9 @@ const COMMON_REASONS = [
 export function CancellationPolicyModal({
   ticketId,
   ticketCode,
-  seatNumber = '01A',
+  seatNumber = '',
   departureTime,
-  price = 10000,
+  price = 0,
   onClose,
   onSuccess,
 }: CancellationPolicyModalProps) {

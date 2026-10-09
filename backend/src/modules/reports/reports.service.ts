@@ -95,7 +95,7 @@ export class ReportsService {
       const dateStr = new Date(b.bookingTime).toISOString().slice(0, 10);
       revenueByDateMap.set(dateStr, (revenueByDateMap.get(dateStr) || 0) + amount);
 
-      const rawMethod = b.payments?.[0]?.paymentMethod?.toLowerCase() || 'vnpay';
+      const rawMethod = b.payments?.[0]?.paymentMethod?.toLowerCase() || 'cash';
       const channelLabel = CHANNEL_LABELS[rawMethod] || 'Cổng thanh toán điện tử';
       revenueByChannelMap.set(channelLabel, (revenueByChannelMap.get(channelLabel) || 0) + amount);
 

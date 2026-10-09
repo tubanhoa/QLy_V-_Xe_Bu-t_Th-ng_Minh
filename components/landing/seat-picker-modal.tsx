@@ -109,6 +109,7 @@ export function SeatPickerModal({
   const [paymentMethod, setPaymentMethod] = useState<'vnpay' | 'momo' | 'zalopay' | 'bank_card' | 'vietqr' | 'ictupay'>('vnpay')
   const [paymentResponse, setPaymentResponse] = useState<PaymentUrlResponseData | null>(null)
   const [isCancellingPayment, setIsCancellingPayment] = useState(false)
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingResult, setBookingResult] = useState<BookingResultData | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -239,6 +240,43 @@ export function SeatPickerModal({
     toggleSeat(seat)
   }, [toggleSeat])
 
+  // Lắng nghe trạng thái thanh toán tự động (Asynchronous IPN Webhook Polling mỗi 3 giây)
+  useEffect(() => {
+    if (step !== 'payment-qr') return
+
+    const primaryTicketId = bookingResult?.tickets?.[0]?.id || bookingResult?.ticketId
+    const bookingId = bookingResult?.id || bookingResult?.bookingId
+
+    if (!primaryTicketId && !bookingId) return
+
+    let isCancelled = false
+    const interval = setInterval(async () => {
+      try {
+        if (primaryTicketId) {
+          const res = await paymentService.getTicketDetail(primaryTicketId)
+          if (res.success && res.data) {
+            const status = (res.data.status || '').toLowerCase()
+            if (status === 'paid' && !isCancelled) {
+              setBookingResult((prev: any) => ({
+                ...prev,
+                status: 'paid',
+                tickets: [res.data],
+              }))
+              setStep('success')
+            }
+          }
+        }
+      } catch {
+        // Tiếp tục lắng nghe chu kỳ tiếp theo
+      }
+    }, 3000)
+
+    return () => {
+      isCancelled = true
+      clearInterval(interval)
+    }
+  }, [step, bookingResult])
+
   const handleClose = async () => {
     if (step === 'payment-qr' && bookingResult?.id) {
       await paymentService.cancelPayment(bookingResult.id).catch(() => {})
@@ -274,6 +312,42 @@ export function SeatPickerModal({
       setStep('seats')
     } finally {
       setIsCancellingPayment(false)
+    }
+  }
+
+  // Xác nhận thanh toán thành công (chốt chuyển sang PAID trên backend Supabase)
+  const handleConfirmPaymentSuccess = async () => {
+    const validBookingId = bookingResult?.id || (bookingResult as any)?.bookingId || paymentResponse?.bookingId
+    if (!validBookingId) {
+      setStep('success')
+      refreshSeatMap()
+      return
+    }
+
+    setIsConfirmingPayment(true)
+    try {
+      const confirmRes = await paymentService.mockConfirmPayment(validBookingId)
+      if (confirmRes.success) {
+        const confirmedData = confirmRes.data as any
+        const updatedTickets = confirmedData?.tickets || bookingResult?.tickets
+        const updatedBooking = confirmedData?.booking || bookingResult
+
+        setBookingResult((prev: any) => ({
+          ...prev,
+          ...updatedBooking,
+          status: 'paid',
+          tickets: updatedTickets,
+        }))
+
+        refreshSeatMap()
+        setStep('success')
+      } else {
+        alert(confirmRes.message || 'Không thể xác nhận thanh toán. Vui lòng kiểm tra lại.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi kết nối xác nhận thanh toán')
+    } finally {
+      setIsConfirmingPayment(false)
     }
   }
 
@@ -961,6 +1035,15 @@ export function SeatPickerModal({
                 </strong>
                 . Mở ứng dụng ngân hàng hoặc ví điện tử để quét mã.
               </p>
+              <div className="pt-1 flex items-center justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-[11px] font-bold text-blue-700 shadow-2xs">
+                  <span className="relative flex size-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full size-2 bg-blue-600"></span>
+                  </span>
+                  <span>Đang kết nối Webhook IPN Sandbox · Tự động xác nhận sau khi quét</span>
+                </span>
+              </div>
             </div>
 
             {/* Khung mã QR Code chuẩn VietQR & EMVCo */}
@@ -1098,6 +1181,59 @@ export function SeatPickerModal({
               )}
             </div>
 
+            {/* Card thông tin thẻ test NCB Sandbox dành cho VNPay */}
+            {(paymentMethod === 'vnpay' || paymentMethod === 'bank_card') && (
+              <div className="w-full max-w-sm rounded-2xl border border-blue-200 bg-blue-50/80 p-3.5 text-left text-xs space-y-2 text-blue-950 shadow-xs shrink-0">
+                <div className="flex items-center justify-between font-black">
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <CreditCard size={15} className="text-blue-700" />
+                    <span>Thông Tin Thẻ Test VNPay Sandbox</span>
+                  </span>
+                  <span className="text-[10px] bg-blue-200 text-blue-900 px-2 py-0.5 rounded-full font-mono font-bold">
+                    NCB TEST
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 font-mono text-[11px] bg-white/80 p-2.5 rounded-xl border border-blue-100">
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Số thẻ test:</span>
+                    <div className="flex items-center gap-1">
+                      <strong className="text-blue-950 font-black">9704198526191432198</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard('9704198526191432198', 'ncb_card')}
+                        className="p-0.5 rounded hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
+                        title="Sao chép số thẻ test NCB"
+                      >
+                        {copiedField === 'ncb_card' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Tên chủ thẻ:</span>
+                    <strong className="text-blue-950 font-black">NGUYEN VAN A</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Ngày phát hành:</span>
+                    <strong className="text-blue-950 font-black">07/15</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block font-sans">Mã OTP:</span>
+                    <div className="flex items-center gap-1">
+                      <strong className="text-blue-950 font-black">123456</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard('123456', 'ncb_otp')}
+                        className="p-0.5 rounded hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
+                        title="Sao chép mã OTP"
+                      >
+                        {copiedField === 'ncb_otp' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Các nút hành động */}
             <div className="flex flex-col gap-2 w-full max-w-sm pt-1 shrink-0 pb-4 safe-pb-dock">
               {paymentResponse?.paymentUrl && (
@@ -1108,24 +1244,27 @@ export function SeatPickerModal({
                   className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-[#005A36] py-3 text-xs font-black text-white hover:opacity-95 transition-all shadow-md shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer touch-press touch-manipulation"
                 >
                   <ExternalLink size={15} />
-                  <span>Mở Trang Thanh Toán Cổng {paymentMethod.toUpperCase()}</span>
+                  <span>Mở Cổng Thanh Toán VNPay Sandbox Chính Thức</span>
                 </a>
               )}
 
               <button
                 type="button"
-                onClick={async () => {
-                  const bId = bookingResult?.id || bookingResult?.bookingId || paymentResponse?.bookingId
-                  if (bId) {
-                    await paymentService.mockConfirmPayment(bId).catch(() => {})
-                  }
-                  setStep('success')
-                  refreshSeatMap()
-                }}
-                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation"
+                disabled={isConfirmingPayment}
+                onClick={handleConfirmPaymentSuccess}
+                className="w-full rounded-xl bg-emerald-50 border border-emerald-300 text-[#005A36] hover:bg-emerald-100/70 py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-press touch-manipulation disabled:opacity-50"
               >
-                <CheckCircle2 size={15} />
-                <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                {isConfirmingPayment ? (
+                  <>
+                    <span className="size-3.5 rounded-full border-2 border-[#005A36] border-t-transparent animate-spin" />
+                    <span>Đang kiểm tra & chốt thanh toán...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={15} />
+                    <span>Tôi Đã Thanh Toán Xong (Xác Nhận)</span>
+                  </>
+                )}
               </button>
 
               <button
@@ -1209,6 +1348,7 @@ export function SeatPickerModal({
               >
                 <QRCodeSVG
                   value={
+                    bookingResult?.tickets?.[0]?.qrData ||
                     bookingResult?.tickets?.[0]?.qrCodeData ||
                     `ICTU-PASS:${bookingResult?.tickets?.[0]?.ticketCode || bookingResult?.bookingCode || 'TICKET'}`
                   }

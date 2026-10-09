@@ -236,8 +236,8 @@ export class PaymentService {
     bankCode?: string;
     returnUrl?: string;
   }): string {
-    const tmnCode = process.env.VNPAY_TMN_CODE || 'ICTUBUS01';
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const tmnCode = process.env.VNPAY_TMN_CODE || 'BDCDEH71';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const vnpUrl = process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
     const returnUrl = params.returnUrl || process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payment/result';
 
@@ -342,7 +342,7 @@ export class PaymentService {
     delete queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHashType'];
 
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
     const signData = new URLSearchParams(sorted).toString();
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
@@ -368,12 +368,12 @@ export class PaymentService {
     };
   }
 
-  async handleVNPayIpn(queryParams: Record<string, string>) {
+  async handleVNPayIpn(queryParams: Record<string, string>, clientIp?: string) {
     const secureHash = queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHash'];
     delete queryParams['vnp_SecureHashType'];
 
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const sorted = this.sortObject(queryParams);
     const signData = new URLSearchParams(sorted).toString();
     const checkHash = crypto.createHmac('sha512', secretKey).update(Buffer.from(signData, 'utf-8')).digest('hex');
@@ -381,9 +381,11 @@ export class PaymentService {
     if (secureHash !== checkHash) {
       await this.logPaymentEvent({
         gateway: PaymentMethod.VNPAY,
-        eventType: 'ipn_received',
+        eventType: 'ipn_checksum_error',
         requestData: queryParams,
+        responseData: { RspCode: '97', Message: 'Invalid Checksum' },
         status: 'failed',
+        ipAddress: clientIp,
         errorMessage: 'Invalid VNPay checksum',
       });
       return { RspCode: '97', Message: 'Invalid Checksum' };
@@ -400,21 +402,57 @@ export class PaymentService {
         gateway: PaymentMethod.VNPAY,
         eventType: 'ipn_not_found',
         requestData: queryParams,
+        responseData: { RspCode: '01', Message: 'Order not found' },
         status: 'failed',
+        ipAddress: clientIp,
         errorMessage: 'Order not found',
       });
       return { RspCode: '01', Message: 'Order not found' };
     }
 
     if (payment.status === PaymentStatus.SUCCESS) {
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_duplicate',
+        requestData: queryParams,
+        responseData: { RspCode: '02', Message: 'Order already confirmed' },
+        status: 'success',
+        ipAddress: clientIp,
+      });
       return { RspCode: '02', Message: 'Order already confirmed' };
     }
 
     if (queryParams['vnp_ResponseCode'] === '00') {
       await this.confirmPayment(txnRef, queryParams);
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_success',
+        requestData: queryParams,
+        responseData: { RspCode: '00', Message: 'Confirm Success' },
+        status: 'success',
+        ipAddress: clientIp,
+      });
       return { RspCode: '00', Message: 'Confirm Success' };
     } else {
       await this.failPayment(txnRef, queryParams);
+      await this.logPaymentEvent({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        bookingCode: payment.booking?.bookingCode,
+        gateway: PaymentMethod.VNPAY,
+        eventType: 'ipn_failed',
+        requestData: queryParams,
+        responseData: { RspCode: '00', Message: 'Confirm Success' },
+        status: 'failed',
+        ipAddress: clientIp,
+        errorMessage: `VNPay returned response code: ${queryParams['vnp_ResponseCode']}`,
+      });
       return { RspCode: '00', Message: 'Confirm Success' };
     }
   }
@@ -721,8 +759,15 @@ export class PaymentService {
       status: 'success',
     });
 
-    // Tự động gửi Email/Thông báo kèm vé điện tử và hình ảnh mã QR sau khi thanh toán thành công
-    if (this.notificationService && payment.booking?.user?.email) {
+    // Tự động khởi tạo hóa đơn điện tử và gửi 1 Email tích hợp vé điện tử + mã QR soát vé + tóm tắt hóa đơn chuẩn Mobile-First
+    if (this.invoiceService) {
+      try {
+        await this.invoiceService.generateAndSendInvoiceForPayment(payment.id);
+      } catch (err: any) {
+        this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
+      }
+    } else if (this.notificationService && payment.booking?.user?.email) {
+      // Fallback: nếu invoiceService không khả dụng thì gửi email xác nhận vé
       for (const ticket of tickets) {
         let qrDataUrl = '';
         if (ticket.qrData) {
@@ -742,15 +787,6 @@ export class PaymentService {
           price: ticket.originalPrice,
           qrDataUrl,
         });
-      }
-    }
-
-    // Tự động khởi tạo hóa đơn điện tử và gửi email kèm file PDF đính kèm ngay sau khi thanh toán thành công
-    if (this.invoiceService) {
-      try {
-        await this.invoiceService.generateAndSendInvoiceForPayment(payment.id);
-      } catch (err: any) {
-        this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
       }
     }
   }
@@ -810,25 +846,60 @@ export class PaymentService {
   }
 
   async mockConfirmPayment(bookingId: string, userId?: string) {
-    const payment = await this.paymentRepository.findOne({
+    let payment = await this.paymentRepository.findOne({
       where: { bookingId },
       order: { createdAt: 'DESC' },
     });
 
+    if (!payment) {
+      const booking = await this.bookingRepository.findOne({
+        where: { id: bookingId },
+      });
+      if (booking) {
+        const txnRef = `TXN_MOCK_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        payment = this.paymentRepository.create({
+          bookingId,
+          amount: booking.finalAmount || booking.totalAmount || 10000,
+          paymentMethod: PaymentMethod.VNPAY,
+          status: PaymentStatus.PENDING,
+          transactionId: txnRef,
+        });
+        payment = await this.paymentRepository.save(payment);
+      }
+    }
+
     if (payment) {
       await this.confirmPayment(payment.transactionId, {
-        gateway: payment.paymentMethod || 'sandbox_mock',
+        gateway: payment.paymentMethod || 'vnpay',
         status: 'PAID',
         confirmedBy: userId || 'system',
         confirmedAt: new Date().toISOString(),
         isDemoMock: true,
       });
-      return { success: true, message: 'Đã xác nhận thanh toán thành công' };
+    } else {
+      await this.bookingRepository.update(bookingId, { status: BookingStatus.PAID });
+      await this.ticketRepository.update({ bookingId }, { status: TicketStatus.PAID });
     }
 
-    await this.bookingRepository.update(bookingId, { status: BookingStatus.PAID });
-    await this.ticketRepository.update({ bookingId }, { status: TicketStatus.PAID });
-    return { success: true, message: 'Đã cập nhật trạng thái vé sang Đã thanh toán (PAID)' };
+    const tickets = await this.ticketRepository.find({
+      where: { bookingId },
+      relations: { seat: true },
+    });
+
+    const booking = await this.bookingRepository.findOne({
+      where: { id: bookingId },
+      relations: { trip: { route: true, vehicle: true }, user: true },
+    });
+
+    return {
+      success: true,
+      message: 'Đã xác nhận thanh toán thành công và kích hoạt vé điện tử có chữ ký HMAC',
+      bookingId,
+      bookingCode: booking?.bookingCode,
+      status: 'paid',
+      tickets,
+      booking,
+    };
   }
 
   async cancelPayment(bookingId: string, userId?: string) {
@@ -1321,11 +1392,33 @@ export class PaymentService {
       0,
     );
 
+    // Tổng hợp đối soát theo từng cổng thanh toán thực tế 100% từ CSDL
+    const allPayments = await this.paymentRepository.find();
+    const GATEWAYS = ['vnpay', 'momo', 'zalopay', 'vietqr', 'cash'];
+    const summaryByGateway = GATEWAYS.map((gw) => {
+      const gwPayments = allPayments.filter((p) => (p.paymentMethod || '').toLowerCase() === gw);
+      const successful = gwPayments.filter((p) => p.status === PaymentStatus.SUCCESS);
+      const refunded = gwPayments.filter((p) => p.status === PaymentStatus.REFUNDED);
+      const pendingOrFailed = gwPayments.filter(
+        (p) => p.status !== PaymentStatus.SUCCESS && p.status !== PaymentStatus.REFUNDED,
+      );
+      const revenue = successful.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      return {
+        gateway: gw,
+        total: gwPayments.length,
+        successCount: successful.length,
+        failedCount: pendingOrFailed.length,
+        refundCount: refunded.length,
+        revenue,
+      };
+    });
+
     return {
       totalLogs: logs.length,
       totalSuccessfulPayments: successfulPayments.length,
       totalRevenue,
       logs,
+      summaryByGateway,
     };
   }
 

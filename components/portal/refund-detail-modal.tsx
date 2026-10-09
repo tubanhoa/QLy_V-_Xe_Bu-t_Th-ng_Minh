@@ -63,18 +63,18 @@ export function RefundDetailModal({
 
   if (!open) return null
 
-  // Dữ liệu fallback chuẩn mực nếu chưa nhận đủ từ API
+  // Dữ liệu fallback nếu chưa nhận từ API
   const resolvedInfo = refundInfo || initialRefundInfo
   const info: RefundInfo = resolvedInfo || {
-    refundAmount: initialTicketPrice || 10000,
-    originalPrice: initialTicketPrice || 10000,
+    refundAmount: initialTicketPrice ?? 0,
+    originalPrice: initialTicketPrice ?? 0,
     cancellationFee: 0,
     feePercent: 0,
-    refundMethod: 'vnpay',
-    status: 'SUCCESS',
-    refundTransactionId: `RF-${Date.now().toString().slice(-8)}`,
+    refundMethod: 'cash',
+    status: 'PENDING',
+    refundTransactionId: 'N/A',
     refundTime: new Date().toISOString(),
-    estimatedArrival: 'Ngay lập tức đến 24 giờ',
+    estimatedArrival: 'Đang đối soát',
   }
 
   const isSuccess = info.status === 'SUCCESS'

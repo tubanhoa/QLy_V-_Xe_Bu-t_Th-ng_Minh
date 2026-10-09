@@ -73,13 +73,20 @@ export interface TicketResultItem {
   id: string
   ticketId?: string
   ticketCode: string
-  seatNumber: string
+  seatNumber?: string
   passengerName: string
   passengerPhone?: string
-  price: number
+  price?: number
+  originalPrice?: number
   status: string
+  qrData?: string
+  qrSignatureHash?: string
   qrCodeData?: string
   qrDataUrl?: string
+  seat?: {
+    id?: string
+    seatNumber?: string
+  }
 }
 
 export interface BookingResultData {

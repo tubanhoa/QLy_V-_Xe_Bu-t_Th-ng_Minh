@@ -139,7 +139,7 @@ class PaymentService {
    */
   async mockConfirmPayment(
     bookingId: string,
-  ): Promise<UnifiedApiResponse<{ message: string }>> {
+  ): Promise<UnifiedApiResponse<{ message?: string; success?: boolean; tickets?: any[]; booking?: any }>> {
     try {
       const response = await fetch(`${this.baseUrl}/payment/mock-confirm/${bookingId}`, {
         method: 'POST',
@@ -400,6 +400,124 @@ class PaymentService {
       }
     }
   }
+
+  /**
+   * Xác thực và xử lý phản hồi từ VNPay Sandbox (Return URL Callback)
+   * Endpoint: GET /api/v1/payment/vnpay-return
+   */
+  async handleVNPayReturn(
+    queryParams: Record<string, string>,
+  ): Promise<
+    UnifiedApiResponse<{
+      isValid: boolean
+      isSuccess: boolean
+      responseCode: string
+      bookingCode?: string | null
+      message: string
+    }>
+  > {
+    try {
+      const search = new URLSearchParams(queryParams).toString()
+      const url = `${this.baseUrl}/payment/vnpay-return?${search}`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể xác thực giao dịch từ VNPay',
+        }
+      }
+
+      const data = resJson?.data || resJson
+      return {
+        success: Boolean(data?.isSuccess),
+        data,
+      }
+    } catch (error: any) {
+      console.error('[PaymentService.handleVNPayReturn] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối kiểm tra giao dịch VNPay',
+      }
+    }
+  }
+
+  /**
+   * Xác nhận thanh toán đơn vé thật sự chuyển sang PAID
+   * Endpoint: POST /api/v1/payment/confirm/:bookingId hoặc mock-confirm/:bookingId
+   */
+  async confirmBookingPayment(
+    bookingId: string,
+  ): Promise<UnifiedApiResponse<{ message: string; success?: boolean }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/payment/mock-confirm/${bookingId}`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể xác nhận thanh toán đơn vé',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson?.data || resJson,
+      }
+    } catch (error: any) {
+      console.error('[PaymentService.confirmBookingPayment] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối xác nhận thanh toán',
+      }
+    }
+  }
+
+
+  /**
+   * Lấy chi tiết vé điện tử kèm chữ ký HMAC và trạng thái
+   * Endpoint: GET /api/v1/booking/tickets/:id
+   */
+  async getTicketDetail(ticketId: string): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/booking/tickets/${ticketId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể lấy chi tiết vé điện tử',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson?.data || resJson,
+      }
+    } catch (error: any) {
+      console.error('[PaymentService.getTicketDetail] Lỗi:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối tra cứu vé',
+      }
+    }
+  }
 }
 
 export const paymentService = new PaymentService()
+

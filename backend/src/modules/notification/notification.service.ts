@@ -25,6 +25,34 @@ export interface SendInvoiceEmailParams {
   totalAmount: number;
   pdfBuffer: Buffer;
   htmlContent?: string;
+  lookupCode?: string;
+  issuedAt?: string | Date;
+  subtotalAmount?: number;
+  vatAmount?: number;
+  vatRate?: number;
+  items?: Array<{
+    itemNumber: number;
+    description: string;
+    ticketCode?: string;
+    seatNumber?: string;
+    unitPrice: number;
+    quantity: number;
+    totalAmount: number;
+  }>;
+  sellerName?: string;
+  sellerTaxCode?: string;
+  buyerName?: string;
+  buyerPhone?: string;
+  studentId?: string;
+  faculty?: string;
+  ticketCode?: string;
+  qrDataUrl?: string;
+  origin?: string;
+  destination?: string;
+  departureTime?: Date | string;
+  seatNumber?: string;
+  vehiclePlate?: string;
+  paymentMethod?: string;
 }
 
 export interface SendTicketEmailParams {
@@ -139,10 +167,43 @@ export class NotificationService {
   }
 
   /**
+   * Chuẩn hóa và bảo vệ địa chỉ email người nhận:
+   * Chuyển hướng các địa chỉ mock/test không có hòm thư thực tế ngoài đời (@ictu.edu.vn demo, @example.com...)
+   * về email của quản trị viên/tester (process.env.SMTP_USER) để:
+   * 1. Ngăn chặn 100% lỗi Google Mail "Address not found" (550 Mail Delivery Subsystem Bounce).
+   * 2. Đảm bảo tester nhận được email thực tế ngay trên điện thoại để kiểm thử giao diện.
+   */
+  resolveTargetEmail(recipientEmail: string): { actualTo: string; isRedirected: boolean; originalEmail: string } {
+    const trimmed = (recipientEmail || '').trim();
+    const adminTestEmail = (process.env.SMTP_USER || '').trim() || 'ductrandanh06@gmail.com';
+
+    // Nhận diện các domain và địa chỉ hạt giống (seed/mock) không có tài khoản Google Workspace thật
+    const isMockOrTestEmail =
+      trimmed.endsWith('@ictu.edu.vn') ||
+      trimmed.endsWith('@smartbus.ictu.vn') ||
+      trimmed.endsWith('@example.com') ||
+      trimmed.endsWith('@test.com') ||
+      trimmed.toLowerCase().includes('student.an') ||
+      trimmed.toLowerCase().includes('driver.hung') ||
+      trimmed.toLowerCase().includes('test.');
+
+    if (isMockOrTestEmail && trimmed.toLowerCase() !== adminTestEmail.toLowerCase()) {
+      this.logger.log(
+        `[NotificationService] Chuyển hướng email từ địa chỉ thử nghiệm ${trimmed} -> Hòm thư quản trị viên thực tế ${adminTestEmail}`,
+      );
+      return { actualTo: adminTestEmail, isRedirected: true, originalEmail: trimmed };
+    }
+
+    return { actualTo: trimmed, isRedirected: false, originalEmail: trimmed };
+  }
+
+  /**
    * Tự động gửi Email vé điện tử kèm mã QR sau khi thanh toán thành công
    */
   async sendTicketConfirmationEmail(params: SendTicketEmailParams): Promise<boolean> {
-    const subject = `[SmartBus ICTU] Xác nhận vé điện tử thành công - Mã vé: ${params.ticketCode}`;
+    const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
+    const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
+    const subject = `${subjectPrefix}[SmartBus ICTU] Xác nhận vé điện tử thành công - Mã vé: ${params.ticketCode}`;
     const formattedPrice = Number(params.price).toLocaleString('vi-VN');
     const formattedDeparture =
       params.departureTime instanceof Date
@@ -171,11 +232,12 @@ export class NotificationService {
     }
 
     const renderHtml = (qrImgSrc: string) => `
-      <!DOCTYPE html>
-      <html>
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
       <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Vé Xe Buýt Điện Tử - ${params.ticketCode}</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px 8px; color: #1e293b; -webkit-text-size-adjust: 100%; }
           .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
@@ -212,12 +274,23 @@ export class NotificationService {
         </style>
       </head>
       <body>
+        <!-- Preheader Text Ẩn (Chống lỗi dính chữ xem trước trên Gmail Mobile) -->
+        <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+          Vé xe buýt điện tử ${params.ticketCode} đã thanh toán thành công. Khởi hành: ${formattedDeparture}. Ghế: ${params.seatNumber}. Giá vé: ${formattedPrice} VND.
+          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+        </div>
+
         <div class="container">
           <div class="header">
             <h1>HỆ THỐNG XE BUÝT THÔNG MINH - SMARTBUS</h1>
             <p>Xác nhận thanh toán và Thẻ lên xe điện tử (E-Ticket Boarding Pass)</p>
           </div>
           <div class="content">
+            ${redirectInfo.isRedirected ? `
+            <div style="background-color: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px; line-height: 1.5;">
+              <strong>MÔI TRƯỜNG THỬ NGHIỆM:</strong> Email này được hệ thống SmartBus ICTU tự động gửi thử nghiệm tới hòm thư của bạn <strong>${redirectInfo.actualTo}</strong> (Địa chỉ gốc của đơn vé: <code>${redirectInfo.originalEmail}</code>).
+            </div>` : ''}
+
             <div class="badge-wrapper">
               <span class="success-badge">✓ ĐÃ THANH TOÁN THÀNH CÔNG (PAID)</span>
             </div>
@@ -323,14 +396,14 @@ export class NotificationService {
           `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
         await this.transporter.sendMail({
           from: fromAddress,
-          to: params.recipientEmail,
+          to: redirectInfo.actualTo,
           subject,
           html: emailHtml,
           attachments,
         });
-        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${params.recipientEmail} kèm inline QR attachment`);
+        this.logger.log(`[NotificationService] Đã gửi email vé điện tử thực tế qua SMTP tới: ${redirectInfo.actualTo} (Gốc: ${params.recipientEmail}) kèm inline QR attachment`);
       } catch (err: any) {
-        this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${params.recipientEmail}: ${err?.message}`);
+        this.logger.error(`[NotificationService] Lỗi gửi email vé qua SMTP tới ${redirectInfo.actualTo}: ${err?.message}`);
         record.status = 'failed';
       }
     }
@@ -833,16 +906,193 @@ export class NotificationService {
   }
 
   /**
-   * Gửi email chung qua Nodemailer SMTP hoặc Mock logger
+   * Tạo giao diện HTML Hóa Đơn Điện Tử chuẩn Responsive, tương thích 100% mọi ứng dụng Email di động (Gmail, Outlook, iOS Mail)
    */
+  /**
+   * Tạo giao diện HTML Vé Điện Tử & Hóa Đơn Chuẩn Mobile-First (Thẻ Boarding Pass tích hợp mã QR soát vé và tóm tắt thanh toán)
+   */
+  buildInvoiceEmailHtml(
+    params: SendInvoiceEmailParams,
+    redirectInfo?: { isRedirected: boolean; originalEmail: string; actualTo: string },
+    qrImgSrc?: string,
+  ): string {
+    const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
+    const ticketCode = params.ticketCode || params.items?.[0]?.ticketCode || params.bookingCode;
+    const seatNumber = params.seatNumber || params.items?.[0]?.seatNumber || 'Ghế tiêu chuẩn';
+    const passengerName = params.passengerName || params.buyerName || 'Hành khách';
+    const routeName = params.routeName || 'Tuyến xe buýt thông minh ICTU';
+    const origin = params.origin;
+    const destination = params.destination;
+    const lookupCode = params.lookupCode || params.bookingCode;
+    const paymentMethodDisplay = (params.paymentMethod || 'vnpay').toUpperCase();
+
+    let departureStr = 'Khi lên xe';
+    if (params.departureTime) {
+      const d = params.departureTime instanceof Date ? params.departureTime : new Date(params.departureTime);
+      departureStr = d.toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Ho_Chi_Minh',
+      });
+    }
+
+    const finalQrSrc = qrImgSrc || params.qrDataUrl || '';
+
+    return `
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Vé Xe Buýt & Hóa Đơn - ${ticketCode}</title>
+        <style>
+          body { margin: 0; padding: 12px 6px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; -webkit-text-size-adjust: 100%; }
+          .ticket-wrapper { max-width: 440px; margin: 0 auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0; }
+          .ticket-head { background: linear-gradient(135deg, #005A36 0%, #059669 100%); color: #ffffff; padding: 18px 20px; text-align: center; }
+          .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; margin: 0 0 6px 0; }
+          .badge-paid { display: inline-block; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.45); padding: 4px 14px; border-radius: 9999px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+          .ticket-body { padding: 22px 18px 16px 18px; text-align: center; }
+          .qr-box { display: inline-block; padding: 12px; background: #ffffff; border-radius: 14px; border: 2px solid #10b981; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15); margin-bottom: 12px; }
+          .qr-img { width: 190px; height: 190px; display: block; margin: 0 auto; }
+          .ticket-code-tag { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #047857; padding: 5px 12px; border-radius: 6px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 16px; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+          .qr-hint { font-size: 12.5px; color: #059669; font-weight: 600; margin: 0 0 16px 0; }
+          .trip-card { background: #f8fafc; border-radius: 12px; padding: 14px 16px; text-align: left; margin-bottom: 16px; border: 1px solid #f1f5f9; }
+          .route-header { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+          .route-sub { font-size: 13px; color: #047857; font-weight: 600; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0; }
+          .trip-table { width: 100%; border-collapse: collapse; }
+          .trip-table td { padding: 4px 0; font-size: 13px; }
+          .t-lbl { color: #64748b; }
+          .t-val { color: #0f172a; font-weight: 600; text-align: right; }
+          .seat-pill { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 13px; }
+          .dash-divider { border-top: 2px dashed #cbd5e1; margin: 4px 16px; }
+          .invoice-box { padding: 16px 18px 20px 18px; text-align: left; }
+          .inv-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+          .pay-highlight { background: #f0fdf4; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; border: 1px solid #dcfce7; }
+          .pay-amount { font-size: 20px; font-weight: 900; color: #15803d; float: right; }
+          .pay-label { font-size: 13px; font-weight: 700; color: #166534; line-height: 24px; }
+          .inv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          .inv-table td { padding: 3px 0; color: #64748b; }
+          .inv-v { text-align: right; color: #1e293b; font-weight: 600; }
+          .pdf-badge { font-size: 11.5px; color: #334155; background: #f8fafc; padding: 8px 12px; border-radius: 8px; margin-top: 12px; border: 1px solid #e2e8f0; text-align: center; line-height: 1.4; }
+          .footer-note { text-align: center; padding: 12px 14px; font-size: 11px; color: #94a3b8; background: #f8fafc; border-top: 1px solid #f1f5f9; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <!-- Preheader Ẩn (Chống dính chữ xem trước trên Gmail Mobile) -->
+        <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+          Vé xe buýt SmartBus ICTU: Mã ${ticketCode} • Ghế ${seatNumber} • Đã thanh toán ${formattedTotal} đ. Quét mã QR khi lên xe.
+          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+        </div>
+
+        <div class="ticket-wrapper">
+          <!-- 1. Header Vé Xe Thông Minh -->
+          <div class="ticket-head">
+            <div class="brand-title">SMARTBUS ICTU • THẺ LÊN XE BUÝT</div>
+            <span class="badge-paid">✓ ĐÃ THANH TOÁN (HỢP LỆ)</span>
+          </div>
+
+          <!-- 2. Thân Vé: QR Code To Rõ Ở Trung Tâm -->
+          <div class="ticket-body">
+            ${finalQrSrc ? `
+            <div class="qr-box">
+              <img class="qr-img" src="${finalQrSrc}" alt="QR Vé Xe ${ticketCode}" width="190" height="190" />
+            </div>
+            ` : ''}
+
+            <div>
+              <span class="ticket-code-tag">MÃ VÉ: ${ticketCode}</span>
+            </div>
+            <p class="qr-hint">📲 Xuất trình mã QR này cho tài xế/phụ xe quét khi lên xe buýt</p>
+
+            <!-- Chi tiết chuyến đi -->
+            <div class="trip-card">
+              <div class="route-header">${routeName}</div>
+              ${origin && destination ? `<div class="route-sub">${origin} ➔ ${destination}</div>` : ''}
+
+              <table class="trip-table">
+                <tr>
+                  <td class="t-lbl">Khởi hành:</td>
+                  <td class="t-val">${departureStr}</td>
+                </tr>
+                <tr>
+                  <td class="t-lbl">Vị trí ghế:</td>
+                  <td class="t-val"><span class="seat-pill">${seatNumber}</span></td>
+                </tr>
+                ${params.vehiclePlate ? `
+                <tr>
+                  <td class="t-lbl">Xe buýt:</td>
+                  <td class="t-val">${params.vehiclePlate}</td>
+                </tr>` : ''}
+                <tr>
+                  <td class="t-lbl">Hành khách:</td>
+                  <td class="t-val">${passengerName}</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <!-- 3. Rãnh Cắt Vé (Ticket Perforation) -->
+          <div class="dash-divider"></div>
+
+          <!-- 4. Khối Tóm Tắt Thanh Toán & Hóa Đơn Tinh Gọn -->
+          <div class="invoice-box">
+            <div class="inv-title">CHI TIẾT THANH TOÁN & HÓA ĐƠN</div>
+
+            <div class="pay-highlight">
+              <span class="pay-amount">${formattedTotal} đ</span>
+              <span class="pay-label">ĐÃ THANH TOÁN</span>
+              <div style="clear: both;"></div>
+            </div>
+
+            <table class="inv-table">
+              <tr>
+                <td>Phương thức:</td>
+                <td class="inv-v">${paymentMethodDisplay}</td>
+              </tr>
+              <tr>
+                <td>Mã đơn đặt vé:</td>
+                <td class="inv-v" style="font-family: monospace;">${params.bookingCode}</td>
+              </tr>
+              <tr>
+                <td>Số hóa đơn GTGT:</td>
+                <td class="inv-v" style="font-family: monospace;">${params.invoiceNumber}</td>
+              </tr>
+              <tr>
+                <td>Mã tra cứu:</td>
+                <td class="inv-v" style="font-family: monospace; color: #0284c7;">${lookupCode}</td>
+              </tr>
+            </table>
+
+            <div class="pdf-badge">
+              📎 <strong>Hóa đơn điện tử PDF:</strong> Tệp <code>Hoa_Don_${params.invoiceNumber}.pdf</code> đã được đính kèm ở thư này để bạn lưu trữ và quyết toán chi phí.
+            </div>
+          </div>
+
+          <!-- 5. Footer Nhỏ Gọn -->
+          <div class="footer-note">
+            <strong>SmartBus ICTU - Hệ Thống Xe Buýt Thông Minh</strong><br/>
+            Hotline: 1900 1234 | Website: smartbus.ictu.edu.vn
+            ${redirectInfo?.isRedirected ? `<br/><span style="color: #b45309; font-size: 10px;">* Demo: Chuyển hướng từ ${redirectInfo.originalEmail}</span>` : ''}
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   async sendMail(options: SendMailOptions): Promise<boolean> {
+    const redirectInfo = this.resolveTargetEmail(options.to);
+    const toAddress = redirectInfo.actualTo;
     const fromAddress =
       process.env.SMTP_FROM ||
       `"Hệ Thống Xe Buýt Thông Minh ICTU" <${process.env.SMTP_USER || 'no-reply@smartbus.ictu.edu.vn'}>`;
 
     const record: SentNotificationRecord = {
       id: `mail-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      recipientEmail: options.to,
+      recipientEmail: toAddress,
       subject: options.subject,
       ticketCode: '',
       bookingCode: '',
@@ -855,24 +1105,24 @@ export class NotificationService {
       try {
         await this.transporter.sendMail({
           from: fromAddress,
-          to: options.to,
+          to: toAddress,
           subject: options.subject,
           text: options.text,
           html: options.html,
           attachments: options.attachments,
         });
-        this.logger.log(`[NotificationService] Đã gửi email thành công qua SMTP tới: ${options.to} (Tiêu đề: ${options.subject})`);
+        this.logger.log(`[NotificationService] Đã gửi email thành công qua SMTP tới: ${toAddress} (Gốc: ${options.to}) (Tiêu đề: ${options.subject})`);
         this.sentNotifications.push(record);
         return true;
       } catch (error: any) {
-        this.logger.error(`[NotificationService] Lỗi gửi email qua SMTP: ${error?.message}. Ghi nhận log.`);
+        this.logger.error(`[NotificationService] Lỗi gửi email qua SMTP tới ${toAddress}: ${error?.message}. Ghi nhận log.`);
         record.status = 'failed';
         this.sentNotifications.push(record);
         return false;
       }
     } else {
       this.logger.log(
-        `[NotificationService] [Mock/Log Mode] Gửi email tới ${options.to}: ${options.subject} (Số tệp đính kèm: ${options.attachments?.length || 0})`,
+        `[NotificationService] [Mock/Log Mode] Gửi email tới ${toAddress}: ${options.subject} (Số tệp đính kèm: ${options.attachments?.length || 0})`,
       );
       this.sentNotifications.push(record);
       return true;
@@ -882,58 +1132,54 @@ export class NotificationService {
   /**
    * Gửi email Hóa đơn điện tử kèm tệp đính kèm PDF
    */
+  /**
+   * Gửi email Vé Điện Tử & Hóa Đơn Chuẩn Mobile-First kèm mã QR soát vé và tệp PDF đính kèm
+   */
   async sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<boolean> {
-    const subject = `[SmartBus ICTU] Hóa đơn điện tử ${params.invoiceNumber} - Đơn vé ${params.bookingCode}`;
-    const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
+    const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
+    const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
+    const ticketCodeDisplay = params.ticketCode ? ` - Mã vé: ${params.ticketCode}` : ` - Đơn: ${params.bookingCode}`;
+    const subject = `${subjectPrefix}[SmartBus ICTU] Thẻ lên xe & Hóa đơn${ticketCodeDisplay}`;
 
-    const htmlBody =
-      params.htmlContent ||
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 16px;">
-          <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">HÓA ĐƠN ĐIỆN TỬ - SMARTBUS ICTU</h2>
-          <p style="color: #64748b; font-size: 13px; margin: 6px 0 0 0;">Dịch vụ vận tải hành khách bằng xe buýt thông minh</p>
-        </div>
-        
-        <p style="margin-top: 20px;">Kính chào quý khách <strong>${params.passengerName}</strong>,</p>
-        <p>Hệ thống trân trọng gửi quý khách hóa đơn điện tử cho giao dịch thanh toán đặt vé xe buýt thành công.</p>
-        
-        <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 14px 18px; margin: 18px 0; border-radius: 4px;">
-          <p style="margin: 4px 0;"><strong>Số hóa đơn:</strong> <span style="color: #2563eb; font-weight: bold;">${params.invoiceNumber}</span></p>
-          <p style="margin: 4px 0;"><strong>Mã đơn vé:</strong> <code>${params.bookingCode}</code></p>
-          <p style="margin: 4px 0;"><strong>Tuyến xe:</strong> ${params.routeName}</p>
-          <p style="margin: 4px 0;"><strong>Tổng tiền thanh toán:</strong> <span style="color: #059669; font-weight: bold; font-size: 16px;">${formattedTotal} VND</span></p>
-        </div>
+    const attachments: EmailAttachment[] = [
+      {
+        filename: `Hoa_Don_${params.invoiceNumber}.pdf`,
+        content: params.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ];
 
-        <p>Tệp hóa đơn điện tử định dạng <strong>PDF chuẩn có chữ ký số điện tử</strong> đã được đính kèm ở bên dưới email này.</p>
-        <p style="color: #64748b; font-size: 13px;">Quý khách có thể xem và tải lại hóa đơn bất cứ lúc nào từ phần Lịch sử đặt vé trong ứng dụng.</p>
+    let qrCid = '';
+    let smtpQrSrc = params.qrDataUrl || '';
 
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
-        <div style="font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6;">
-          <strong>Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên (ICTU)</strong><br/>
-          Địa chỉ: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br/>
-          Hotline hỗ trợ: 1900 1234 | Email: hotro@smartbus.ictu.edu.vn
-        </div>
-      </div>
-    `;
+    // Chuẩn bị CID Inline Attachment cho ảnh QR để Gmail mobile hiển thị trực tiếp sắc nét
+    if (params.qrDataUrl && params.qrDataUrl.startsWith('data:image/')) {
+      const match = params.qrDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] || 'png';
+        const base64Data = match[2];
+        const safeCode = (params.ticketCode || params.bookingCode).replace(/[^a-zA-Z0-9_-]/g, '');
+        qrCid = `ticket-qr-${safeCode}`;
+        attachments.push({
+          filename: `ticket-${safeCode}-qr.${ext}`,
+          content: Buffer.from(base64Data, 'base64'),
+          contentType: `image/${ext}`,
+          cid: qrCid,
+        } as any);
+        smtpQrSrc = `cid:${qrCid}`;
+      }
+    }
+
+    const htmlBody = params.htmlContent || this.buildInvoiceEmailHtml(params, redirectInfo, smtpQrSrc);
 
     return this.sendMail({
-      to: params.recipientEmail,
+      to: redirectInfo.actualTo,
       subject,
       html: htmlBody,
-      attachments: [
-        {
-          filename: `Hoa_Don_${params.invoiceNumber}.pdf`,
-          content: params.pdfBuffer,
-          contentType: 'application/pdf',
-        },
-      ],
+      attachments,
     });
   }
 
-  /**
-   * Lấy danh sách các thông báo / email đã gửi (phục vụ đối soát và kiểm thử)
-   */
   getSentNotifications(filter?: { ticketCode?: string; recipientEmail?: string }): SentNotificationRecord[] {
     return this.sentNotifications.filter((n) => {
       if (filter?.ticketCode && n.ticketCode !== filter.ticketCode) return false;

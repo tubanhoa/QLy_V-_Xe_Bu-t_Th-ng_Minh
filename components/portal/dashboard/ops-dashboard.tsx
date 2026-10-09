@@ -190,7 +190,7 @@ export function OpsDashboard({
             hour: '2-digit',
             minute: '2-digit',
           })
-        : '07:15'
+        : 'Chưa xếp giờ'
 
       const hasVehicle = Boolean(t.vehicle?.licensePlate || t.vehicleId)
       const hasDriver = Boolean(t.driver?.fullName || t.driverId)
@@ -218,40 +218,39 @@ export function OpsDashboard({
 
   // Dynamic KPIs từ dữ liệu thực tế 100% từ Supabase có memoization
   const dynamicKpis = useMemo(() => {
+    const rev = data?.kpis.totalRevenue ?? 0
+    const ticketsCount = data?.kpis.totalTicketsSold ?? 0
     return [
       {
         key: 'revenue',
         label: 'Doanh thu kỳ này',
-        value: `${(data?.kpis.totalRevenue ?? 0).toLocaleString('vi-VN')} đ`,
+        value: `${rev.toLocaleString('vi-VN')} đ`,
         delta: `${data?.kpis.totalRevenueGrowth !== undefined && data.kpis.totalRevenueGrowth >= 0 ? '+' : ''}${data?.kpis.totalRevenueGrowth ?? 0}%`,
-        progress: Math.min(
-          100,
-          Math.round(((data?.kpis.totalRevenue ?? 0) / 2000000) * 100),
-        ),
+        progress: rev > 0 ? Math.min(100, Math.round((rev / 2000000) * 100)) : 0,
         hint: 'Dữ liệu giao dịch live từ Supabase',
       },
       {
         key: 'trips',
         label: 'Vé số hóa đã phát hành',
-        value: `${(data?.kpis.totalTicketsSold ?? 0).toLocaleString('vi-VN')} vé`,
-        delta: `+${data?.kpis.ticketsGrowth ?? 0}%`,
-        progress: Math.min(100, Math.round(((data?.kpis.totalTicketsSold ?? 0) / 200) * 100)),
+        value: `${ticketsCount.toLocaleString('vi-VN')} vé`,
+        delta: `${data?.kpis.ticketsGrowth !== undefined && data.kpis.ticketsGrowth >= 0 ? '+' : ''}${data?.kpis.ticketsGrowth ?? 0}%`,
+        progress: ticketsCount > 0 ? Math.min(100, Math.round((ticketsCount / 200) * 100)) : 0,
         hint: 'Vé lượt QR Code & Thẻ sinh viên',
       },
       {
         key: 'occupancy',
         label: 'Hệ số lấp đầy TB',
         value: `${data?.kpis.averageOccupancyRate ?? 0}%`,
-        delta: '+3.2%',
+        delta: `${data?.kpis.averageOccupancyRate ?? 0}%`,
         progress: data?.kpis.averageOccupancyRate ?? 0,
-        hint: 'Giờ cao điểm các cổng trường ICTU',
+        hint: 'Theo lịch trình các cổng trường ICTU',
       },
       {
         key: 'speed',
         label: 'Đội xe đang vận hành',
-        value: `${data?.kpis.activeVehiclesCount ?? 3} xe`,
+        value: `${data?.kpis.activeVehiclesCount ?? 0} xe`,
         delta: `${data?.kpis.activeIncidentsCount ?? 0} cảnh báo`,
-        progress: 100,
+        progress: (data?.kpis.activeVehiclesCount ?? 0) > 0 ? 100 : 0,
         hint: 'Giám sát kết nối GPS thời gian thực',
       },
     ]

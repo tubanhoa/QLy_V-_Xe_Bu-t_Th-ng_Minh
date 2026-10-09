@@ -49,4 +49,7 @@ export interface InvoiceData {
   totalAmount: number;
   amountInWords: string;
   qrLookupData: string;
+  ticketCode?: string;
+  seatNumber?: string;
+  ticketQrDataUrl?: string;
 }

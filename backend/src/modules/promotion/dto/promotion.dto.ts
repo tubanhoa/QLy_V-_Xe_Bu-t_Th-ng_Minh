@@ -5,32 +5,97 @@ import {
   IsOptional,
   IsEnum,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { MonthlyPassCategory, ApprovalStatus } from '../../../common/constants/status.constant.js';
+import { MonthlyPassCategory, ApprovalStatus, PaymentMethod } from '../../../common/constants/status.constant.js';
+
+export class CalculateMonthlyPassPriceDto {
+  @ApiProperty({ enum: MonthlyPassCategory, example: MonthlyPassCategory.STUDENT })
+  @IsEnum(MonthlyPassCategory)
+  category: MonthlyPassCategory;
+
+  @ApiPropertyOptional({ example: 1, description: 'Số tháng đăng ký (1, 3, 6)' })
+  @IsOptional()
+  @IsNumber()
+  durationMonths?: number;
+
+  @ApiPropertyOptional({ example: false, description: 'Có phải vé liên tuyến toàn mạng không' })
+  @IsOptional()
+  @IsBoolean()
+  isAllRoutes?: boolean;
+
+  @ApiPropertyOptional({ example: 'all-routes', description: 'ID tuyến xe buýt hoặc all-routes' })
+  @IsOptional()
+  @IsString()
+  routeId?: string;
+}
 
 export class RegisterMonthlyPassDto {
-  @ApiProperty({ description: 'ID tuyến xe buýt đăng ký' })
+  @ApiPropertyOptional({ description: 'ID tuyến xe buýt đăng ký (hoặc all-routes)', example: 'all-routes' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  routeId: string;
+  routeId?: string;
 
   @ApiProperty({ enum: MonthlyPassCategory, example: MonthlyPassCategory.STUDENT })
   @IsEnum(MonthlyPassCategory)
   category: MonthlyPassCategory;
 
-  @ApiProperty({ example: '2026-10-01', description: 'Ngày bắt đầu hiệu lực (YYYY-MM-DD)' })
-  @IsDateString()
-  startDate: string;
+  @ApiPropertyOptional({ example: 1, description: 'Thời hạn (1, 3, 6 tháng)' })
+  @IsOptional()
+  @IsNumber()
+  durationMonths?: number;
 
-  @ApiProperty({ example: '2026-10-31', description: 'Ngày hết hạn (YYYY-MM-DD)' })
+  @ApiPropertyOptional({ example: '2026-10-01', description: 'Ngày bắt đầu hiệu lực (YYYY-MM-DD)' })
+  @IsOptional()
   @IsDateString()
-  endDate: string;
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-10-31', description: 'Ngày hết hạn (YYYY-MM-DD) - tự động tính nếu bỏ trống' })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @ApiPropertyOptional({ example: 'https://storage.ictu.edu.vn/cards/student_card.jpg' })
   @IsOptional()
   @IsString()
   proofImageUrl?: string;
+}
+
+export class CreateMonthlyPassPaymentDto {
+  @ApiPropertyOptional({ enum: PaymentMethod, default: PaymentMethod.VIETQR })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+}
+
+export class ConfirmMonthlyPassPaymentDto {
+  @ApiPropertyOptional({ enum: PaymentMethod, default: PaymentMethod.VIETQR })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @ApiPropertyOptional({ example: 'DEMO-MP-PAY-778899' })
+  @IsOptional()
+  @IsString()
+  transactionCode?: string;
+}
+
+export class RenewMonthlyPassDto {
+  @ApiProperty({ example: 1, description: 'Số tháng gia hạn (1, 3, 6)' })
+  @IsNumber()
+  @IsNotEmpty()
+  durationMonths: number;
+
+  @ApiPropertyOptional({ enum: PaymentMethod, default: PaymentMethod.VIETQR })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @ApiPropertyOptional({ example: false, description: 'Tự động xác nhận thanh toán (Demo Quick Pay)' })
+  @IsOptional()
+  @IsBoolean()
+  autoConfirmPayment?: boolean;
 }
 
 export class ReviewMonthlyPassDto {
