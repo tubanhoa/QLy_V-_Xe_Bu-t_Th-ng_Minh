@@ -31,9 +31,9 @@ interface FareConfigModalProps {
 }
 
 const DEFAULT_DISTANCE_RULES: DistanceFareRule[] = [
-  { minKm: 0, maxKm: 5, price: 7000, studentPrice: 4000 },
-  { minKm: 5, maxKm: 10, price: 10000, studentPrice: 5000 },
-  { minKm: 10, maxKm: 999, price: 15000, studentPrice: 8000 },
+  { minKm: 0, maxKm: 5, price: 20000, studentPrice: 10000 },
+  { minKm: 5, maxKm: 10, price: 25000, studentPrice: 12000 },
+  { minKm: 10, maxKm: 999, price: 30000, studentPrice: 15000 },
 ]
 
 export function FareConfigModal({
@@ -43,8 +43,8 @@ export function FareConfigModal({
   onSuccess,
 }: FareConfigModalProps) {
   const [pricingType, setPricingType] = useState<PricingType>('fixed')
-  const [basePrice, setBasePrice] = useState<number>(10000)
-  const [studentPrice, setStudentPrice] = useState<number>(5000)
+  const [basePrice, setBasePrice] = useState<number>(20000)
+  const [studentPrice, setStudentPrice] = useState<number>(10000)
   const [distanceRules, setDistanceRules] = useState<DistanceFareRule[]>(DEFAULT_DISTANCE_RULES)
 
   // Sandbox Test

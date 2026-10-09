@@ -220,6 +220,11 @@ export class MonthlyPassService {
     const seconds = String(date.getSeconds()).padStart(2, '0');
     const createDate = `${year}${month}${day}${hours}${minutes}${seconds}`;
 
+    const ipAddr =
+      params.ipAddr === '::1' || !params.ipAddr || params.ipAddr === 'localhost'
+        ? '127.0.0.1'
+        : params.ipAddr.replace('::ffff:', '');
+
     const vnp_Params: Record<string, string> = {
       vnp_Version: '2.1.0',
       vnp_Command: 'pay',
@@ -231,7 +236,7 @@ export class MonthlyPassService {
       vnp_OrderType: 'other',
       vnp_Amount: (params.amount * 100).toString(),
       vnp_ReturnUrl: returnUrl,
-      vnp_IpAddr: params.ipAddr,
+      vnp_IpAddr: ipAddr,
       vnp_CreateDate: createDate,
     };
 
@@ -242,15 +247,15 @@ export class MonthlyPassService {
     const sortedKeys = Object.keys(vnp_Params).sort();
     const sortedParams: Record<string, string> = {};
     for (const key of sortedKeys) {
-      sortedParams[key] = vnp_Params[key];
+      sortedParams[encodeURIComponent(key)] = encodeURIComponent(vnp_Params[key]).replace(/%20/g, '+');
     }
 
-    const signData = new URLSearchParams(sortedParams).toString();
+    const signData = Object.entries(sortedParams).map(([k, v]) => `${k}=${v}`).join('&');
     const hmac = crypto.createHmac('sha512', secretKey);
     const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
     sortedParams['vnp_SecureHash'] = signed;
-    return `${vnpUrl}?${new URLSearchParams(sortedParams).toString()}`;
+    return `${vnpUrl}?${Object.entries(sortedParams).map(([k, v]) => `${k}=${v}`).join('&')}`;
   }
 
   /**

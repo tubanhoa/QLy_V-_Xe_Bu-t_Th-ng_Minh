@@ -6,6 +6,8 @@ import { RefundLogEntity } from '../../database/entities/refund-log.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
+import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
+import { MonthlyPassTransactionEntity } from '../../database/entities/monthly-pass-transaction.entity.js';
 import { PaymentController } from './payment.controller.js';
 import { PaymentService } from './payment.service.js';
 import { GatewayRefundService } from './services/gateway-refund.service.js';
@@ -22,6 +24,8 @@ import { NotificationModule } from '../notification/notification.module.js';
       BookingEntity,
       TicketEntity,
       SeatHoldEntity,
+      MonthlyPassEntity,
+      MonthlyPassTransactionEntity,
     ]),
     forwardRef(() => BookingModule),
     InvoiceModule,
