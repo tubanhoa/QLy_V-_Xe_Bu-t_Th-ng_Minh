@@ -71,6 +71,7 @@ interface TicketManagementModalProps {
   open: boolean
   onClose: () => void
   initialTicketId?: string | null
+  onOpenPriorityVerificationModal?: () => void
 }
 
 const FILTER_TABS: { key: TicketFilterStatus; label: string }[] = [
@@ -85,6 +86,7 @@ export function TicketManagementModal({
   open,
   onClose,
   initialTicketId = null,
+  onOpenPriorityVerificationModal,
 }: TicketManagementModalProps) {
   const { isAuthenticated, user } = useAuth()
 
@@ -1257,6 +1259,72 @@ export function TicketManagementModal({
             {/* TRƯỜNG HỢP D: DANH SÁCH THẺ VÉ (CHƯA CHỌN VÉ CỤ THỂ) */}
             {isAuthenticated && !selectedTicketId && !loading && (
               <>
+                {/* Profile Card & Badge Ưu Đãi HSSV / Người Cao Tuổi */}
+                {user && (
+                  <div className="rounded-2xl sm:rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-50/70 via-white to-teal-50/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-11 sm:size-12 items-center justify-center rounded-2xl bg-[#005A36] text-white font-black text-sm shadow-sm shadow-emerald-950/20">
+                        {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-black text-sm sm:text-base text-slate-900">
+                            {user.fullName || user.name}
+                          </h4>
+                          {user.verificationStatus === 'verified' ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-0.5 border border-emerald-300">
+                              <ShieldCheck size={12} className="text-[#005A36]" />
+                              {user.priorityCategory === 'elderly'
+                                ? 'Đã duyệt: Người cao tuổi (-60%)'
+                                : 'Đã duyệt: Học sinh - Sinh viên (-50%)'}
+                            </span>
+                          ) : user.verificationStatus === 'pending' ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 border border-amber-300">
+                              <Clock size={12} className="text-amber-600" />
+                              Đang chờ duyệt ưu đãi
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 border border-slate-200">
+                              Hành khách phổ thông
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          {user.email} {user.studentId ? `· MSSV: ${user.studentId}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {user.verificationStatus === 'verified' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose()
+                            onOpenPriorityVerificationModal?.()
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-200 text-[#005A36] text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                        >
+                          <ShieldCheck size={14} />
+                          <span>Xem thẻ ưu đãi</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose()
+                            onOpenPriorityVerificationModal?.()
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-xs font-black transition-all shadow-sm shadow-emerald-950/20 cursor-pointer"
+                        >
+                          <ShieldCheck size={14} />
+                          <span>{user.verificationStatus === 'pending' ? 'Xem trạng thái duyệt' : 'Xác thực ưu đãi (-50%)'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {filteredTickets.length === 0 ? (
                   <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center space-y-3 shadow-xs">
                     <div className="size-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">

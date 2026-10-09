@@ -26,6 +26,10 @@ import {
   Mail,
   School,
   IdCard,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Download,
 } from 'lucide-react'
 import {
   priorityVerificationService,
@@ -72,6 +76,11 @@ export function DispatcherStudentApproval() {
   const [rejectingItem, setRejectingItem] = useState<{ id: string; name: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState<string | null>(null)
+
+  // State Lightbox phóng to ảnh minh chứng
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null)
+  const [lightboxZoom, setLightboxZoom] = useState<number>(1)
+  const [lightboxRotation, setLightboxRotation] = useState<number>(0)
 
   // ==================== STATE CHO DUYỆT VÉ THÁNG ====================
   const [passes, setPasses] = useState<StudentPassApp[]>([])
@@ -981,20 +990,28 @@ export function DispatcherStudentApproval() {
                     <span className="text-[11px] font-semibold text-muted-foreground">
                       Mặt trước Thẻ SV / CCCD:
                     </span>
-                    <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center">
+                    <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                       <img
                         src={previewVerif.frontImageUrl}
                         alt="Mặt trước"
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover cursor-zoom-in"
+                        onClick={() => {
+                          setLightboxImage({ url: previewVerif.frontImageUrl, title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                          setLightboxZoom(1)
+                          setLightboxRotation(0)
+                        }}
                       />
-                      <a
-                        href={previewVerif.frontImageUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLightboxImage({ url: previewVerif.frontImageUrl, title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                          setLightboxZoom(1)
+                          setLightboxRotation(0)
+                        }}
+                        className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black cursor-pointer"
                       >
-                        <ExternalLink size={10} /> Phóng to
-                      </a>
+                        <ZoomIn size={11} /> Phóng to
+                      </button>
                     </div>
                   </div>
 
@@ -1004,20 +1021,28 @@ export function DispatcherStudentApproval() {
                       <span className="text-[11px] font-semibold text-muted-foreground">
                         Mặt sau Thẻ SV / CCCD:
                       </span>
-                      <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center">
+                      <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                         <img
                           src={previewVerif.backImageUrl}
                           alt="Mặt sau"
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover cursor-zoom-in"
+                          onClick={() => {
+                            setLightboxImage({ url: previewVerif.backImageUrl!, title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxZoom(1)
+                            setLightboxRotation(0)
+                          }}
                         />
-                        <a
-                          href={previewVerif.backImageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxImage({ url: previewVerif.backImageUrl!, title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxZoom(1)
+                            setLightboxRotation(0)
+                          }}
+                          className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black cursor-pointer"
                         >
-                          <ExternalLink size={10} /> Phóng to
-                        </a>
+                          <ZoomIn size={11} /> Phóng to
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1028,20 +1053,28 @@ export function DispatcherStudentApproval() {
                       <span className="text-[11px] font-semibold text-muted-foreground">
                         Ảnh chân dung đối chiếu:
                       </span>
-                      <div className="relative h-36 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center">
+                      <div className="relative h-36 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                         <img
                           src={previewVerif.portraitImageUrl}
                           alt="Chân dung"
-                          className="h-full w-full object-contain"
+                          className="h-full w-full object-contain cursor-zoom-in"
+                          onClick={() => {
+                            setLightboxImage({ url: previewVerif.portraitImageUrl!, title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxZoom(1)
+                            setLightboxRotation(0)
+                          }}
                         />
-                        <a
-                          href={previewVerif.portraitImageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxImage({ url: previewVerif.portraitImageUrl!, title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxZoom(1)
+                            setLightboxRotation(0)
+                          }}
+                          className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white flex items-center gap-1 hover:bg-black cursor-pointer"
                         >
-                          <ExternalLink size={10} /> Phóng to
-                        </a>
+                          <ZoomIn size={11} /> Phóng to
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1163,6 +1196,25 @@ export function DispatcherStudentApproval() {
                 placeholder="Ví dụ: Ảnh thẻ sinh viên bị mờ không nhìn rõ niên khóa, hoặc thẻ đã hết hạn..."
                 className="w-full rounded-2xl border border-border bg-card p-3 text-xs text-foreground focus:border-red-500 focus:outline-none"
               />
+              {/* Quick Rejection Chips */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  'Ảnh chụp mờ / lóa sáng, không đọc rõ thông tin',
+                  'Thẻ học sinh / sinh viên đã quá hạn sử dụng',
+                  'Họ tên hoặc số CCCD không trùng khớp',
+                  'Thiếu ảnh mặt sau hoặc không có dấu xác nhận',
+                  'Ảnh chụp bị cắt xén hoặc không nguyên vẹn',
+                ].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setRejectReason(reason)}
+                    className="px-2 py-1 rounded-lg bg-muted text-[10px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-700 transition-colors text-left cursor-pointer"
+                  >
+                    + {reason}
+                  </button>
+                ))}
+              </div>
               {rejectError && <p className="text-[11px] text-red-600">{rejectError}</p>}
             </div>
 
@@ -1287,6 +1339,74 @@ export function DispatcherStudentApproval() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIGHTBOX MODAL PHÓNG TO ẢNH MINH CHỨNG (ZOOM 1X-3X & ROTATE)              */}
+      {/* ========================================================================= */}
+      {lightboxImage && (
+        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-4xl flex items-center justify-between text-white pb-3 border-b border-white/20">
+            <span className="text-sm font-bold truncate">{lightboxImage.title}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLightboxZoom((z) => Math.max(0.5, z - 0.5))}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                title="Thu nhỏ"
+              >
+                <ZoomOut size={16} />
+              </button>
+              <span className="text-xs font-mono font-bold px-1.5">{Math.round(lightboxZoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setLightboxZoom((z) => Math.min(3, z + 0.5))}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                title="Phóng to"
+              >
+                <ZoomIn size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightboxRotation((r) => (r + 90) % 360)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                title="Xoay ảnh 90°"
+              >
+                <RotateCw size={16} />
+              </button>
+              <a
+                href={lightboxImage.url}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                title="Mở ảnh gốc trong tab mới"
+              >
+                <ExternalLink size={16} />
+              </a>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="p-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white ml-2 cursor-pointer"
+                title="Đóng (ESC)"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full flex items-center justify-center overflow-auto p-4">
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.title}
+              style={{
+                transform: `scale(${lightboxZoom}) rotate(${lightboxRotation}deg)`,
+                transition: 'transform 0.2s ease',
+              }}
+              className="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl"
+            />
           </div>
         </div>
       )}
