@@ -32,6 +32,10 @@ const MonthlyPassModal = dynamic(
   () => import('./monthly-pass-modal').then((mod) => mod.MonthlyPassModal),
   { ssr: false }
 )
+const PriorityVerificationModal = dynamic(
+  () => import('./priority-verification-modal').then((mod) => mod.PriorityVerificationModal),
+  { ssr: false }
+)
 const QuickAccessModals = dynamic(
   () => import('./quick-access-modals').then((mod) => mod.QuickAccessModals),
   { ssr: false }
@@ -56,6 +60,7 @@ export function LandingPage() {
   const [isTripSearchOpen, setIsTripSearchOpen] = useState(false)
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false)
   const [isMonthlyPassModalOpen, setIsMonthlyPassModalOpen] = useState(false)
+  const [isPriorityVerificationModalOpen, setIsPriorityVerificationModalOpen] = useState(false)
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false)
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false)
   const [activeModal, setActiveModal] = useState<'routes' | 'news' | 'student-pass' | 'lookup' | 'staff' | 'partner' | null>(null)
@@ -71,6 +76,7 @@ export function LandingPage() {
     isTripSearchOpen ||
     isTicketModalOpen ||
     isMonthlyPassModalOpen ||
+    isPriorityVerificationModalOpen ||
     isAuthPromptOpen ||
     isNotificationCenterOpen ||
     activeModal !== null
@@ -84,6 +90,9 @@ export function LandingPage() {
       }
       if (params.get('openMonthlyPass') === 'true') {
         setIsMonthlyPassModalOpen(true)
+      }
+      if (params.get('openVerification') === 'true') {
+        setIsPriorityVerificationModalOpen(true)
       }
     }
   }, [])
@@ -211,6 +220,7 @@ export function LandingPage() {
           }}
           onOpenTicketModal={() => setIsTicketModalOpen(true)}
           onOpenMonthlyPassModal={() => setIsMonthlyPassModalOpen(true)}
+          onOpenPriorityVerificationModal={() => setIsPriorityVerificationModalOpen(true)}
           onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
           unreadCount={notifController.unreadCount}
         />
@@ -322,6 +332,7 @@ export function LandingPage() {
             setSelectedTicketId(null)
           }}
           initialTicketId={selectedTicketId}
+          onOpenPriorityVerificationModal={() => setIsPriorityVerificationModalOpen(true)}
         />
       )}
 
@@ -330,6 +341,15 @@ export function LandingPage() {
         <MonthlyPassModal
           open={isMonthlyPassModalOpen}
           onClose={() => setIsMonthlyPassModalOpen(false)}
+        />
+      )}
+
+      {/* Cửa sổ nổi: Xác Thực Hồ Sơ Đối Tượng Ưu Đãi (HSSV / Cao Tuổi) */}
+      {isPriorityVerificationModalOpen && (
+        <PriorityVerificationModal
+          open={isPriorityVerificationModalOpen}
+          onClose={() => setIsPriorityVerificationModalOpen(false)}
+          onOpenMonthlyPass={() => setIsMonthlyPassModalOpen(true)}
         />
       )}
 

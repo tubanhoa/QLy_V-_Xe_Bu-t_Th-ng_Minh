@@ -10,6 +10,10 @@ export interface AuthUser {
   studentId?: string | null
   faculty?: string | null
   phoneNumber?: string | null
+  priorityCategory?: 'regular' | 'student' | 'elderly' | string | null
+  verificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected' | string | null
+  verifiedAt?: string | null
+  idCardNumber?: string | null
 }
 
 export interface LoginResponseData {
@@ -468,6 +472,45 @@ class AuthService {
     try {
       const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY)
       return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Cập nhật thông tin profile người dùng trên local storage
+   */
+  updateUserLocally(partial: Partial<AuthUser>): AuthUser | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const current = this.getUser() || ({} as AuthUser)
+      const updated = { ...current, ...partial }
+      localStorage.setItem(USER_KEY, JSON.stringify(updated))
+      sessionStorage.setItem(USER_KEY, JSON.stringify(updated))
+      return updated
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Tải lại thông tin mới nhất từ máy chủ qua GET /auth/me
+   */
+  async fetchProfile(): Promise<AuthUser | null> {
+    try {
+      const token = this.getToken()
+      if (!token) return null
+      const res = await fetch(`${this.baseUrl}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const json = await res.json()
+      const userData = json.data?.user || json.data || json
+      if (userData?.id) {
+        this.updateUserLocally(userData)
+        return userData
+      }
+      return null
     } catch {
       return null
     }

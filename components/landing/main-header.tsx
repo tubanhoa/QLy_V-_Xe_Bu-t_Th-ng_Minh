@@ -29,6 +29,7 @@ interface MainHeaderProps {
   onOpenModal?: (modal: 'routes' | 'news' | 'student-pass' | 'lookup') => void
   onOpenTicketModal?: () => void
   onOpenMonthlyPassModal?: () => void
+  onOpenPriorityVerificationModal?: () => void
   onOpenNotificationCenter?: () => void
   unreadCount?: number
 }
@@ -38,6 +39,7 @@ export function MainHeader({
   onOpenModal,
   onOpenTicketModal,
   onOpenMonthlyPassModal,
+  onOpenPriorityVerificationModal,
   onOpenNotificationCenter,
   unreadCount = 0,
 }: MainHeaderProps) {
@@ -157,6 +159,24 @@ export function MainHeader({
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
                   </div>
                   <p className="mt-1 text-xs font-medium text-slate-600">Đăng ký trực tuyến thẻ tháng sinh viên ICTU</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenPriorityVerificationModal) {
+                      onOpenPriorityVerificationModal()
+                    } else {
+                      window.location.href = '/?openVerification=true'
+                    }
+                  }}
+                  className="w-full text-left rounded-xl p-3 hover:bg-emerald-50 transition-colors block cursor-pointer"
+                  id="desktop-nav-priority-verification"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="block text-sm font-black text-slate-900">Xác thực ưu đãi HSSV / Cao tuổi</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Giảm 50-60%</span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-slate-600">Nộp thẻ SV / CCCD để kích hoạt trợ giá vé xe buýt</p>
                 </button>
                 <button
                   type="button"
@@ -284,12 +304,34 @@ export function MainHeader({
                     {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                   </div>
                   <div className="flex flex-col text-left leading-tight pr-1">
-                    <span className="text-xs font-black text-slate-900 truncate max-w-[130px]">
-                      {user.fullName || user.name}
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-700">
-                      {user.studentId ? `SV: ${user.studentId}` : user.roleTitle || 'Hành khách'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-slate-900 truncate max-w-[130px]">
+                        {user.fullName || user.name}
+                      </span>
+                      {user.verificationStatus === 'verified' && (
+                        <span
+                          title={user.priorityCategory === 'elderly' ? 'Ưu đãi người cao tuổi (-60%)' : 'Ưu đãi sinh viên (-50%)'}
+                          className="inline-flex items-center text-[#005A36]"
+                        >
+                          <ShieldCheck size={13} className="text-[#005A36] shrink-0" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {user.verificationStatus === 'verified' ? (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded-md">
+                          {user.priorityCategory === 'elderly' ? 'Ưu đãi -60%' : 'Ưu đãi HSSV -50%'}
+                        </span>
+                      ) : user.verificationStatus === 'pending' ? (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-1.5 py-0.2 rounded-md">
+                          Chờ duyệt ưu đãi
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-700">
+                          {user.studentId ? `SV: ${user.studentId}` : user.roleTitle || 'Hành khách'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               )}
@@ -483,6 +525,24 @@ export function MainHeader({
               >
                 <span>Đăng ký vé tháng HSSV (-50%)</span>
                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  if (onOpenPriorityVerificationModal) {
+                    onOpenPriorityVerificationModal()
+                  } else {
+                    window.location.href = '/?openVerification=true'
+                  }
+                }}
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
+                id="mobile-nav-priority-verification"
+              >
+                <span>Xác thực ưu đãi HSSV / Cao tuổi</span>
+                <span className="rounded-full bg-emerald-100 text-[#005A36] text-[10px] font-bold px-2 py-0.5">
+                  -50%
+                </span>
               </button>
               <Link
                 href="/my-tickets"

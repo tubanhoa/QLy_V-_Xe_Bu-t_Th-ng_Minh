@@ -21,6 +21,7 @@ interface AuthContextValue {
   isLoaded: boolean
   login: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; message?: string; user?: AuthUser }>
   setUserSession: (data: LoginResponseData, remember?: boolean) => void
+  refreshProfile: () => Promise<void>
   logout: () => void
   themeMode: ThemeMode
   toggleTheme: () => void
@@ -48,7 +49,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (roleName === 'admin') roleTitle = 'Quản trị viên'
     else if (roleName === 'manager' || roleName === 'dispatcher') roleTitle = 'Điều hành viên'
     else if (roleName === 'driver') roleTitle = 'Tài xế xe buýt'
-    else if (rawUser.studentId) roleTitle = `Sinh viên ICTU (${rawUser.studentId})`
+    else if (rawUser.verificationStatus === 'verified') {
+      if (rawUser.priorityCategory === 'student') {
+        roleTitle = `Sinh viên ICTU · Đã xác thực (${rawUser.studentId || 'Ưu đãi 50%'})`
+      } else if (rawUser.priorityCategory === 'elderly') {
+        roleTitle = 'Người cao tuổi · Đã xác thực (Ưu đãi 60%)'
+      } else {
+        roleTitle = 'Hành khách ưu đãi chính thức'
+      }
+    } else if (rawUser.studentId) {
+      roleTitle = `Sinh viên ICTU (${rawUser.studentId})`
+    }
 
     const name = rawUser.fullName || rawUser.email
     const initials =
@@ -69,6 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       initials,
     }
   }
+
+  // Cập nhật lại thông tin mới nhất từ máy chủ
+  const refreshProfile = useCallback(async () => {
+    const updated = await authService.fetchProfile()
+    if (updated) {
+      setUser(formatUserProfile(updated))
+    }
+  }, [])
 
   // Khôi phục phiên đăng nhập khi tải trang
   useEffect(() => {
@@ -141,10 +160,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       setUserSession,
       logout,
+      refreshProfile,
       themeMode,
       toggleTheme,
     }),
-    [user, accessToken, isAuthenticated, isLoaded, login, setUserSession, logout, themeMode, toggleTheme],
+    [user, accessToken, isAuthenticated, isLoaded, login, setUserSession, logout, refreshProfile, themeMode, toggleTheme],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
