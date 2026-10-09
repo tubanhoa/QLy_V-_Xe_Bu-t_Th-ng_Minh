@@ -206,7 +206,10 @@ class DriverService {
           data: {
             valid: false,
             alreadyCheckedIn: errPayload?.alreadyCheckedIn || false,
-            isWrongTrip: errPayload?.isWrongTrip || false,
+            isWrongTrip:
+              errPayload?.isWrongTrip ||
+              (typeof json?.message === 'string' && json.message.includes('không thuộc về chuyến xe')) ||
+              false,
             isMonthlyPass: errPayload?.isMonthlyPass || false,
             category: errPayload?.category,
             message: json?.message || errPayload?.message || 'Vé không hợp lệ',

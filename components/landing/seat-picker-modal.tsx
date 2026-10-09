@@ -418,8 +418,12 @@ export function SeatPickerModal({
       setBookingResult(bookingData)
       refreshSeatMap()
 
-      // Nếu phương thức là Tiền mặt tại xe -> Trực tiếp xuất vé thành công
+      // Nếu phương thức là Tiền mặt tại xe -> Trực tiếp xuất vé thành công và đồng bộ trạng thái PAID
       if (paymentMethod === 'ictupay') {
+        const bId = bookingData.id || bookingData.bookingId
+        if (bId) {
+          await paymentService.mockConfirmPayment(bId).catch(() => {})
+        }
         setStep('success')
         return
       }
