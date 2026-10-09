@@ -115,6 +115,21 @@ export class MonthlyPassService {
   }
 
   /**
+   * Tính ngày kết thúc an toàn, tránh lỗi tràn tháng khi ngày bắt đầu rơi vào ngày 29, 30, 31
+   */
+  private calculateEndDate(startDateStr: string, durationMonths: number): string {
+    const [year, month, day] = startDateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const targetMonth = date.getUTCMonth() + durationMonths;
+    date.setUTCMonth(targetMonth);
+    // Nếu tháng vượt quá mục tiêu (vd: 31/01 + 1 tháng -> 03/03), lùi về ngày cuối tháng trước
+    if (date.getUTCMonth() !== targetMonth % 12) {
+      date.setUTCDate(0);
+    }
+    return date.toISOString().slice(0, 10);
+  }
+
+  /**
    * Đăng ký vé tháng mới (Sinh viên / Phổ thông)
    */
   async register(dto: RegisterMonthlyPassDto, userId: string) {
@@ -137,6 +152,43 @@ export class MonthlyPassService {
       ? Number(dto.durationMonths)
       : 1;
 
+    // Ràng buộc CSDL & Nghiệp vụ: Chống spam hồ sơ và chặn đăng ký trùng lặp khi thẻ cũ còn hiệu lực
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const existingPasses = await this.monthlyPassRepository.find({
+      where: { userId },
+    });
+
+    const activeOrPending = existingPasses.find((p) => {
+      // 1. Có hồ sơ đang chờ xét duyệt
+      if (p.approvalStatus === ApprovalStatus.PENDING) {
+        return true;
+      }
+      // 2. Có thẻ đã duyệt, đã thanh toán và chưa hết hạn
+      if (
+        p.approvalStatus === ApprovalStatus.APPROVED &&
+        p.paymentStatus === MonthlyPassPaymentStatus.PAID &&
+        p.endDate >= todayStr
+      ) {
+        // Trùng phạm vi (cùng tuyến hoặc một trong hai là liên tuyến toàn mạng)
+        if (isAllRoutes || !p.routeId || p.routeId === routeId) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (activeOrPending) {
+      if (activeOrPending.approvalStatus === ApprovalStatus.PENDING) {
+        throw new BadRequestException(
+          `Bạn đang có hồ sơ vé tháng (${activeOrPending.passCode}) đang chờ xét duyệt. Vui lòng chờ kết quả trước khi gửi hồ sơ mới.`,
+        );
+      } else {
+        throw new BadRequestException(
+          `Bạn đang có thẻ vé tháng (${activeOrPending.passCode}) còn hạn sử dụng đến ngày ${activeOrPending.endDate}. Vui lòng sử dụng tính năng Gia Hạn để cộng dồn thêm thời hạn sử dụng.`,
+        );
+      }
+    }
+
     // Tính giá vé tháng
     const priceBreakdown = this.calculatePrice({
       category: dto.category,
@@ -147,12 +199,15 @@ export class MonthlyPassService {
 
     const passCode = generateMonthlyPassCode();
 
-    // Tính ngày bắt đầu và ngày kết thúc
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Tính ngày bắt đầu và ngày kết thúc an toàn
     const startDate = dto.startDate || todayStr;
-    const startObj = new Date(startDate);
-    startObj.setMonth(startObj.getMonth() + durationMonths);
-    const endDate = dto.endDate || startObj.toISOString().slice(0, 10);
+    const endDate = dto.endDate || this.calculateEndDate(startDate, durationMonths);
+
+    // Đối với người đi làm / phổ thông (không cần đối soát thẻ SV/CCCD) -> tự động APPROVED để thanh toán ngay
+    const initialApprovalStatus =
+      dto.category === MonthlyPassCategory.WORKER
+        ? ApprovalStatus.APPROVED
+        : ApprovalStatus.PENDING;
 
     const monthlyPass = this.monthlyPassRepository.create({
       userId,
@@ -164,7 +219,7 @@ export class MonthlyPassService {
       durationMonths,
       proofImageUrl: dto.proofImageUrl || null,
       price: priceBreakdown.finalPrice,
-      approvalStatus: ApprovalStatus.PENDING,
+      approvalStatus: initialApprovalStatus,
       paymentStatus: MonthlyPassPaymentStatus.UNPAID,
       qrPayload: `ICTU-MONTHLY:${passCode}:${endDate}`,
     });
@@ -456,9 +511,7 @@ export class MonthlyPassService {
     const previousEndDate = pass.endDate;
     const baseDateStr = pass.endDate >= todayStr ? pass.endDate : todayStr;
 
-    const baseDate = new Date(baseDateStr);
-    baseDate.setMonth(baseDate.getMonth() + durationMonths);
-    const newEndDate = baseDate.toISOString().slice(0, 10);
+    const newEndDate = this.calculateEndDate(baseDateStr, durationMonths);
 
     // Nếu chọn Demo Quick Pay (autoConfirmPayment = true)
     if (dto.autoConfirmPayment) {

@@ -216,6 +216,235 @@ class PromotionService {
       }
     }
   }
+
+  /**
+   * Tải ảnh minh chứng Thẻ Sinh Viên / CCCD lên máy chủ
+   * Endpoint: POST /api/v1/monthly-passes/upload-proof (Multipart Form-Data)
+   */
+  async uploadProofImage(file: File): Promise<UnifiedApiResponse<{ url: string; filename: string }>> {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = authService.getToken()
+      const headers: Record<string, string> = {}
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`${this.baseUrl}/monthly-passes/upload-proof`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải ảnh minh chứng lên máy chủ',
+        }
+      }
+
+      return {
+        success: true,
+        data: resJson,
+      }
+    } catch (error: any) {
+      console.error('[PromotionService.uploadProofImage]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi tải ảnh',
+      }
+    }
+  }
+
+  /**
+   * Tính giá vé tháng theo đối tượng, kỳ hạn và phạm vi tuyến
+   * Endpoint: POST /api/v1/monthly-passes/calculate-price
+   */
+  async calculatePrice(payload: {
+    category: string
+    durationMonths: number
+    isAllRoutes?: boolean
+    routeId?: string
+  }): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monthly-passes/calculate-price`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tính giá vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.calculatePrice]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /**
+   * Gia hạn vé tháng trực tuyến (Cộng dồn thời hạn thông minh)
+   * Endpoint: POST /api/v1/monthly-passes/:id/renew
+   */
+  async renewMonthlyPass(
+    id: string,
+    payloadOrMonths:
+      | number
+      | {
+          durationMonths: number
+          paymentMethod?: string
+          autoConfirmPayment?: boolean
+        },
+    autoConfirm?: boolean,
+  ): Promise<UnifiedApiResponse<any>> {
+    try {
+      const payload =
+        typeof payloadOrMonths === 'number'
+          ? { durationMonths: payloadOrMonths, autoConfirmPayment: autoConfirm }
+          : payloadOrMonths
+
+      const response = await fetch(`${this.baseUrl}/monthly-passes/${id}/renew`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể gia hạn vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.renewMonthlyPass]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi gia hạn',
+      }
+    }
+  }
+
+  /**
+   * Tạo yêu cầu thanh toán cho vé tháng (VNPay Sandbox / VietQR)
+   * Endpoint: POST /api/v1/monthly-passes/:id/create-payment
+   */
+  async createMonthlyPassPayment(
+    id: string,
+    payloadOrMethod?: string | { paymentMethod?: string },
+  ): Promise<UnifiedApiResponse<any>> {
+    try {
+      const payload =
+        typeof payloadOrMethod === 'string'
+          ? { paymentMethod: payloadOrMethod }
+          : payloadOrMethod || {}
+
+      const response = await fetch(`${this.baseUrl}/monthly-passes/${id}/create-payment`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tạo yêu cầu thanh toán vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.createMonthlyPassPayment]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi tạo thanh toán',
+      }
+    }
+  }
+
+  /**
+   * Xác nhận thanh toán chốt kích hoạt vé tháng
+   * Endpoint: POST /api/v1/monthly-passes/:id/confirm-payment
+   */
+  async confirmMonthlyPassPayment(
+    id: string,
+    payload?: { paymentMethod?: string; transactionCode?: string },
+  ): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monthly-passes/${id}/confirm-payment`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload || {}),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể xác nhận thanh toán vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.confirmMonthlyPassPayment]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi xác nhận thanh toán',
+      }
+    }
+  }
+
+  /**
+   * Xem lịch sử giao dịch và gia hạn của vé tháng
+   * Endpoint: GET /api/v1/monthly-passes/:id/history
+   */
+  async getMonthlyPassHistory(id: string): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monthly-passes/${id}/history`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải lịch sử vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.getMonthlyPassHistory]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
 }
 
 export const promotionService = new PromotionService()
