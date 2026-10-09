@@ -45,6 +45,14 @@ export interface SendInvoiceEmailParams {
   buyerPhone?: string;
   studentId?: string;
   faculty?: string;
+  ticketCode?: string;
+  qrDataUrl?: string;
+  origin?: string;
+  destination?: string;
+  departureTime?: Date | string;
+  seatNumber?: string;
+  vehiclePlate?: string;
+  paymentMethod?: string;
 }
 
 export interface SendTicketEmailParams {
@@ -900,67 +908,38 @@ export class NotificationService {
   /**
    * Tạo giao diện HTML Hóa Đơn Điện Tử chuẩn Responsive, tương thích 100% mọi ứng dụng Email di động (Gmail, Outlook, iOS Mail)
    */
+  /**
+   * Tạo giao diện HTML Vé Điện Tử & Hóa Đơn Chuẩn Mobile-First (Thẻ Boarding Pass tích hợp mã QR soát vé và tóm tắt thanh toán)
+   */
   buildInvoiceEmailHtml(
     params: SendInvoiceEmailParams,
     redirectInfo?: { isRedirected: boolean; originalEmail: string; actualTo: string },
+    qrImgSrc?: string,
   ): string {
     const formattedTotal = Number(params.totalAmount).toLocaleString('vi-VN');
-    const subtotal = params.subtotalAmount
-      ? Number(params.subtotalAmount)
-      : Math.round(Number(params.totalAmount) / 1.08);
-    const formattedSubtotal = subtotal.toLocaleString('vi-VN');
-    const vatAmount = params.vatAmount
-      ? Number(params.vatAmount)
-      : Number(params.totalAmount) - subtotal;
-    const formattedVat = vatAmount.toLocaleString('vi-VN');
-    const vatRate = params.vatRate ?? 8;
-
-    const issuedDate = params.issuedAt ? new Date(params.issuedAt) : new Date();
-    const dateStr = issuedDate.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
-    const timeStr = issuedDate.toLocaleTimeString('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
-
+    const ticketCode = params.ticketCode || params.items?.[0]?.ticketCode || params.bookingCode;
+    const seatNumber = params.seatNumber || params.items?.[0]?.seatNumber || 'Ghế tiêu chuẩn';
+    const passengerName = params.passengerName || params.buyerName || 'Hành khách';
+    const routeName = params.routeName || 'Tuyến xe buýt thông minh ICTU';
+    const origin = params.origin;
+    const destination = params.destination;
     const lookupCode = params.lookupCode || params.bookingCode;
-    const lookupUrl = `http://localhost:3000/tra-cuu-hoa-don?code=${encodeURIComponent(lookupCode)}`;
+    const paymentMethodDisplay = (params.paymentMethod || 'vnpay').toUpperCase();
 
-    const itemsHtml =
-      params.items && params.items.length > 0
-        ? params.items
-            .map(
-              (item, idx) => `
-            <tr>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #64748b;">${idx + 1}</td>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #1e293b;">
-                <strong>${item.description}</strong><br/>
-                <span style="font-size: 11.5px; color: #64748b;">${item.ticketCode ? `Mã vé: <code>${item.ticketCode}</code>` : ''} ${item.seatNumber ? `| Ghế: <strong>${item.seatNumber}</strong>` : ''}</span>
-              </td>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #1e293b;">${item.quantity || 1}</td>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; color: #1e293b;">${Number(item.unitPrice || item.totalAmount).toLocaleString('vi-VN')} đ</td>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 700; color: #0284c7;">${Number(item.totalAmount).toLocaleString('vi-VN')} đ</td>
-            </tr>
-          `,
-            )
-            .join('')
-        : `
-          <tr>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #64748b;">1</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #1e293b;">
-              <strong>Dịch vụ vận tải hành khách xe buýt thông minh</strong><br/>
-              <span style="font-size: 11.5px; color: #64748b;">Tuyến: <strong>${params.routeName}</strong> | Mã đơn vé: <code>${params.bookingCode}</code></span>
-            </td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: center; color: #1e293b;">1</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; color: #1e293b;">${formattedSubtotal} đ</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-align: right; font-weight: 700; color: #0284c7;">${formattedTotal} đ</td>
-          </tr>
-        `;
+    let departureStr = 'Khi lên xe';
+    if (params.departureTime) {
+      const d = params.departureTime instanceof Date ? params.departureTime : new Date(params.departureTime);
+      departureStr = d.toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Ho_Chi_Minh',
+      });
+    }
+
+    const finalQrSrc = qrImgSrc || params.qrDataUrl || '';
 
     return `
       <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -968,212 +947,142 @@ export class NotificationService {
       <head>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Hóa Đơn Điện Tử ${params.invoiceNumber}</title>
-        <style type="text/css">
-          body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-          table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-          td { vertical-align: top; }
-          img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+        <title>Vé Xe Buýt & Hóa Đơn - ${ticketCode}</title>
+        <style>
+          body { margin: 0; padding: 12px 6px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; -webkit-text-size-adjust: 100%; }
+          .ticket-wrapper { max-width: 440px; margin: 0 auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0; }
+          .ticket-head { background: linear-gradient(135deg, #005A36 0%, #059669 100%); color: #ffffff; padding: 18px 20px; text-align: center; }
+          .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; margin: 0 0 6px 0; }
+          .badge-paid { display: inline-block; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.45); padding: 4px 14px; border-radius: 9999px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+          .ticket-body { padding: 22px 18px 16px 18px; text-align: center; }
+          .qr-box { display: inline-block; padding: 12px; background: #ffffff; border-radius: 14px; border: 2px solid #10b981; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15); margin-bottom: 12px; }
+          .qr-img { width: 190px; height: 190px; display: block; margin: 0 auto; }
+          .ticket-code-tag { display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #047857; padding: 5px 12px; border-radius: 6px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 16px; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+          .qr-hint { font-size: 12.5px; color: #059669; font-weight: 600; margin: 0 0 16px 0; }
+          .trip-card { background: #f8fafc; border-radius: 12px; padding: 14px 16px; text-align: left; margin-bottom: 16px; border: 1px solid #f1f5f9; }
+          .route-header { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+          .route-sub { font-size: 13px; color: #047857; font-weight: 600; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0; }
+          .trip-table { width: 100%; border-collapse: collapse; }
+          .trip-table td { padding: 4px 0; font-size: 13px; }
+          .t-lbl { color: #64748b; }
+          .t-val { color: #0f172a; font-weight: 600; text-align: right; }
+          .seat-pill { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 13px; }
+          .dash-divider { border-top: 2px dashed #cbd5e1; margin: 4px 16px; }
+          .invoice-box { padding: 16px 18px 20px 18px; text-align: left; }
+          .inv-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+          .pay-highlight { background: #f0fdf4; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; border: 1px solid #dcfce7; }
+          .pay-amount { font-size: 20px; font-weight: 900; color: #15803d; float: right; }
+          .pay-label { font-size: 13px; font-weight: 700; color: #166534; line-height: 24px; }
+          .inv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          .inv-table td { padding: 3px 0; color: #64748b; }
+          .inv-v { text-align: right; color: #1e293b; font-weight: 600; }
+          .pdf-badge { font-size: 11.5px; color: #334155; background: #f8fafc; padding: 8px 12px; border-radius: 8px; margin-top: 12px; border: 1px solid #e2e8f0; text-align: center; line-height: 1.4; }
+          .footer-note { text-align: center; padding: 12px 14px; font-size: 11px; color: #94a3b8; background: #f8fafc; border-top: 1px solid #f1f5f9; line-height: 1.5; }
         </style>
       </head>
-      <body style="background-color: #f1f5f9; margin: 0; padding: 24px 10px;">
-        <!-- Preheader Text Ẩn (Ngăn chặn Gmail gom dòng text body vào snippet xem trước) -->
+      <body>
+        <!-- Preheader Ẩn (Chống dính chữ xem trước trên Gmail Mobile) -->
         <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
-          Hóa đơn điện tử số ${params.invoiceNumber} cho đơn đặt vé ${params.bookingCode} đã được phát hành thành công. Mã tra cứu: ${lookupCode}. Tổng thanh toán: ${formattedTotal} VND.
-          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
+          Vé xe buýt SmartBus ICTU: Mã ${ticketCode} • Ghế ${seatNumber} • Đã thanh toán ${formattedTotal} đ. Quét mã QR khi lên xe.
+          &#847; &zwnj; &nbsp; &#8199; &shy; &#847; &zwnj; &nbsp; &#8199; &shy;
         </div>
 
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-          <tr>
-            <td align="center">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
-                
-                <!-- 1. Header Banner -->
+        <div class="ticket-wrapper">
+          <!-- 1. Header Vé Xe Thông Minh -->
+          <div class="ticket-head">
+            <div class="brand-title">SMARTBUS ICTU • THẺ LÊN XE BUÝT</div>
+            <span class="badge-paid">✓ ĐÃ THANH TOÁN (HỢP LỆ)</span>
+          </div>
+
+          <!-- 2. Thân Vé: QR Code To Rõ Ở Trung Tâm -->
+          <div class="ticket-body">
+            ${finalQrSrc ? `
+            <div class="qr-box">
+              <img class="qr-img" src="${finalQrSrc}" alt="QR Vé Xe ${ticketCode}" width="190" height="190" />
+            </div>
+            ` : ''}
+
+            <div>
+              <span class="ticket-code-tag">MÃ VÉ: ${ticketCode}</span>
+            </div>
+            <p class="qr-hint">📲 Xuất trình mã QR này cho tài xế/phụ xe quét khi lên xe buýt</p>
+
+            <!-- Chi tiết chuyến đi -->
+            <div class="trip-card">
+              <div class="route-header">${routeName}</div>
+              ${origin && destination ? `<div class="route-sub">${origin} ➔ ${destination}</div>` : ''}
+
+              <table class="trip-table">
                 <tr>
-                  <td style="background: linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
-                    <div style="font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #bae6fd; margin-bottom: 4px;">
-                      TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG (ICTU)
-                    </div>
-                    <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #ffffff;">
-                      HÓA ĐƠN GIÁ TRỊ GIA TĂNG (ĐIỆN TỬ)
-                    </h1>
-                    <div style="font-size: 13px; color: #e0f2fe; margin-top: 4px;">
-                      Dịch vụ vận tải hành khách bằng xe buýt thông minh SmartBus ICTU
-                    </div>
-                    <div style="margin-top: 14px;">
-                      <span style="display: inline-block; background-color: #10b981; color: #ffffff; font-size: 12px; font-weight: 700; padding: 4px 14px; border-radius: 9999px; letter-spacing: 0.5px; text-transform: uppercase;">
-                        ✓ ĐÃ THANH TOÁN (PAID)
-                      </span>
-                    </div>
-                  </td>
+                  <td class="t-lbl">Khởi hành:</td>
+                  <td class="t-val">${departureStr}</td>
                 </tr>
-
-                <!-- 2. Thân Email Nội Dung -->
                 <tr>
-                  <td style="padding: 24px;">
-                    ${redirectInfo?.isRedirected ? `
-                    <div style="background-color: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 18px; line-height: 1.5;">
-                      <strong>MÔI TRƯỜNG KIỂM THỬ:</strong> Email hóa đơn điện tử này được hệ thống tự động chuyển tiếp tới hòm thư quản trị <strong>${redirectInfo.actualTo}</strong> (Địa chỉ gốc của đơn vé: <code>${redirectInfo.originalEmail}</code>).
-                    </div>` : ''}
-
-                    <p style="margin: 0 0 14px 0; font-size: 15px; color: #1e293b;">
-                      Kính chào quý khách <strong>${params.passengerName || params.buyerName || 'Hành khách'}</strong>,
-                    </p>
-                    <p style="margin: 0 0 18px 0; font-size: 14px; color: #475569; line-height: 1.5;">
-                      Hệ thống trân trọng gửi quý khách thông tin hóa đơn điện tử cho giao dịch thanh toán đặt vé xe buýt thành công. Chi tiết chứng từ như sau:
-                    </p>
-
-                    <!-- Khối Thông Tin Hóa Đơn & Mã Tra Cứu Nổi Bật -->
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; margin-bottom: 20px;">
-                      <tr>
-                        <td style="padding: 16px 18px;">
-                          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-                            <tr>
-                              <td width="50%" style="padding-bottom: 8px;">
-                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Số hóa đơn:</div>
-                                <div style="font-size: 16px; font-weight: 800; color: #0284c7; font-family: monospace;">${params.invoiceNumber}</div>
-                              </td>
-                              <td width="50%" style="padding-bottom: 8px; text-align: right;">
-                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Ký hiệu / Mẫu số:</div>
-                                <div style="font-size: 13px; font-weight: 700; color: #334155;">C26TIU (Mẫu 1/001)</div>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td width="50%" style="padding-top: 6px; border-top: 1px dashed #e2e8f0;">
-                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Ngày lập:</div>
-                                <div style="font-size: 13px; font-weight: 600; color: #334155;">${dateStr} ${timeStr}</div>
-                              </td>
-                              <td width="50%" style="padding-top: 6px; border-top: 1px dashed #e2e8f0; text-align: right;">
-                                <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">Mã đơn đặt vé:</div>
-                                <div style="font-size: 13px; font-weight: 700; color: #0f172a; font-family: monospace;">${params.bookingCode}</div>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td colspan="2" style="padding-top: 12px; border-top: 1.5px solid #e2e8f0;">
-                                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; text-align: center;">
-                                  <div style="font-size: 11.5px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px;">MÃ TRA CỨU HÓA ĐƠN TRỰC TUYẾN</div>
-                                  <div style="font-size: 20px; font-weight: 900; color: #1d4ed8; font-family: monospace; letter-spacing: 2px; margin: 4px 0;">${lookupCode}</div>
-                                  <div style="font-size: 11px; color: #3b82f6;">Sử dụng mã này để tra cứu và tải lại hóa đơn gốc tại cổng SmartBus ICTU</div>
-                                </div>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Nút Kêu Gọi Hành Động (CTA Button) -->
-                    <div style="text-align: center; margin: 20px 0 24px 0;">
-                      <a href="${lookupUrl}" target="_blank" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 13.5px; font-weight: 700; display: inline-block; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);">
-                        🔍 Tra Cứu & Tải Hóa Đơn Trực Tuyến →
-                      </a>
-                    </div>
-
-                    <!-- Bảng Thông Tin Đơn Vị Phát Hành & Khách Hàng -->
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px;">
-                      <tr>
-                        <td width="50%" style="padding-right: 8px;">
-                          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; height: 100%;">
-                            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 6px;">ĐƠN VỊ BÁN HÀNG</div>
-                            <div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.4;">${params.sellerName || 'Trường Đại học Công nghệ Thông tin & Truyền thông Thái Nguyên'}</div>
-                            <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">MST: <strong>${params.sellerTaxCode || '4600123456'}</strong></div>
-                          </div>
-                        </td>
-                        <td width="50%" style="padding-left: 8px;">
-                          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; height: 100%;">
-                            <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase; margin-bottom: 6px;">NGƯỜI MUA HÀNG</div>
-                            <div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.4;">${params.passengerName || params.buyerName || 'Hành khách'}</div>
-                            <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">
-                              ${params.studentId ? `Mã SV: <strong>${params.studentId}</strong> | ` : ''}SĐT: ${params.buyerPhone || 'Đã liên kết'}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Bảng Kê Chi Tiết Hàng Hóa Dịch Vụ -->
-                    <div style="font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; margin-bottom: 8px;">
-                      CHI TIẾT DỊCH VỤ VẬN TẢI
-                    </div>
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 16px;">
-                      <thead>
-                        <tr style="background-color: #f8fafc; border-bottom: 1.5px solid #e2e8f0;">
-                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: center; width: 35px;">STT</th>
-                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: left;">Tên Dịch Vụ / Tuyến Xe</th>
-                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: center; width: 45px;">SL</th>
-                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: right; width: 85px;">Đơn Giá</th>
-                          <th style="padding: 9px 8px; font-size: 11.5px; font-weight: 700; color: #475569; text-align: right; width: 95px;">Thành Tiền</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${itemsHtml}
-                      </tbody>
-                    </table>
-
-                    <!-- Bảng Tổng Kết Tài Chính -->
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px;">
-                      <tr>
-                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Tiền dịch vụ trước thuế:</td>
-                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${formattedSubtotal} VND</td>
-                      </tr>
-                      <tr>
-                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Thuế suất GTGT:</td>
-                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${vatRate}%</td>
-                      </tr>
-                      <tr>
-                        <td style="font-size: 13px; color: #64748b; padding: 4px 0;">Tiền thuế GTGT:</td>
-                        <td style="font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; padding: 4px 0;">${formattedVat} VND</td>
-                      </tr>
-                      <tr>
-                        <td style="font-size: 14px; font-weight: 700; color: #0f172a; padding: 8px 0 0 0; border-top: 1.5px dashed #cbd5e1;">TỔNG TIỀN THANH TOÁN:</td>
-                        <td style="font-size: 18px; font-weight: 800; color: #16a34a; text-align: right; padding: 8px 0 0 0; border-top: 1.5px dashed #cbd5e1;">${formattedTotal} VND</td>
-                      </tr>
-                    </table>
-
-                    <!-- Khối Chữ Ký Số & Con Dấu Điện Tử Hợp Lệ -->
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 1.5px dashed #10b981; border-radius: 10px; margin-bottom: 20px;">
-                      <tr>
-                        <td style="padding: 14px 18px;">
-                          <div style="font-size: 12px; font-weight: 800; color: #047857; text-transform: uppercase; margin-bottom: 4px;">
-                            ✓ ĐÃ KÝ SỐ ĐIỆN TỬ HỢP LỆ (DIGITALLY SIGNED)
-                          </div>
-                          <div style="font-size: 12px; color: #065f46; line-height: 1.5;">
-                            Ký bởi: <strong>TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG (ICTU)</strong><br/>
-                            Ngày ký: ${dateStr} ${timeStr} | Tiêu chuẩn chứng thư số Nhà Nước<br/>
-                            Căn cứ pháp lý: Nghị định 123/2020/NĐ-CP & Thông tư 78/2021/TT-BTC của Bộ Tài Chính
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Hướng Dẫn Tệp Đính Kèm PDF -->
-                    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #1e40af; margin-bottom: 20px; line-height: 1.5;">
-                      📎 <strong>Tệp đính kèm:</strong> Tệp hóa đơn điện tử định dạng PDF (<code>Hoa_Don_${params.invoiceNumber}.pdf</code>) có chữ ký số điện tử chuẩn đã được đính kèm ở bên dưới email này để quý khách thuận tiện lưu trữ và quyết toán chi phí.
-                    </div>
-                  </td>
+                  <td class="t-lbl">Vị trí ghế:</td>
+                  <td class="t-val"><span class="seat-pill">${seatNumber}</span></td>
                 </tr>
-
-                <!-- 3. Footer Pháp Lý -->
+                ${params.vehiclePlate ? `
                 <tr>
-                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 22px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                    <strong>TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG THÁI NGUYÊN (ICTU)</strong><br/>
-                    Địa chỉ: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br/>
-                    Hotline hỗ trợ kỹ thuật: 1900 1234 | Email: hotro@smartbus.ictu.edu.vn | Website: smartbus.ictu.edu.vn
-                  </td>
+                  <td class="t-lbl">Xe buýt:</td>
+                  <td class="t-val">${params.vehiclePlate}</td>
+                </tr>` : ''}
+                <tr>
+                  <td class="t-lbl">Hành khách:</td>
+                  <td class="t-val">${passengerName}</td>
                 </tr>
-
               </table>
-            </td>
-          </tr>
-        </table>
+            </div>
+          </div>
+
+          <!-- 3. Rãnh Cắt Vé (Ticket Perforation) -->
+          <div class="dash-divider"></div>
+
+          <!-- 4. Khối Tóm Tắt Thanh Toán & Hóa Đơn Tinh Gọn -->
+          <div class="invoice-box">
+            <div class="inv-title">CHI TIẾT THANH TOÁN & HÓA ĐƠN</div>
+
+            <div class="pay-highlight">
+              <span class="pay-amount">${formattedTotal} đ</span>
+              <span class="pay-label">ĐÃ THANH TOÁN</span>
+              <div style="clear: both;"></div>
+            </div>
+
+            <table class="inv-table">
+              <tr>
+                <td>Phương thức:</td>
+                <td class="inv-v">${paymentMethodDisplay}</td>
+              </tr>
+              <tr>
+                <td>Mã đơn đặt vé:</td>
+                <td class="inv-v" style="font-family: monospace;">${params.bookingCode}</td>
+              </tr>
+              <tr>
+                <td>Số hóa đơn GTGT:</td>
+                <td class="inv-v" style="font-family: monospace;">${params.invoiceNumber}</td>
+              </tr>
+              <tr>
+                <td>Mã tra cứu:</td>
+                <td class="inv-v" style="font-family: monospace; color: #0284c7;">${lookupCode}</td>
+              </tr>
+            </table>
+
+            <div class="pdf-badge">
+              📎 <strong>Hóa đơn điện tử PDF:</strong> Tệp <code>Hoa_Don_${params.invoiceNumber}.pdf</code> đã được đính kèm ở thư này để bạn lưu trữ và quyết toán chi phí.
+            </div>
+          </div>
+
+          <!-- 5. Footer Nhỏ Gọn -->
+          <div class="footer-note">
+            <strong>SmartBus ICTU - Hệ Thống Xe Buýt Thông Minh</strong><br/>
+            Hotline: 1900 1234 | Website: smartbus.ictu.edu.vn
+            ${redirectInfo?.isRedirected ? `<br/><span style="color: #b45309; font-size: 10px;">* Demo: Chuyển hướng từ ${redirectInfo.originalEmail}</span>` : ''}
+          </div>
+        </div>
       </body>
       </html>
     `;
   }
 
-  /**
-   * Gửi email chung qua Nodemailer SMTP hoặc Mock logger
-   */
   async sendMail(options: SendMailOptions): Promise<boolean> {
     const redirectInfo = this.resolveTargetEmail(options.to);
     const toAddress = redirectInfo.actualTo;
@@ -1223,30 +1132,54 @@ export class NotificationService {
   /**
    * Gửi email Hóa đơn điện tử kèm tệp đính kèm PDF
    */
+  /**
+   * Gửi email Vé Điện Tử & Hóa Đơn Chuẩn Mobile-First kèm mã QR soát vé và tệp PDF đính kèm
+   */
   async sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<boolean> {
     const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
     const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
-    const subject = `${subjectPrefix}[SmartBus ICTU] Hóa đơn điện tử ${params.invoiceNumber} - Đơn vé ${params.bookingCode}`;
+    const ticketCodeDisplay = params.ticketCode ? ` - Mã vé: ${params.ticketCode}` : ` - Đơn: ${params.bookingCode}`;
+    const subject = `${subjectPrefix}[SmartBus ICTU] Thẻ lên xe & Hóa đơn${ticketCodeDisplay}`;
 
-    const htmlBody = params.htmlContent || this.buildInvoiceEmailHtml(params, redirectInfo);
+    const attachments: EmailAttachment[] = [
+      {
+        filename: `Hoa_Don_${params.invoiceNumber}.pdf`,
+        content: params.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ];
+
+    let qrCid = '';
+    let smtpQrSrc = params.qrDataUrl || '';
+
+    // Chuẩn bị CID Inline Attachment cho ảnh QR để Gmail mobile hiển thị trực tiếp sắc nét
+    if (params.qrDataUrl && params.qrDataUrl.startsWith('data:image/')) {
+      const match = params.qrDataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] || 'png';
+        const base64Data = match[2];
+        const safeCode = (params.ticketCode || params.bookingCode).replace(/[^a-zA-Z0-9_-]/g, '');
+        qrCid = `ticket-qr-${safeCode}`;
+        attachments.push({
+          filename: `ticket-${safeCode}-qr.${ext}`,
+          content: Buffer.from(base64Data, 'base64'),
+          contentType: `image/${ext}`,
+          cid: qrCid,
+        } as any);
+        smtpQrSrc = `cid:${qrCid}`;
+      }
+    }
+
+    const htmlBody = params.htmlContent || this.buildInvoiceEmailHtml(params, redirectInfo, smtpQrSrc);
 
     return this.sendMail({
       to: redirectInfo.actualTo,
       subject,
       html: htmlBody,
-      attachments: [
-        {
-          filename: `Hoa_Don_${params.invoiceNumber}.pdf`,
-          content: params.pdfBuffer,
-          contentType: 'application/pdf',
-        },
-      ],
+      attachments,
     });
   }
 
-  /**
-   * Lấy danh sách các thông báo / email đã gửi (phục vụ đối soát và kiểm thử)
-   */
   getSentNotifications(filter?: { ticketCode?: string; recipientEmail?: string }): SentNotificationRecord[] {
     return this.sentNotifications.filter((n) => {
       if (filter?.ticketCode && n.ticketCode !== filter.ticketCode) return false;

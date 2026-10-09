@@ -759,8 +759,15 @@ export class PaymentService {
       status: 'success',
     });
 
-    // Tự động gửi Email/Thông báo kèm vé điện tử và hình ảnh mã QR sau khi thanh toán thành công
-    if (this.notificationService && payment.booking?.user?.email) {
+    // Tự động khởi tạo hóa đơn điện tử và gửi 1 Email tích hợp vé điện tử + mã QR soát vé + tóm tắt hóa đơn chuẩn Mobile-First
+    if (this.invoiceService) {
+      try {
+        await this.invoiceService.generateAndSendInvoiceForPayment(payment.id);
+      } catch (err: any) {
+        this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
+      }
+    } else if (this.notificationService && payment.booking?.user?.email) {
+      // Fallback: nếu invoiceService không khả dụng thì gửi email xác nhận vé
       for (const ticket of tickets) {
         let qrDataUrl = '';
         if (ticket.qrData) {
@@ -780,15 +787,6 @@ export class PaymentService {
           price: ticket.originalPrice,
           qrDataUrl,
         });
-      }
-    }
-
-    // Tự động khởi tạo hóa đơn điện tử và gửi email kèm file PDF đính kèm ngay sau khi thanh toán thành công
-    if (this.invoiceService) {
-      try {
-        await this.invoiceService.generateAndSendInvoiceForPayment(payment.id);
-      } catch (err: any) {
-        this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
       }
     }
   }
