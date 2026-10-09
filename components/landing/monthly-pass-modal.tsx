@@ -41,6 +41,10 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { promotionService } from '@/lib/services/promotion.service'
+import {
+  priorityVerificationService,
+  type MyVerificationsResponse,
+} from '@/lib/services/priority-verification.service'
 import { useAuth } from '@/lib/auth-context'
 import type {
   MonthlyPass,
@@ -59,7 +63,7 @@ import { cn } from '@/lib/utils'
 interface MonthlyPassModalProps {
   open: boolean
   onClose: () => void
-  initialTab?: 'register' | 'my-passes'
+  initialTab?: 'register' | 'my-passes' | 'verify-profile'
 }
 
 const CATEGORIES: {
@@ -102,12 +106,31 @@ export function MonthlyPassModal({
   initialTab = 'register',
 }: MonthlyPassModalProps) {
   const { isAuthenticated, user } = useAuth()
-  const [activeTab, setActiveTab] = useState<'register' | 'my-passes'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'register' | 'my-passes' | 'verify-profile'>(initialTab)
 
   // Danh sách thẻ tháng
   const [myPasses, setMyPasses] = useState<MonthlyPass[]>([])
   const [loadingPasses, setLoadingPasses] = useState(false)
   const [passesError, setPassesError] = useState<string | null>(null)
+
+  // State cho Xác thực Đối tượng Ưu đãi (HSSV / Người cao tuổi)
+  const [verificationData, setVerificationData] = useState<MyVerificationsResponse | null>(null)
+  const [loadingVerification, setLoadingVerification] = useState(false)
+  const [showReapplyForm, setShowReapplyForm] = useState(false)
+  const [verifCategory, setVerifCategory] = useState<'student' | 'elderly'>('student')
+  const [verifStudentId, setVerifStudentId] = useState(user?.studentId || 'DTC215180001')
+  const [verifSchoolName, setVerifSchoolName] = useState('Trường ĐH Công Nghệ Thông Tin & Truyền Thông (ICTU)')
+  const [verifIdCard, setVerifIdCard] = useState('')
+  const [verifFrontUrl, setVerifFrontUrl] = useState<string | null>(null)
+  const [verifFrontPreview, setVerifFrontPreview] = useState<string | null>(null)
+  const [verifBackUrl, setVerifBackUrl] = useState<string | null>(null)
+  const [verifBackPreview, setVerifBackPreview] = useState<string | null>(null)
+  const [verifPortraitUrl, setVerifPortraitUrl] = useState<string | null>(null)
+  const [verifPortraitPreview, setVerifPortraitPreview] = useState<string | null>(null)
+  const [uploadingSlot, setUploadingSlot] = useState<'front' | 'back' | 'portrait' | null>(null)
+  const [submittingVerif, setSubmittingVerif] = useState(false)
+  const [verifError, setVerifError] = useState<string | null>(null)
+  const [verifSuccessMsg, setVerifSuccessMsg] = useState<string | null>(null)
 
   // Form State
   const [category, setCategory] = useState<MonthlyPassCategory>('student')
@@ -137,6 +160,9 @@ export function MonthlyPassModal({
   const [renewError, setRenewError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const verifFrontRef = useRef<HTMLInputElement>(null)
+  const verifBackRef = useRef<HTMLInputElement>(null)
+  const verifPortraitRef = useRef<HTMLInputElement>(null)
 
   const formatPrice = (amount: number) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
@@ -157,12 +183,29 @@ export function MonthlyPassModal({
     }
   }, [isAuthenticated])
 
+  // Tải thông tin xác thực ưu đãi tài khoản của user
+  const loadMyVerification = useCallback(async () => {
+    if (!isAuthenticated) return
+    setLoadingVerification(true)
+    try {
+      const res = await priorityVerificationService.getMyVerifications()
+      if (res.success && res.data) {
+        setVerificationData(res.data)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingVerification(false)
+    }
+  }, [isAuthenticated])
+
   useEffect(() => {
     if (open) {
       loadMyPasses()
+      loadMyVerification()
       if (initialTab) setActiveTab(initialTab)
     }
-  }, [open, initialTab, loadMyPasses])
+  }, [open, initialTab, loadMyPasses, loadMyVerification])
 
   // Xử lý nạp ảnh minh chứng thẻ SV / CCCD có kiểm tra bảo mật (Magic bytes & 3MB)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,6 +380,93 @@ export function MonthlyPassModal({
     }
   }
 
+  // Xử lý upload ảnh minh chứng đối tượng ưu đãi
+  const handleUploadVerifFile = async (
+    file: File,
+    slot: 'front' | 'back' | 'portrait'
+  ) => {
+    setVerifError(null)
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    if (!allowed.includes(file.type) || file.type.includes('svg')) {
+      setVerifError('Định dạng ảnh không hợp lệ. Vui lòng chỉ chọn ảnh JPG, PNG hoặc WebP.')
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setVerifError('Dung lượng tệp vượt quá giới hạn 3MB.')
+      return
+    }
+
+    setUploadingSlot(slot)
+    const preview = URL.createObjectURL(file)
+    if (slot === 'front') setVerifFrontPreview(preview)
+    if (slot === 'back') setVerifBackPreview(preview)
+    if (slot === 'portrait') setVerifPortraitPreview(preview)
+
+    const res = await priorityVerificationService.uploadProofImage(file)
+    setUploadingSlot(null)
+
+    if (res.success && res.data?.url) {
+      if (slot === 'front') setVerifFrontUrl(res.data.url)
+      if (slot === 'back') setVerifBackUrl(res.data.url)
+      if (slot === 'portrait') setVerifPortraitUrl(res.data.url)
+    } else {
+      setVerifError(res.message || 'Lỗi khi tải ảnh lên máy chủ. Vui lòng thử lại.')
+    }
+  }
+
+  // Xử lý gửi hồ sơ thẩm định đối tượng ưu đãi tài khoản
+  const handleSubmitVerification = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setVerifError(null)
+    setVerifSuccessMsg(null)
+
+    if (verifCategory === 'student') {
+      if (!verifStudentId.trim()) {
+        setVerifError('Vui lòng nhập Mã sinh viên')
+        return
+      }
+      if (!verifSchoolName.trim()) {
+        setVerifError('Vui lòng nhập Tên trường đào tạo')
+        return
+      }
+    } else {
+      if (!verifIdCard.trim()) {
+        setVerifError('Vui lòng nhập Số CCCD / CMND')
+        return
+      }
+    }
+
+    if (!verifFrontUrl) {
+      setVerifError('Vui lòng tải lên ảnh mặt trước Thẻ SV hoặc CCCD')
+      return
+    }
+
+    setSubmittingVerif(true)
+    try {
+      const res = await priorityVerificationService.submitVerification({
+        category: verifCategory,
+        studentId: verifCategory === 'student' ? verifStudentId.trim() : undefined,
+        schoolName: verifCategory === 'student' ? verifSchoolName.trim() : undefined,
+        idCardNumber: verifCategory === 'elderly' ? verifIdCard.trim() : undefined,
+        frontImageUrl: verifFrontUrl,
+        backImageUrl: verifBackUrl || undefined,
+        portraitImageUrl: verifPortraitUrl || undefined,
+      })
+
+      if (res.success) {
+        setVerifSuccessMsg('Gửi hồ sơ xác thực đối tượng thành công! Hồ sơ đang được Ban Quản Lý / HR thẩm định.')
+        setShowReapplyForm(false)
+        await loadMyVerification()
+      } else {
+        setVerifError(res.message || 'Không thể gửi hồ sơ xác thực')
+      }
+    } catch (err: any) {
+      setVerifError(err.message || 'Lỗi kết nối máy chủ')
+    } finally {
+      setSubmittingVerif(false)
+    }
+  }
+
   if (!open) return null
 
   const selectedCategoryMeta = CATEGORIES.find((c) => c.key === category)!
@@ -410,6 +540,27 @@ export function MonthlyPassModal({
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('verify-profile')}
+                className={cn(
+                  'px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5',
+                  activeTab === 'verify-profile'
+                    ? 'bg-white text-[#005A36] shadow-xs font-extrabold'
+                    : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                <ShieldCheck
+                  size={14}
+                  className={verificationData?.verificationStatus === 'verified' ? 'text-emerald-600' : ''}
+                />
+                <span>Xác thực ưu đãi</span>
+                {verificationData?.verificationStatus === 'verified' ? (
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                ) : verificationData?.verificationStatus === 'pending' ? (
+                  <span className="size-2 rounded-full bg-amber-400" />
+                ) : null}
+              </button>
             </div>
 
             <button
@@ -424,24 +575,24 @@ export function MonthlyPassModal({
         </div>
 
         {/* Mobile Tab Switcher */}
-        <div className="flex sm:hidden border-b border-slate-100 bg-slate-50/80 p-2 gap-2 shrink-0">
+        <div className="flex sm:hidden border-b border-slate-100 bg-slate-50/80 p-2 gap-1.5 shrink-0 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('register')}
             className={cn(
-              'flex-1 py-2 rounded-xl text-xs font-bold transition-all text-center',
+              'flex-1 min-w-[90px] py-2 rounded-xl text-xs font-bold transition-all text-center',
               activeTab === 'register'
                 ? 'bg-[#005A36] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200',
             )}
           >
-            Đăng ký thẻ mới
+            Đăng ký mới
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('my-passes')}
             className={cn(
-              'flex-1 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
+              'flex-1 min-w-[90px] py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
               activeTab === 'my-passes'
                 ? 'bg-[#005A36] text-white shadow-xs'
                 : 'bg-white text-slate-600 border border-slate-200',
@@ -453,6 +604,19 @@ export function MonthlyPassModal({
                 {myPasses.length}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('verify-profile')}
+            className={cn(
+              'flex-1 min-w-[110px] py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
+              activeTab === 'verify-profile'
+                ? 'bg-[#005A36] text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200',
+            )}
+          >
+            <ShieldCheck size={13} />
+            <span>Xác thực ưu đãi</span>
           </button>
         </div>
 
@@ -986,6 +1150,485 @@ export function MonthlyPassModal({
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: XÁC THỰC ĐỐI TƯỢNG ƯU ĐÃI (HSSV / NGƯỜI CAO TUỔI) */}
+          {activeTab === 'verify-profile' && (
+            <div className="space-y-4">
+              {!isAuthenticated ? (
+                <div className="py-10 text-center space-y-3">
+                  <div className="size-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs">
+                    <ShieldCheck size={28} />
+                  </div>
+                  <h4 className="font-bold text-slate-900 text-sm">Vui lòng đăng nhập</h4>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    Đăng nhập tài khoản để nộp hồ sơ xác thực đối tượng ưu đãi (Sinh viên ICTU, Người cao tuổi) và nhận trợ giá tự động.
+                  </p>
+                </div>
+              ) : loadingVerification ? (
+                <div className="py-12 text-center text-slate-500 space-y-2">
+                  <Loader2 size={28} className="animate-spin text-[#005A36] mx-auto" />
+                  <p className="text-xs font-bold">Đang tải hồ sơ xác thực của bạn...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Trường hợp 1: Đã xác thực thành công (Verified) */}
+                  {verificationData?.verificationStatus === 'verified' && !showReapplyForm && (
+                    <div className="rounded-3xl border border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-6 sm:p-8 space-y-5 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="size-12 rounded-2xl bg-[#005A36] text-white flex items-center justify-center shadow-md shadow-emerald-950/20">
+                          <CheckCircle2 size={28} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-base sm:text-lg font-black text-slate-900">
+                              Tài Khoản Đã Được Xác Thực Ưu Đãi
+                            </h4>
+                            <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-black text-[#005A36]">
+                              CHÍNH THỨC
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium mt-0.5">
+                            Hệ thống tự động kích hoạt mức cước trợ giá cho tài khoản này trên toàn bộ hệ thống
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-2xl border border-emerald-200/80 bg-white/80 p-3.5 space-y-1">
+                          <span className="text-[11px] font-bold text-slate-500 block uppercase">
+                            Họ và tên chủ tài khoản
+                          </span>
+                          <span className="font-extrabold text-slate-900 text-sm">
+                            {user?.fullName || user?.name}
+                          </span>
+                        </div>
+
+                        <div className="rounded-2xl border border-emerald-200/80 bg-white/80 p-3.5 space-y-1">
+                          <span className="text-[11px] font-bold text-slate-500 block uppercase">
+                            Đối tượng áp dụng
+                          </span>
+                          <span className="font-extrabold text-emerald-800 text-sm flex items-center gap-1.5">
+                            {verificationData.priorityCategory === 'student' ? (
+                              <>
+                                <GraduationCap size={16} />
+                                <span>Sinh viên ICTU (Trợ giá 50%)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Heart size={16} />
+                                <span>Người cao tuổi (Trợ giá 60%)</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 text-xs text-emerald-900 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles size={16} className="text-[#005A36] shrink-0" />
+                          <span>
+                            Từ giờ bạn có thể đăng ký vé tháng hoặc mua vé lượt với mức giá trợ giá mà không cần nộp lại thẻ.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowReapplyForm(true)}
+                          className="text-[11px] font-bold text-[#005A36] underline hover:text-[#00472b] whitespace-nowrap ml-2 cursor-pointer"
+                        >
+                          Cập nhật thẻ mới
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trường hợp 2: Đang chờ HR thẩm định (Pending) */}
+                  {verificationData?.verificationStatus === 'pending' && !showReapplyForm && (
+                    <div className="rounded-3xl border border-amber-300 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-6 sm:p-8 space-y-4 shadow-sm text-center">
+                      <div className="size-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-md shadow-amber-950/20 animate-pulse">
+                        <Clock size={28} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-base font-black text-slate-900">
+                          Hồ Sơ Của Bạn Đang Được Thẩm Định
+                        </h4>
+                        <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                          Bộ phận HR và Ban Quản Lý ICTU Transit đang đối soát minh chứng thẻ HSSV/CCCD của bạn. Thời gian phản hồi dự kiến từ <strong>2 đến 24 giờ</strong>. Kết quả xét duyệt sẽ được thông báo trực tiếp qua <strong>Email</strong> và <strong>Thông báo</strong> trên ứng dụng.
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-300 px-3 py-1 text-xs font-bold text-amber-800">
+                        <Clock size={13} />
+                        <span>Trạng thái: Đang chờ xét duyệt hồ sơ</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trường hợp 3: Bị từ chối (Rejected) */}
+                  {verificationData?.verificationStatus === 'rejected' && !showReapplyForm && (
+                    <div className="rounded-3xl border border-rose-300 bg-rose-50/80 p-6 space-y-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="size-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                          <AlertTriangle size={24} />
+                        </div>
+                        <div className="space-y-1 flex-1">
+                          <h4 className="text-sm sm:text-base font-black text-rose-900">
+                            Hồ Sơ Xác Thực Trước Đó Đã Bị Từ Chối
+                          </h4>
+                          <p className="text-xs text-rose-700">
+                            {verificationData.history?.[0]?.rejectionReason ? (
+                              <span>
+                                <strong>Lý do từ chối:</strong> {verificationData.history[0].rejectionReason}
+                              </span>
+                            ) : (
+                              <span>Minh chứng của bạn chưa đạt yêu cầu rõ nét hoặc thông tin không trùng khớp.</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowReapplyForm(true)}
+                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Upload size={14} />
+                          <span>Bổ sung & Nộp lại minh chứng mới</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trường hợp 4: Chưa nộp hồ sơ (Unverified) HOẶC Người dùng bấm Nộp lại */}
+                  {(verificationData?.verificationStatus === 'unverified' ||
+                    !verificationData?.verificationStatus ||
+                    showReapplyForm) && (
+                    <form onSubmit={handleSubmitVerification} className="space-y-5">
+                      {/* Tiêu đề giới thiệu */}
+                      <div className="rounded-2xl bg-emerald-50 border border-emerald-200/80 p-4 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck size={18} className="text-[#005A36]" />
+                          <h4 className="text-xs sm:text-sm font-black text-emerald-950">
+                            Đăng Ký Xác Thực Đối Tượng Ưu Đãi (1 Lần Duy Nhất)
+                          </h4>
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-emerald-800 leading-relaxed">
+                          Tải ảnh thẻ sinh viên hoặc CCCD để được HR ICTU Transit phê duyệt tài khoản. Sau khi được duyệt, bạn sẽ được tự động hưởng chính sách trợ giá <strong>50% - 60%</strong> cho mọi vé tháng và vé xe.
+                        </p>
+                      </div>
+
+                      {/* Chọn đối tượng */}
+                      <div className="space-y-2">
+                        <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600">
+                          1. Chọn đối tượng áp dụng *
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setVerifCategory('student')}
+                            className={cn(
+                              'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between',
+                              verifCategory === 'student'
+                                ? 'border-[#005A36] bg-emerald-50/50 shadow-sm ring-2 ring-[#005A36]/20'
+                                : 'border-slate-200 hover:border-slate-300 bg-white',
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={cn(
+                                  'size-9 rounded-xl flex items-center justify-center',
+                                  verifCategory === 'student'
+                                    ? 'bg-[#005A36] text-white'
+                                    : 'bg-slate-100 text-slate-600',
+                                )}
+                              >
+                                <GraduationCap size={18} />
+                              </div>
+                              <div>
+                                <span className="block text-xs font-black text-slate-900">
+                                  Học sinh / Sinh viên
+                                </span>
+                                <span className="text-[11px] font-bold text-emerald-700">
+                                  Trợ giá 50% vé tháng
+                                </span>
+                              </div>
+                            </div>
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-[#005A36]">
+                              -50%
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setVerifCategory('elderly')}
+                            className={cn(
+                              'p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between',
+                              verifCategory === 'elderly'
+                                ? 'border-[#005A36] bg-emerald-50/50 shadow-sm ring-2 ring-[#005A36]/20'
+                                : 'border-slate-200 hover:border-slate-300 bg-white',
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={cn(
+                                  'size-9 rounded-xl flex items-center justify-center',
+                                  verifCategory === 'elderly'
+                                    ? 'bg-[#005A36] text-white'
+                                    : 'bg-slate-100 text-slate-600',
+                                )}
+                              >
+                                <Heart size={18} />
+                              </div>
+                              <div>
+                                <span className="block text-xs font-black text-slate-900">
+                                  Người cao tuổi (≥ 60 tuổi)
+                                </span>
+                                <span className="text-[11px] font-bold text-sky-700">
+                                  Trợ giá 60% vé tháng
+                                </span>
+                              </div>
+                            </div>
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-800">
+                              -60%
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Thông tin định danh */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {verifCategory === 'student' ? (
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-bold text-slate-700">
+                                Mã số sinh viên (MSSV) *
+                              </label>
+                              <input
+                                type="text"
+                                value={verifStudentId}
+                                onChange={(e) => setVerifStudentId(e.target.value)}
+                                placeholder="Ví dụ: DTC215180001"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-xs text-slate-900 font-bold focus:border-[#005A36] focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-bold text-slate-700">
+                                Trường đào tạo *
+                              </label>
+                              <input
+                                type="text"
+                                value={verifSchoolName}
+                                onChange={(e) => setVerifSchoolName(e.target.value)}
+                                placeholder="Trường ĐH Công Nghệ Thông Tin & Truyền Thông (ICTU)"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-xs text-slate-900 focus:border-[#005A36] focus:outline-none"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label className="block text-xs font-bold text-slate-700">
+                              Số CCCD / CMND gắn chip *
+                            </label>
+                            <input
+                              type="text"
+                              value={verifIdCard}
+                              onChange={(e) => setVerifIdCard(e.target.value)}
+                              placeholder="Nhập 12 số CCCD"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 text-xs text-slate-900 font-mono font-bold focus:border-[#005A36] focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tải 3 ảnh minh chứng */}
+                      <div className="space-y-2">
+                        <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600">
+                          2. Tải ảnh minh chứng đối chiếu *
+                        </label>
+                        <p className="text-[11px] text-slate-400">
+                          Chấp nhận ảnh JPG, PNG, WebP (Dưới 3MB) · Hệ thống bảo mật Magic Bytes chống mã độc
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {/* Slot 1: Mặt trước (Bắt buộc) */}
+                          <div className="space-y-1">
+                            <span className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                              <span>Mặt trước Thẻ SV / CCCD *</span>
+                              {uploadingSlot === 'front' && <Loader2 size={12} className="animate-spin text-[#005A36]" />}
+                            </span>
+                            <input
+                              ref={verifFrontRef}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) handleUploadVerifFile(f, 'front')
+                              }}
+                            />
+                            {verifFrontPreview ? (
+                              <div className="relative h-32 rounded-2xl overflow-hidden border border-emerald-300 group">
+                                <img src={verifFrontPreview} alt="Mặt trước" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVerifFrontPreview(null)
+                                    setVerifFrontUrl(null)
+                                  }}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-black/60 text-white hover:bg-black"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => verifFrontRef.current?.click()}
+                                className="w-full h-32 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#005A36] bg-slate-50 flex flex-col items-center justify-center p-3 text-center transition-colors cursor-pointer group"
+                              >
+                                <Upload size={20} className="text-slate-400 group-hover:text-[#005A36] mb-1" />
+                                <span className="text-[11px] font-bold text-slate-700">Mặt trước</span>
+                                <span className="text-[10px] text-slate-400">Chạm để chọn</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Slot 2: Mặt sau (Tùy chọn) */}
+                          <div className="space-y-1">
+                            <span className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                              <span>Mặt sau Thẻ / CCCD</span>
+                              {uploadingSlot === 'back' && <Loader2 size={12} className="animate-spin text-[#005A36]" />}
+                            </span>
+                            <input
+                              ref={verifBackRef}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) handleUploadVerifFile(f, 'back')
+                              }}
+                            />
+                            {verifBackPreview ? (
+                              <div className="relative h-32 rounded-2xl overflow-hidden border border-emerald-300 group">
+                                <img src={verifBackPreview} alt="Mặt sau" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVerifBackPreview(null)
+                                    setVerifBackUrl(null)
+                                  }}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-black/60 text-white hover:bg-black"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => verifBackRef.current?.click()}
+                                className="w-full h-32 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#005A36] bg-slate-50 flex flex-col items-center justify-center p-3 text-center transition-colors cursor-pointer group"
+                              >
+                                <Upload size={20} className="text-slate-400 group-hover:text-[#005A36] mb-1" />
+                                <span className="text-[11px] font-bold text-slate-700">Mặt sau</span>
+                                <span className="text-[10px] text-slate-400">Tùy chọn</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Slot 3: Ảnh chân dung đối chiếu */}
+                          <div className="space-y-1">
+                            <span className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                              <span>Ảnh chân dung đối chiếu</span>
+                              {uploadingSlot === 'portrait' && <Loader2 size={12} className="animate-spin text-[#005A36]" />}
+                            </span>
+                            <input
+                              ref={verifPortraitRef}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) handleUploadVerifFile(f, 'portrait')
+                              }}
+                            />
+                            {verifPortraitPreview ? (
+                              <div className="relative h-32 rounded-2xl overflow-hidden border border-emerald-300 group">
+                                <img src={verifPortraitPreview} alt="Chân dung" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVerifPortraitPreview(null)
+                                    setVerifPortraitUrl(null)
+                                  }}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-black/60 text-white hover:bg-black"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => verifPortraitRef.current?.click()}
+                                className="w-full h-32 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#005A36] bg-slate-50 flex flex-col items-center justify-center p-3 text-center transition-colors cursor-pointer group"
+                              >
+                                <User size={20} className="text-slate-400 group-hover:text-[#005A36] mb-1" />
+                                <span className="text-[11px] font-bold text-slate-700">Ảnh chân dung</span>
+                                <span className="text-[10px] text-slate-400">Tùy chọn</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {verifError && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2">
+                          <AlertCircle size={16} className="shrink-0" />
+                          <span>{verifError}</span>
+                        </div>
+                      )}
+
+                      {verifSuccessMsg && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                          <span>{verifSuccessMsg}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                        {showReapplyForm && (
+                          <button
+                            type="button"
+                            onClick={() => setShowReapplyForm(false)}
+                            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          >
+                            Quay lại
+                          </button>
+                        )}
+
+                        <button
+                          type="submit"
+                          disabled={submittingVerif || !!uploadingSlot}
+                          className="py-3 px-6 rounded-xl bg-[#005A36] hover:bg-[#004529] disabled:opacity-50 text-white text-xs font-black shadow-md shadow-emerald-950/15 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {submittingVerif ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Đang gửi hồ sơ...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck size={16} />
+                              <span>Gửi Hồ Sơ Xác Thực Đối Tượng Ưu Đãi</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               )}
             </div>

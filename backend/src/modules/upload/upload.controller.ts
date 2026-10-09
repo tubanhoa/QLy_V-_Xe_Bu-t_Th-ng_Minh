@@ -9,10 +9,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
-import * as crypto from 'node:crypto';
-import { validateStudentCardImage } from '../../common/utils/file-upload.util.js';
+import { validateProofImage, saveUploadedFileLocally } from '../../common/utils/file-upload.util.js';
 import { UploadStudentCardDto } from './dto/upload.dto.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 
 interface UploadedMulterFile {
@@ -26,10 +24,10 @@ interface UploadedMulterFile {
 @Controller()
 export class UploadController {
   @Public()
-  @Post(['upload/student-card', 'users/upload-student-card', 'monthly-passes/upload-proof'])
+  @Post(['upload/student-card', 'users/upload-student-card', 'monthly-passes/upload-proof', 'priority-verifications/upload-proof'])
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
-    summary: 'Tải ảnh minh chứng Thẻ Sinh Viên (Kiểm định Magic Bytes, max 3MB, chặn SVG)',
+    summary: 'Tải ảnh minh chứng Thẻ Sinh Viên / CCCD (Kiểm định Magic Bytes, max 3MB, chặn SVG)',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   async uploadStudentCard(
@@ -45,7 +43,7 @@ export class UploadController {
       originalFilename = file.originalname;
       declaredMimeType = file.mimetype;
     } else if (dto?.fileBase64) {
-      originalFilename = dto.filename || 'student-card.jpg';
+      originalFilename = dto.filename || 'proof-image.jpg';
       declaredMimeType = dto.mimeType || '';
 
       let rawBase64 = dto.fileBase64;
@@ -70,22 +68,21 @@ export class UploadController {
     }
 
     // Kiểm định nghiêm ngặt: Dung lượng <= 3MB, chặn SVG, kiểm tra Magic Bytes đầu tệp
-    const validation = validateStudentCardImage(
+    const validation = validateProofImage(
       buffer,
       originalFilename,
       declaredMimeType,
     );
 
-    const ext = validation.mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    const secureFilename = `student_card_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    const fileUrl = `/uploads/student-cards/${secureFilename}`;
+    const ext = validation.mimeType === 'image/jpeg' ? 'jpg' : validation.mimeType === 'image/png' ? 'png' : 'webp';
+    const saved = await saveUploadedFileLocally(buffer, 'verifications', ext);
 
     return {
       success: true,
       message:
-        'Tải ảnh minh chứng thẻ sinh viên hợp lệ và an toàn (Đã kiểm tra Magic Bytes thành công)',
-      url: fileUrl,
-      filename: secureFilename,
+        'Tải ảnh minh chứng hợp lệ và an toàn (Đã kiểm tra Magic Bytes thành công)',
+      url: saved.fileUrl,
+      filename: saved.filename,
       mimeType: validation.mimeType,
       sizeBytes: validation.sizeBytes,
     };

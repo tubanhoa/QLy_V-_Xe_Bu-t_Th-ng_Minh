@@ -51,6 +51,18 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 20, default: UserStatus.ACTIVE })
   status: UserStatus;
 
+  @Column({ name: 'priority_category', type: 'varchar', length: 20, default: 'regular' })
+  priorityCategory: string;
+
+  @Column({ name: 'verification_status', type: 'varchar', length: 20, default: 'unverified' })
+  verificationStatus: string;
+
+  @Column({ name: 'verified_at', type: 'timestamptz', nullable: true })
+  verifiedAt: Date | null;
+
+  @Column({ name: 'verified_by', type: 'uuid', nullable: true })
+  verifiedBy: string | null;
+
   @Column({ name: 'refresh_token_hash', type: 'varchar', length: 255, nullable: true })
   refreshTokenHash: string;
 

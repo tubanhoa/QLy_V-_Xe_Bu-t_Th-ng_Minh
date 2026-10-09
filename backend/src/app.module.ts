@@ -17,6 +17,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { NotificationModule } from './modules/notification/notification.module.js';
 import { UploadModule } from './modules/upload/upload.module.js';
 import { InvoiceModule } from './modules/invoice/invoice.module.js';
+import { PriorityVerificationModule } from './modules/priority-verification/priority-verification.module.js';
 import { SeedModule } from './database/seeds/seed.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -44,6 +45,7 @@ import { AppService } from './app.service.js';
     NotificationModule,
     UploadModule,
     InvoiceModule,
+    PriorityVerificationModule,
     SeedModule,
   ],
   controllers: [AppController],

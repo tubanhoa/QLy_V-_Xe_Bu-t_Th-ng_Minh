@@ -23,6 +23,7 @@ export * from './refund-log.entity.js';
 export * from './device-token.entity.js';
 export * from './notification.entity.js';
 export * from './notification-preference.entity.js';
+export * from './priority-verification.entity.js';
 
 import { RoleEntity } from './role.entity.js';
 import { UserEntity } from './user.entity.js';
@@ -49,6 +50,7 @@ import { RefundLogEntity } from './refund-log.entity.js';
 import { DeviceTokenEntity } from './device-token.entity.js';
 import { NotificationEntity } from './notification.entity.js';
 import { NotificationPreferenceEntity } from './notification-preference.entity.js';
+import { PriorityVerificationEntity } from './priority-verification.entity.js';
 
 export const ALL_ENTITIES = [
   RoleEntity,
@@ -76,6 +78,7 @@ export const ALL_ENTITIES = [
   DeviceTokenEntity,
   NotificationEntity,
   NotificationPreferenceEntity,
+  PriorityVerificationEntity,
 ];
 
 
