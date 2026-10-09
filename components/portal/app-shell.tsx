@@ -287,27 +287,10 @@ export function AppShell() {
             key={`${portalRole}-${activeItem.key}-${loading}`}
             className={
               portalRole === 'driver'
-                ? 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-32 duration-300 md:p-6'
+                ? 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-28 md:p-6 md:pb-10 duration-300'
                 : 'animate-in fade-in slide-in-from-bottom-2 p-4 pb-10 duration-300 md:p-6'
             }
           >
-            {portalRole === 'driver' && (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 px-4 text-emerald-950 dark:text-emerald-200 shadow-sm">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex size-2.5 rounded-full bg-emerald-500 animate-ping" />
-                  <p className="text-xs font-bold">
-                    Đang xem ở Chế độ Hành chính / Văn phòng
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsCockpitMode(true)}
-                  className="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
-                >
-                  🚀 Bật Buồng Lái Táp-lô (HUD Cockpit)
-                </button>
-              </div>
-            )}
             {renderContent()}
           </div>
         </Layout.Content>

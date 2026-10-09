@@ -64,7 +64,7 @@ function LoginFormContent() {
     } else if (next === 'dispatcher') {
       setIdentifier('manager@smartbus.ictu.vn')
     } else if (next === 'driver') {
-      setIdentifier('driver.nam@smartbus.ictu.vn')
+      setIdentifier('driver.le.nam@smartbus.ictu.vn')
     } else {
       setIdentifier('student.an@ictu.edu.vn')
     }

@@ -34,6 +34,9 @@ import {
   Play,
   CheckCheck,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
   X,
   Volume2,
   VolumeX,
@@ -236,7 +239,8 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
   const [manifestSearch, setManifestSearch] = useState('')
   const [isLoadingManifest, setIsLoadingManifest] = useState(false)
   const [manifestSubTab, setManifestSubTab] = useState<'seatmap' | 'list'>('seatmap')
-  const [selectedSeatNo, setSelectedSeatNo] = useState<string | null>(null)
+  const [selectedPassenger, setSelectedPassenger] = useState<ManifestPassenger | null>(null)
+  const [isStopCardMinimized, setIsStopCardMinimized] = useState(false)
 
   // 7. Trạng thái Báo sự cố SOS & Điểm danh
   const [selectedIncidentType, setSelectedIncidentType] = useState<IncidentType>('traffic_jam')
@@ -245,6 +249,13 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
   const [isSubmittingIncident, setIsSubmittingIncident] = useState(false)
   const [incidentSuccessNotice, setIncidentSuccessNotice] = useState<string | null>(null)
   const [manifestNotice, setManifestNotice] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+
+  // Sĩ số hành khách & Sức chứa ca chạy
+  const checkedInCount = useMemo(() => {
+    return manifestList.filter((m) => m.status === 'checked_in' || !!m.checkedInAt).length
+  }, [manifestList])
+  const totalBooked = manifestList.length
+  const totalCapacity = activeTrip?.vehicle?.capacity || 28
 
 
 
@@ -322,30 +333,62 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     }
   }, [activeTab, loadManifest])
 
-  // Điểm danh vé thủ công bằng ID vé / mã ghế
+  // Điểm danh vé thủ công bằng ID vé / mã ghế (Chuyển xanh lá tức thì)
   const handleQuickCheckIn = useCallback(async (ticketId: string) => {
     if (!activeTrip?.id) return
+    driverHardware.playCue('ticketSuccess')
+    // Cập nhật giao diện tức thì sang màu xanh lá (Optimistic UI)
+    setManifestList((prev) =>
+      prev.map((item) =>
+        item.ticketId === ticketId || item.ticketCode === ticketId
+          ? { ...item, status: 'checked_in', checkedInAt: new Date().toISOString() }
+          : item
+      )
+    )
+    setSelectedPassenger((prev) =>
+      prev && (prev.ticketId === ticketId || prev.ticketCode === ticketId)
+        ? { ...prev, status: 'checked_in', checkedInAt: new Date().toISOString() }
+        : prev
+    )
+
     const res = await driverService.quickCheckInTicket(activeTrip.id, ticketId)
     if (res.success) {
       setManifestNotice({ text: res.message || 'Đã điểm danh hành khách lên xe!', type: 'success' })
       loadManifest()
     } else {
       setManifestNotice({ text: res.message || 'Không thể điểm danh vé này', type: 'error' })
+      loadManifest()
     }
-    setTimeout(() => setManifestNotice(null), 4000)
+    setTimeout(() => setManifestNotice(null), 3500)
   }, [activeTrip?.id, loadManifest])
 
   // Hoàn tác điểm danh (nếu ấn nhầm)
   const handleUndoCheckIn = useCallback(async (ticketId: string) => {
     if (!activeTrip?.id) return
+    driverHardware.playCue('tap')
+    // Cập nhật giao diện hoàn tác tức thì
+    setManifestList((prev) =>
+      prev.map((item) =>
+        item.ticketId === ticketId || item.ticketCode === ticketId
+          ? { ...item, status: 'booked', checkedInAt: null }
+          : item
+      )
+    )
+    setSelectedPassenger((prev) =>
+      prev && (prev.ticketId === ticketId || prev.ticketCode === ticketId)
+        ? { ...prev, status: 'booked', checkedInAt: null }
+        : prev
+    )
+
     const res = await driverService.undoCheckInTicket(activeTrip.id, ticketId)
     if (res.success) {
       setManifestNotice({ text: res.message || 'Đã hoàn tác điểm danh!', type: 'info' })
       loadManifest()
     } else {
       setManifestNotice({ text: res.message || 'Không thể hoàn tác điểm danh', type: 'error' })
+      loadManifest()
     }
-    setTimeout(() => setManifestNotice(null), 4000)
+    setTimeout(() => setManifestNotice(null), 3500)
   }, [activeTrip?.id, loadManifest])
 
   // Mô phỏng di chuyển xe buýt thời gian thực giữa các trạm dừng
@@ -426,15 +469,50 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
 
     if (res.success && res.data && res.data.valid) {
       driverHardware.playCue('ticketSuccess')
+      const passengerName = res.data.passenger || 'Hành khách sinh viên ICTU'
+      const seatNo = res.data.seat || 'Ghế tiêu chuẩn'
+
       setTicketResult({
         status: 'success',
-        passenger: res.data.passenger || 'Hành khách sinh viên ICTU',
-        seat: res.data.seat || 'Ghế tiêu chuẩn',
+        passenger: passengerName,
+        seat: seatNo,
         ticketCode: code,
         message: 'Vé hợp lệ - Đã ghi nhận check-in lên xe thành công!',
         time: nowTime,
       })
-      // Cập nhật số lượng manifest
+
+      // TỰ ĐỘNG CHUYỂN ĐỔI MÃ MÀU HÀNH KHÁCH SANG MÀU XANH LÁ (EMERALD)
+      setManifestList((prev) => {
+        const found = prev.some(
+          (m) =>
+            m.ticketCode.toUpperCase() === code ||
+            m.ticketId === code ||
+            (m.seatNumber && seatNo && m.seatNumber.toUpperCase() === seatNo.toUpperCase())
+        )
+        if (found) {
+          return prev.map((m) =>
+            m.ticketCode.toUpperCase() === code ||
+            m.ticketId === code ||
+            (m.seatNumber && seatNo && m.seatNumber.toUpperCase() === seatNo.toUpperCase())
+              ? { ...m, status: 'checked_in', checkedInAt: new Date().toISOString() }
+              : m
+          )
+        } else {
+          return [
+            ...prev,
+            {
+              ticketId: code,
+              ticketCode: code,
+              seatNumber: seatNo,
+              passengerName: passengerName,
+              status: 'checked_in',
+              checkedInAt: new Date().toISOString(),
+            },
+          ]
+        }
+      })
+
+      // Đồng bộ từ máy chủ
       loadManifest()
     } else if (res.data?.alreadyCheckedIn) {
       driverHardware.playCue('ticketDuplicate')
@@ -676,10 +754,10 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                       {stop.order}
                     </text>
 
-                    {/* Tên trạm nổi trên bản đồ */}
+                    {/* Tên trạm nổi trên bản đồ - Xen kẽ trên dưới để không đè lên nhau */}
                     <rect
                       x={stop.svgX - 55}
-                      y={stop.svgY - 32}
+                      y={idx % 2 === 1 ? stop.svgY + 18 : stop.svgY - 34}
                       width="110"
                       height="20"
                       rx="6"
@@ -690,7 +768,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                     />
                     <text
                       x={stop.svgX}
-                      y={stop.svgY - 18}
+                      y={idx % 2 === 1 ? stop.svgY + 32 : stop.svgY - 20}
                       textAnchor="middle"
                       fill={isCurrent ? '#005A36' : '#334155'}
                       fontSize="9"
@@ -732,7 +810,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                 <circle cx="18" cy="-8" r="2.5" fill="#fef08a" />
                 <circle cx="18" cy="8" r="2.5" fill="#fef08a" />
 
-                {/* Biển số trên nóc xe */}
+                {/* Biển số trên nóc xe - Luôn đọc xuôi mắt nằm ngang */}
                 <text
                   x="0"
                   y="3"
@@ -740,7 +818,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                   fill="#ffffff"
                   fontSize="7"
                   fontWeight="900"
-                  transform="rotate(0)"
+                  transform={`rotate(${-busPosition.angle})`}
                 >
                   20B
                 </text>
@@ -844,43 +922,89 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       {/* ========================================================================= */}
       {/* 3. THẺ TRẠM DỪNG TIẾP THEO (FLOATING NEXT STOP CARD - TOP LEFT)           */}
       {/* ========================================================================= */}
-      <div className="absolute top-22 left-4 z-20 w-[calc(100%-2rem)] max-w-lg pointer-events-none">
-        <div className="pointer-events-auto rounded-3xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-5 shadow-2xl border border-slate-200/90 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-2 pb-2">
-            <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-              <span className="size-2 rounded-full bg-emerald-600 animate-ping" />
-              Trạm Dừng Kế Tiếp (Stop {currentStopIndex + 1}/{stops.length})
-            </span>
-            <span className="text-xs font-mono font-bold text-slate-500">
-              Cách ~{distanceToNextStop}m
-            </span>
-          </div>
-
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight leading-snug">
-            {currentStop.name}
-          </h2>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold text-slate-600 dark:text-slate-300">
-            <div className="flex items-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 py-1">
-              <Clock size={14} className="text-amber-600" />
-              <span>Dự kiến tới: ~1.5 phút</span>
+      <div className="absolute top-20 sm:top-22 left-4 z-20 w-[calc(100%-2rem)] max-w-md lg:max-w-lg pointer-events-none">
+        {isStopCardMinimized ? (
+          /* Chế độ thu gọn: Dải thanh mỏng không che khuất lộ trình bản đồ */
+          <div className="pointer-events-auto flex items-center justify-between gap-2.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-4 py-2.5 shadow-xl border border-slate-200/90 dark:border-slate-800 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="size-2 rounded-full bg-emerald-600 animate-ping shrink-0" />
+              <div className="truncate">
+                <span className="text-xs font-black text-slate-900 dark:text-white">
+                  Stop {currentStopIndex + 1}/{stops.length}: {currentStop.name}
+                </span>
+                <span className="text-[11px] font-mono text-slate-500 ml-2">
+                  (~{distanceToNextStop}m)
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1">
-              <CheckCircle2 size={14} />
-              <span>Đón: {currentStop.forecastPickup} SV · Xuống: {currentStop.forecastDropoff} SV</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleArriveStation}
+                className="h-8 px-2.5 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-[11px] font-black flex items-center gap-1 shadow active:scale-95 cursor-pointer"
+              >
+                <CheckCheck size={13} />
+                <span>Cập trạm 🔔</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsStopCardMinimized(false)}
+                className="size-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
+                title="Mở rộng thông tin trạm"
+              >
+                <ChevronDown size={16} />
+              </button>
             </div>
           </div>
+        ) : (
+          /* Chế độ mở rộng đầy đủ thông tin đón/trả */
+          <div className="pointer-events-auto rounded-3xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-4 sm:p-5 shadow-2xl border border-slate-200/90 dark:border-slate-800 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between gap-2 pb-2">
+              <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                <span className="size-2 rounded-full bg-emerald-600 animate-ping" />
+                Trạm Dừng Kế Tiếp (Stop {currentStopIndex + 1}/{stops.length})
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-slate-500">
+                  Cách ~{distanceToNextStop}m
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsStopCardMinimized(true)}
+                  className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer"
+                  title="Thu gọn thẻ trạm"
+                >
+                  <ChevronUp size={15} />
+                </button>
+              </div>
+            </div>
 
-          {/* NÚT CỰC ĐẠI: XÁC NHẬN CẬP TRẠM (1 CHẠM PHÁT CHUÔNG DING-DONG) */}
-          <button
-            type="button"
-            onClick={handleArriveStation}
-            className="mt-4 flex w-full h-15 sm:h-16 items-center justify-center gap-3 rounded-2xl bg-[#005A36] hover:bg-[#00472b] active:scale-[0.98] text-white shadow-xl shadow-emerald-950/20 font-black text-base sm:text-lg transition-all cursor-pointer"
-          >
-            <CheckCheck className="size-6 stroke-[2.5]" />
-            <span>{isFinalStop ? 'XÁC NHẬN VỀ BẾN CUỐI' : 'XÁC NHẬN CẬP TRẠM (PHÁT CHUÔNG)'}</span>
-          </button>
-        </div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white tracking-tight leading-snug">
+              {currentStop.name}
+            </h2>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-300">
+                <Clock size={14} className="text-amber-600" />
+                <span>Dự kiến tới: ~1.5 phút</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1">
+                <CheckCircle2 size={14} />
+                <span>Đón: {currentStop.forecastPickup} SV · Xuống: {currentStop.forecastDropoff} SV</span>
+              </div>
+            </div>
+
+            {/* NÚT CỰC ĐẠI: XÁC NHẬN CẬP TRẠM (1 CHẠM PHÁT CHUÔNG DING-DONG) */}
+            <button
+              type="button"
+              onClick={handleArriveStation}
+              className="mt-3.5 flex w-full h-14 sm:h-15 items-center justify-center gap-3 rounded-2xl bg-[#005A36] hover:bg-[#00472b] active:scale-[0.98] text-white shadow-xl shadow-emerald-950/20 font-black text-base sm:text-lg transition-all cursor-pointer"
+            >
+              <CheckCheck className="size-6 stroke-[2.5]" />
+              <span>{isFinalStop ? 'XÁC NHẬN VỀ BẾN CUỐI' : 'XÁC NHẬN CẬP TRẠM (PHÁT CHUÔNG)'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Thông báo phản hồi âm thanh dạng Ribbon nổi */}
@@ -892,124 +1016,158 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       )}
 
       {/* ========================================================================= */}
-      {/* 4. DOCK ĐIỀU KHIỂN BÊN HÔNG (SIDE PANEL DRAWER - 100% ZERO-SCROLL)         */}
+      {/* 4. DOCK ĐIỀU KHIỂN BÊN HÔNG (SIDE PANEL DRAWER - KHÔNG CHE NÚT XUẤT BẾN)  */}
       {/* ========================================================================= */}
       {activeTab !== 'none' && (
-        <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[460px] lg:w-[520px] bg-white/98 dark:bg-slate-900/98 backdrop-blur-2xl shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between p-5 sm:p-6 animate-in slide-in-from-right duration-250">
+        <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[480px] lg:w-[540px] bg-white/98 dark:bg-slate-900/98 backdrop-blur-2xl shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between p-5 animate-in slide-in-from-right duration-250">
           {/* Header Panel */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              {activeTab === 'scanner' && <QrCode className="size-6 text-emerald-600" />}
-              {activeTab === 'manifest' && <Armchair className="size-6 text-blue-600" />}
-              {activeTab === 'incident' && <Siren className="size-6 text-rose-600 animate-pulse" />}
-              <h3 className="text-lg font-black text-slate-950 dark:text-white">
-                {activeTab === 'scanner'
-                  ? 'Máy Soát Vé QR Cửa Xe'
-                  : activeTab === 'manifest'
-                  ? 'Sơ Đồ Ghế & Danh Sách Khách'
-                  : 'Báo Cáo Sự Cố SOS'}
-              </h3>
+          <div className="pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                {activeTab === 'scanner' && <QrCode className="size-6 text-emerald-600" />}
+                {activeTab === 'manifest' && <Armchair className="size-6 text-blue-600" />}
+                {activeTab === 'incident' && <Siren className="size-6 text-rose-600 animate-pulse" />}
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-950 dark:text-white">
+                    {activeTab === 'scanner'
+                      ? 'Máy Soát Vé QR Cửa Xe'
+                      : activeTab === 'manifest'
+                      ? 'Sơ Đồ Ghế & Danh Sách Khách'
+                      : 'Báo Cáo Sự Cố SOS'}
+                  </h3>
+                  {activeTab === 'manifest' && (
+                    <p className="text-xs font-bold text-slate-500">
+                      <span className="text-emerald-600 font-black">{checkedInCount} đã lên</span> · {totalBooked} vé đã đặt · {totalCapacity} chỗ
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('none')}
+                className="size-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
+                title="Đóng bảng thao tác"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('none')}
-              className="size-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+
+            {/* Thông báo thao tác Manifest (nếu có) */}
+            {manifestNotice && (
+              <div
+                className={`mt-2.5 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+                  manifestNotice.type === 'success'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+                    : manifestNotice.type === 'info'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
+                }`}
+              >
+                <CheckCircle2 size={15} />
+                <span>{manifestNotice.text}</span>
+              </div>
+            )}
           </div>
 
           {/* TAB 1: SOÁT VÉ QR (ZERO-SCROLL CAMERA & SCANNER) */}
           {activeTab === 'scanner' && (
-            <div className="flex-1 flex flex-col justify-between py-4">
-              {/* Khung ngắm Camera Soát vé rộng rãi */}
-              <div className="relative mx-auto flex aspect-video w-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-emerald-500 bg-slate-900 text-white p-6 shadow-inner">
-                <ScanLine className="size-16 text-emerald-400 animate-pulse mb-2" />
-                <p className="text-xs font-bold text-emerald-300">
-                  Đưa mã QR vé sinh viên vào khung ngắm camera
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Khoảng cách quét tối ưu: 15 – 25 cm
-                </p>
+            <div className="flex-1 flex flex-col justify-between py-3 overflow-y-auto">
+              <div>
+                {/* Khung ngắm Camera Soát vé rộng rãi */}
+                <div className="relative mx-auto flex aspect-video w-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-emerald-500 bg-slate-900 text-white p-6 shadow-inner">
+                  <ScanLine className="size-14 text-emerald-400 animate-pulse mb-2" />
+                  <p className="text-xs font-bold text-emerald-300">
+                    Đưa mã QR vé sinh viên vào khung ngắm camera
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Hệ thống sẽ tự động check-in và đổi ghế sang XANH LÁ
+                  </p>
 
-                {isVerifyingTicket && (
-                  <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2 rounded-3xl backdrop-blur-xs">
-                    <Loader2 size={24} className="animate-spin text-emerald-400" />
-                    <span className="text-xs font-bold text-white">Đang giải mã chữ ký...</span>
+                  {isVerifyingTicket && (
+                    <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2 rounded-3xl backdrop-blur-xs">
+                      <Loader2 size={24} className="animate-spin text-emerald-400" />
+                      <span className="text-xs font-bold text-white">Đang giải mã chữ ký & check-in...</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Ô nhập mã vé thủ công */}
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nhập mã vé hoặc mã sinh viên (VD: TK-01A)..."
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyTicket()}
+                    className="h-12 flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleVerifyTicket()}
+                    disabled={isVerifyingTicket || !manualCode.trim()}
+                    className="h-12 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    Check-in
+                  </button>
+                </div>
+
+                {/* Thẻ kết quả quét vé */}
+                {ticketResult ? (
+                  <div
+                    className={`mt-3 rounded-2xl p-4 border shadow-md transition-all ${
+                      ticketResult.status === 'success'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 dark:bg-emerald-950/50 dark:border-emerald-700 dark:text-emerald-100 ring-2 ring-emerald-500/20'
+                        : ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip'
+                        ? 'bg-amber-50 border-amber-300 text-amber-950 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-200'
+                        : 'bg-rose-50 border-rose-300 text-rose-950 dark:bg-rose-950/40 dark:border-rose-700 dark:text-rose-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {ticketResult.status === 'success' && <CheckCircle2 size={26} className="text-emerald-600 shrink-0 mt-0.5" />}
+                      {(ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip') && (
+                        <AlertTriangle size={26} className="text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      {ticketResult.status === 'error' && <ShieldAlert size={26} className="text-rose-600 shrink-0 mt-0.5" />}
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-black text-sm">{ticketResult.message}</h4>
+                        {ticketResult.passenger && (
+                          <div className="mt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
+                            <span>Khách: <strong className="font-black text-emerald-700 dark:text-emerald-300">{ticketResult.passenger}</strong></span>
+                            <span className="mx-2">·</span>
+                            <span>Số ghế: <strong className="font-mono font-black text-emerald-700 dark:text-emerald-300">{ticketResult.seat || 'Tiêu chuẩn'}</strong></span>
+                          </div>
+                        )}
+                        {ticketResult.status === 'success' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('manifest')
+                              setManifestSubTab('seatmap')
+                            }}
+                            className="mt-2.5 h-8 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
+                          >
+                            <Armchair size={14} />
+                            <span>Xem ghế xanh trên sơ đồ xe →</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500 pt-2">
+                    <span>Mẹo: Quét mã QR từ điện thoại hoặc thẻ sinh viên ICTU</span>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleVerifyTicket('TXT-ICTU-2025-01002')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+                      >
+                        Thử vé mẫu
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-
-              {/* Ô nhập mã vé thủ công */}
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Nhập mã vé hoặc mã sinh viên (VD: TK-01A)..."
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyTicket()}
-                  className="h-12 flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleVerifyTicket()}
-                  disabled={isVerifyingTicket || !manualCode.trim()}
-                  className="h-12 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  Kiểm tra
-                </button>
-              </div>
-
-              {/* Thẻ kết quả quét vé */}
-              {ticketResult ? (
-                <div
-                  className={`mt-4 rounded-3xl p-4 border shadow-md transition-all ${
-                    ticketResult.status === 'success'
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-200'
-                      : ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip'
-                      ? 'bg-amber-50 border-amber-300 text-amber-950 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-200'
-                      : 'bg-rose-50 border-rose-300 text-rose-950 dark:bg-rose-950/40 dark:border-rose-700 dark:text-rose-200'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {ticketResult.status === 'success' && <CheckCircle2 size={28} className="text-emerald-600 shrink-0 mt-0.5" />}
-                    {(ticketResult.status === 'duplicate' || ticketResult.status === 'wrong_trip') && (
-                      <AlertTriangle size={28} className="text-amber-600 shrink-0 mt-0.5" />
-                    )}
-                    {ticketResult.status === 'error' && <ShieldAlert size={28} className="text-rose-600 shrink-0 mt-0.5" />}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-black text-sm">{ticketResult.message}</h4>
-                      {ticketResult.passenger && (
-                        <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-300">
-                          Hành khách: {ticketResult.passenger} · Ghế: {ticketResult.seat || 'Tiêu chuẩn'}
-                        </p>
-                      )}
-                      {ticketResult.correctTrip && (
-                        <div className="mt-2.5 rounded-xl bg-amber-100/80 dark:bg-amber-900/40 p-2.5 text-xs text-amber-900 dark:text-amber-200 border border-amber-300/50">
-                          <p className="font-bold">Hướng dẫn khách sang đúng xe:</p>
-                          <p className="mt-0.5">· Tuyến: <span className="font-semibold">{ticketResult.correctTrip.routeName}</span></p>
-                          {ticketResult.correctTrip.vehiclePlate && (
-                            <p>· Xe: <span className="font-semibold">{ticketResult.correctTrip.vehiclePlate}</span></p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 flex items-center justify-between text-xs text-slate-500 pt-2">
-                  <span>Mẹo: Quét mã QR từ điện thoại hoặc thẻ vé tháng HSSV</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleVerifyTicket('TK-01A')}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
-                    >
-                      Thử vé mẫu
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Nút đóng panel */}
               <button
@@ -1022,82 +1180,339 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             </div>
           )}
 
-          {/* TAB 2: MANIFEST HÀNH KHÁCH (2-COLUMN ZERO-SCROLL GRID) */}
+          {/* TAB 2: MANIFEST & SƠ ĐỒ 28 GHẾ ĐƠN GIẢN CHUẨN XE BUÝT ICTU */}
           {activeTab === 'manifest' && (
-            <div className="flex-1 flex flex-col justify-between py-4">
+            <div className="flex-1 flex flex-col justify-between py-3 overflow-hidden">
               <div>
-                {/* Thanh tìm kiếm nhanh */}
-                <div className="relative mb-3">
-                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo tên SV, số ghế, SĐT..."
-                    value={manifestSearch}
-                    onChange={(e) => setManifestSearch(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-10 pr-3 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-2">
-                  <span>Tổng số vé: {manifestList.length}</span>
-                  <span>Sức chứa: {activeTrip?.vehicle?.capacity || 28} chỗ</span>
+                {/* Thanh chuyển đổi 2 chế độ: Sơ đồ 28 ghế đơn giản vs Danh sách chi tiết */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setManifestSubTab('seatmap')}
+                    className={`h-10 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      manifestSubTab === 'seatmap'
+                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    <Armchair size={15} />
+                    <span>Sơ Đồ 28 Ghế Xe Buýt</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManifestSubTab('list')}
+                    className={`h-10 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      manifestSubTab === 'list'
+                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    <Users size={15} />
+                    <span>Danh Sách Vé ({manifestList.length})</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Lưới danh sách ghế ngồi (Không scroll, gói gọn trong panel) */}
-              <div className="grid grid-cols-2 gap-2 my-2 flex-1 overflow-hidden">
-                {isLoadingManifest ? (
-                  <div className="col-span-2 flex items-center justify-center py-10 text-xs text-slate-500 gap-2">
-                    <Loader2 size={18} className="animate-spin text-blue-600" />
-                    <span>Đang tải danh sách vé...</span>
+              {/* PHÂN HỆ 1: SƠ ĐỒ 28 GHẾ ĐƠN GIẢN (SIMPLE INTUITIVE SEAT MAP) */}
+              {manifestSubTab === 'seatmap' && (
+                <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                  {/* Chú thích màu sắc trực quan theo đúng luồng nghiệp vụ */}
+                  <div className="flex items-center justify-around py-2 px-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-[11px] font-bold border border-slate-200 dark:border-slate-700 mb-2">
+                    <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <span className="size-3 rounded-full bg-emerald-600 inline-block shadow-xs" />
+                      Đã lên xe ({checkedInCount})
+                    </span>
+                    <span className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                      <span className="size-3 rounded-full bg-blue-400 inline-block" />
+                      Chờ đón ({Math.max(0, totalBooked - checkedInCount)})
+                    </span>
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <span className="size-3 rounded-full bg-slate-300 dark:bg-slate-600 inline-block" />
+                      Ghế trống ({Math.max(0, totalCapacity - totalBooked)})
+                    </span>
                   </div>
-                ) : filteredManifest.length === 0 ? (
-                  <div className="col-span-2 flex flex-col items-center justify-center py-10 text-xs text-slate-400">
-                    <p>Chưa có hành khách nào đặt chỗ.</p>
-                  </div>
-                ) : (
-                  filteredManifest.slice(0, 10).map((m) => {
-                    const isChecked = m.status === 'checked_in' || !!m.checkedInAt
-                    return (
-                      <div
-                        key={m.ticketId || m.ticketCode}
-                        className={`flex items-center justify-between p-2.5 rounded-2xl border text-xs transition-all ${
-                          isChecked
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
-                            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-black text-slate-900 dark:text-white">
-                              {m.seatNumber || 'Ghế'}
-                            </span>
-                            <span className="truncate font-bold text-slate-700 dark:text-slate-300">
-                              {m.passengerName || 'Khách SV'}
+
+                  {/* Sơ đồ cấu trúc 28 ghế dạng xe buýt đơn giản (7 hàng x 4 ghế) */}
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    {/* Chỉ báo đầu xe & Cửa lên xuống */}
+                    <div className="text-center py-1.5 mb-2 bg-slate-200/80 dark:bg-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 rounded-lg flex items-center justify-center gap-2">
+                      <Bus size={13} />
+                      <span>Khoang Lái & Cửa Lên Xuống (Đầu Xe)</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {SEAT_ROWS_28.map((row) => (
+                        <div key={row.row} className="flex items-center gap-2">
+                          {/* Cặp ghế bên trái: A & B */}
+                          <div className="grid grid-cols-2 gap-1.5 flex-1">
+                            {row.left.map((seatCode) => {
+                              const ticket = manifestList.find(
+                                (m) => (m.seatNumber || '').trim().toUpperCase() === seatCode.toUpperCase()
+                              )
+                              const isChecked = ticket ? (ticket.status === 'checked_in' || !!ticket.checkedInAt) : false
+                              const isSelected = selectedPassenger && ticket && (selectedPassenger.ticketId === ticket.ticketId || selectedPassenger.ticketCode === ticket.ticketCode)
+
+                              if (ticket) {
+                                return (
+                                  <button
+                                    key={seatCode}
+                                    type="button"
+                                    onClick={() => setSelectedPassenger(ticket)}
+                                    className={`h-11 rounded-xl border flex flex-col items-center justify-center p-1 transition-all active:scale-95 cursor-pointer ${
+                                      isChecked
+                                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm ring-2 ring-emerald-400/40'
+                                        : 'bg-blue-50 dark:bg-blue-950/70 border-blue-400 dark:border-blue-600 text-blue-950 dark:text-blue-100 hover:bg-blue-100'
+                                    } ${isSelected ? 'scale-105 ring-2 ring-amber-400' : ''}`}
+                                  >
+                                    <div className="flex items-center gap-1 font-mono font-black text-xs leading-none">
+                                      {isChecked && <Check size={11} strokeWidth={3} />}
+                                      <span>{seatCode}</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold truncate max-w-full px-0.5 mt-0.5 opacity-90">
+                                      {ticket.passengerName ? ticket.passengerName.split(' ').slice(-1)[0] : isChecked ? 'Đã lên' : 'Chờ lên'}
+                                    </span>
+                                  </button>
+                                )
+                              }
+
+                              return (
+                                <div
+                                  key={seatCode}
+                                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 flex flex-col items-center justify-center p-1"
+                                >
+                                  <span className="font-mono text-[11px] font-bold">{seatCode}</span>
+                                  <span className="text-[8px] font-medium opacity-60">Trống</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          {/* Lối đi ở giữa có số hàng */}
+                          <div className="w-6 flex items-center justify-center">
+                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                              {row.label}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 font-mono">{m.ticketCode}</span>
+
+                          {/* Cặp ghế bên phải: C & D */}
+                          <div className="grid grid-cols-2 gap-1.5 flex-1">
+                            {row.right.map((seatCode) => {
+                              const ticket = manifestList.find(
+                                (m) => (m.seatNumber || '').trim().toUpperCase() === seatCode.toUpperCase()
+                              )
+                              const isChecked = ticket ? (ticket.status === 'checked_in' || !!ticket.checkedInAt) : false
+                              const isSelected = selectedPassenger && ticket && (selectedPassenger.ticketId === ticket.ticketId || selectedPassenger.ticketCode === ticket.ticketCode)
+
+                              if (ticket) {
+                                return (
+                                  <button
+                                    key={seatCode}
+                                    type="button"
+                                    onClick={() => setSelectedPassenger(ticket)}
+                                    className={`h-11 rounded-xl border flex flex-col items-center justify-center p-1 transition-all active:scale-95 cursor-pointer ${
+                                      isChecked
+                                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm ring-2 ring-emerald-400/40'
+                                        : 'bg-blue-50 dark:bg-blue-950/70 border-blue-400 dark:border-blue-600 text-blue-950 dark:text-blue-100 hover:bg-blue-100'
+                                    } ${isSelected ? 'scale-105 ring-2 ring-amber-400' : ''}`}
+                                  >
+                                    <div className="flex items-center gap-1 font-mono font-black text-xs leading-none">
+                                      {isChecked && <Check size={11} strokeWidth={3} />}
+                                      <span>{seatCode}</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold truncate max-w-full px-0.5 mt-0.5 opacity-90">
+                                      {ticket.passengerName ? ticket.passengerName.split(' ').slice(-1)[0] : isChecked ? 'Đã lên' : 'Chờ lên'}
+                                    </span>
+                                  </button>
+                                )
+                              }
+
+                              return (
+                                <div
+                                  key={seatCode}
+                                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 flex flex-col items-center justify-center p-1"
+                                >
+                                  <span className="font-mono text-[11px] font-bold">{seatCode}</span>
+                                  <span className="text-[8px] font-medium opacity-60">Trống</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* THẺ THAO TÁC NHANH KHI CHỌN GHẾ */}
+                  {selectedPassenger ? (
+                    <div className="mt-2.5 p-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-emerald-500 shadow-xl animate-in fade-in">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-700">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-xs px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              Ghế {selectedPassenger.seatNumber}
+                            </span>
+                            <span className="font-black text-sm text-slate-900 dark:text-white">
+                              {selectedPassenger.passengerName || 'Khách Sinh Viên'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            Mã vé: {selectedPassenger.ticketCode}
+                          </p>
                         </div>
                         <span
-                          className={`size-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
-                            isChecked
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                          className={`text-[11px] font-black px-2 py-0.5 rounded-full ${
+                            selectedPassenger.status === 'checked_in' || !!selectedPassenger.checkedInAt
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300'
                           }`}
                         >
-                          {isChecked ? '✓' : '...'}
+                          {selectedPassenger.status === 'checked_in' || !!selectedPassenger.checkedInAt ? '✓ Đã lên xe' : 'Chờ lên'}
                         </span>
                       </div>
-                    )
-                  })
-                )}
-              </div>
+
+                      {selectedPassenger.status === 'checked_in' || !!selectedPassenger.checkedInAt ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                            <CheckCircle2 size={16} /> Đã chuyển sang màu Xanh Lá
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUndoCheckIn(selectedPassenger.ticketId || selectedPassenger.ticketCode)}
+                            className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer"
+                          >
+                            Hoàn tác
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickCheckIn(selectedPassenger.ticketId || selectedPassenger.ticketCode)}
+                          className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 cursor-pointer"
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>XÁC NHẬN LÊN XE (ĐỔI SANG XANH LÁ)</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-center text-xs text-slate-400 py-1">
+                      Chạm vào ghế để xem thông tin hoặc điểm danh trực tiếp
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PHÂN HỆ 2: DANH SÁCH VÉ CHI TIẾT (PASSENGER LIST TOUCH TARGETS) */}
+              {manifestSubTab === 'list' && (
+                <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                  {/* Ô tìm kiếm nhanh */}
+                  <div className="relative mb-2">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên SV, số ghế, SĐT, mã vé..."
+                      value={manifestSearch}
+                      onChange={(e) => setManifestSearch(e.target.value)}
+                      className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-10 pr-3 text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-600"
+                    />
+                  </div>
+
+                  {/* Danh sách thẻ hành khách thoải mái, không co giãn dị thường */}
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+                    {isLoadingManifest ? (
+                      <div className="flex items-center justify-center py-12 text-xs text-slate-500 gap-2">
+                        <Loader2 size={18} className="animate-spin text-blue-600" />
+                        <span>Đang tải dữ liệu hành khách...</span>
+                      </div>
+                    ) : filteredManifest.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-xs text-slate-400">
+                        <p>Không tìm thấy hành khách phù hợp.</p>
+                      </div>
+                    ) : (
+                      filteredManifest.map((m) => {
+                        const isChecked = m.status === 'checked_in' || !!m.checkedInAt
+                        return (
+                          <div
+                            key={m.ticketId || m.ticketCode}
+                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
+                              isChecked
+                                ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 ring-1 ring-emerald-400/30'
+                                : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                            }`}
+                          >
+                            {/* Khối huy hiệu Ghế to bản */}
+                            <div
+                              className={`size-11 rounded-xl flex flex-col items-center justify-center font-mono font-black text-xs shrink-0 ${
+                                isChecked
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
+                              }`}
+                            >
+                              <span>{m.seatNumber || 'Ghế'}</span>
+                              {isChecked && <Check size={11} strokeWidth={3} className="mt-0.5" />}
+                            </div>
+
+                            {/* Thông tin khách hàng rõ ràng */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-black text-sm text-slate-900 dark:text-white truncate">
+                                  {m.passengerName || 'Khách Sinh Viên'}
+                                </span>
+                                <span
+                                  className={`text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                                    isChecked
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {isChecked ? 'Đã lên xe' : 'Chờ đón'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                                <span>{m.ticketCode}</span>
+                                {m.passengerPhone && (
+                                  <span className="flex items-center gap-1">
+                                    <Phone size={11} /> {m.passengerPhone}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Nút tác vụ 1 chạm */}
+                            <div className="shrink-0">
+                              {isChecked ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUndoCheckIn(m.ticketId || m.ticketCode)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer"
+                                  title="Hoàn tác điểm danh"
+                                >
+                                  Hoàn tác
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickCheckIn(m.ticketId || m.ticketCode)}
+                                  className="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs shadow-md shadow-emerald-900/20 flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <Check size={14} strokeWidth={2.5} />
+                                  <span>Lên xe</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Nút đóng panel */}
               <button
                 type="button"
                 onClick={() => setActiveTab('none')}
-                className="h-12 w-full rounded-2xl bg-slate-900 dark:bg-slate-800 text-white font-bold text-xs hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
+                className="mt-3 h-12 w-full rounded-2xl bg-slate-900 dark:bg-slate-800 text-white font-bold text-xs hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
               >
                 Đóng danh sách khách
               </button>
@@ -1190,48 +1605,80 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       {/* ========================================================================= */}
       {/* 5. DOCK ĐIỀU KHIỂN ĐÁY NỔI DẠNG KÍNH (BOTTOM FLOATING ACTION DECK)         */}
       {/* ========================================================================= */}
-      <footer className="absolute bottom-4 left-4 right-4 z-30 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
-        {/* Nhóm 3 phím bấm điều khiển xúc giác to bản */}
-        <div className="pointer-events-auto flex items-center gap-2.5 sm:gap-3">
-          {/* Nút 1: SOÁT VÉ QR */}
+      <footer className="absolute bottom-4 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none">
+        {/* Nhóm phím bấm điều khiển xúc giác to bản - Bố trí bên trái & giữa, không bị che bởi Drawer */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {/* NÚT 1: ĐIỀU KHIỂN VÒNG ĐỜI CA CHẠY (XUẤT BẾN / HOÀN THÀNH) */}
+          <button
+            type="button"
+            onClick={handleToggleTripLifecycle}
+            className={`flex items-center gap-2.5 px-5 sm:px-6 h-14 sm:h-16 rounded-2xl font-black text-xs sm:text-sm shadow-xl border active:scale-95 transition-all cursor-pointer ${
+              activeTrip?.status === 'in_progress'
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-600/30'
+                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30'
+            }`}
+          >
+            <Play size={18} fill="currentColor" />
+            <div className="text-left">
+              <div>
+                {activeTrip?.status === 'scheduled'
+                  ? 'BẮT ĐẦU XUẤT BẾN'
+                  : activeTrip?.status === 'in_progress'
+                  ? 'VỀ BẾN / HOÀN THÀNH'
+                  : 'CHẠY LƯỢT TIẾP'}
+              </div>
+              <div className="text-[10px] font-semibold opacity-80 hidden sm:block">
+                {activeTrip?.status === 'in_progress' ? 'Đang chạy trên tuyến' : 'Nhấn để bắt đầu ca'}
+              </div>
+            </div>
+          </button>
+
+          {/* Nút 2: SOÁT VÉ QR */}
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'scanner' ? 'none' : 'scanner')}
-            className={`flex items-center gap-2.5 px-4 sm:px-6 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
+            className={`flex items-center gap-2.5 px-4 sm:px-5 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
               activeTab === 'scanner'
                 ? 'bg-emerald-600 text-white border-emerald-400 scale-105'
                 : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-900 dark:text-white border-slate-200/90 dark:border-slate-800 hover:border-emerald-500'
             }`}
           >
-            <QrCode size={20} className="text-emerald-600" />
+            <QrCode size={20} className={activeTab === 'scanner' ? 'text-white' : 'text-emerald-600'} />
             <div className="text-left">
               <div>SOÁT VÉ QR</div>
-              <div className="text-[10px] font-semibold text-slate-500 hidden sm:block">Camera & Máy quét</div>
+              <div className="text-[10px] font-semibold text-slate-500 hidden sm:block">Quét vé điện tử</div>
             </div>
           </button>
 
-          {/* Nút 2: HÀNH KHÁCH / MANIFEST */}
+          {/* Nút 3: HÀNH KHÁCH & SƠ ĐỒ GHẾ */}
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'manifest' ? 'none' : 'manifest')}
-            className={`flex items-center gap-2.5 px-4 sm:px-6 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
+            className={`flex items-center gap-2.5 px-4 sm:px-5 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
               activeTab === 'manifest'
                 ? 'bg-blue-600 text-white border-blue-400 scale-105'
                 : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-900 dark:text-white border-slate-200/90 dark:border-slate-800 hover:border-blue-500'
             }`}
           >
-            <Armchair size={20} className="text-blue-600" />
+            <Armchair size={20} className={activeTab === 'manifest' ? 'text-white' : 'text-blue-600'} />
             <div className="text-left">
-              <div>HÀNH KHÁCH: {manifestList.filter((m) => m.status === 'checked_in' || !!m.checkedInAt).length}/{activeTrip?.vehicle?.capacity || 28}</div>
-              <div className="text-[10px] font-semibold text-slate-500 hidden sm:block">Xem sơ đồ ghế</div>
+              <div className="flex items-center gap-1.5">
+                <span>HÀNH KHÁCH: {checkedInCount}/{totalBooked} ĐÃ LÊN</span>
+                {checkedInCount > 0 && (
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
+              </div>
+              <div className="text-[10px] font-semibold text-slate-500 hidden sm:block">
+                {totalBooked} vé đặt · Sức chứa {totalCapacity} chỗ
+              </div>
             </div>
           </button>
 
-          {/* Nút 3: BÁO SỰ CỐ SOS KHẨN CẤP */}
+          {/* Nút 4: BÁO SỰ CỐ SOS KHẨN CẤP */}
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'incident' ? 'none' : 'incident')}
-            className={`flex items-center gap-2.5 px-4 sm:px-6 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
+            className={`flex items-center gap-2.5 px-4 sm:px-5 h-14 sm:h-16 rounded-2xl text-xs sm:text-sm font-black shadow-xl transition-all active:scale-95 cursor-pointer border ${
               activeTab === 'incident'
                 ? 'bg-rose-600 text-white border-rose-400 scale-105'
                 : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-900 hover:border-rose-500'
@@ -1240,26 +1687,10 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             <Siren size={20} className="animate-pulse" />
             <div className="text-left">
               <div>BÁO SỰ CỐ SOS</div>
-              <div className="text-[10px] font-semibold text-slate-500 hidden sm:block">Ùn tắc, hỏng xe</div>
+              <div className="text-[10px] font-semibold text-rose-600/80 dark:text-rose-400/80 hidden sm:block">
+                Ùn tắc, hỏng xe
+              </div>
             </div>
-          </button>
-        </div>
-
-        {/* Nút 4: ĐIỀU KHIỂN VÒNG ĐỜI CA CHẠY (XUẤT BẾN / HOÀN THÀNH) */}
-        <div className="pointer-events-auto">
-          <button
-            type="button"
-            onClick={handleToggleTripLifecycle}
-            className="flex items-center gap-2.5 px-6 sm:px-8 h-14 sm:h-16 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 border border-amber-300 transition-all cursor-pointer"
-          >
-            <Play size={18} fill="currentColor" />
-            <span>
-              {activeTrip?.status === 'scheduled'
-                ? 'BẮT ĐẦU XUẤT BẾN'
-                : activeTrip?.status === 'in_progress'
-                ? 'VỀ BẾN / KẾT THÚC'
-                : 'CHẠY LƯỢT TIẾP'}
-            </span>
           </button>
         </div>
       </footer>
