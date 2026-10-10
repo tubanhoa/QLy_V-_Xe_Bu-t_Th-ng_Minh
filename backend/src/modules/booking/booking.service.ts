@@ -488,36 +488,63 @@ export class BookingService {
       }
 
       if (dto.voucherCode) {
+        const normalizedCode = dto.voucherCode.trim().toUpperCase();
         voucher = await voucherRepo.findOne({
-          where: { code: dto.voucherCode.toUpperCase(), status: 'active' },
+          where: { code: normalizedCode, status: 'active' },
         });
 
-        if (voucher) {
-          const today = new Date().toISOString().slice(0, 10);
-          if (voucher.startDate <= today && voucher.endDate >= today) {
-            if (totalAmount >= Number(voucher.minOrderValue)) {
-              if (voucher.discountType === 'percentage') {
-                discountAmount = Math.round((totalAmount * Number(voucher.discountValue)) / 100);
-                if (voucher.maxDiscountAmount && discountAmount > Number(voucher.maxDiscountAmount)) {
-                  discountAmount = Number(voucher.maxDiscountAmount);
-                }
-              } else {
-                discountAmount = Number(voucher.discountValue);
-              }
-
-              // Khống chế mức giảm giá (Cap Discount): Giới hạn không để số tiền sau giảm tụt dưới 10.000 VNĐ
-              // Đảm bảo đáp ứng hạn mức chuyển tiền/thanh toán tối thiểu của ngân hàng và VNPay Sandbox
-              const maxAllowedDiscount = Math.max(0, totalAmount - 10000);
-              if (discountAmount > maxAllowedDiscount) {
-                discountAmount = maxAllowedDiscount;
-              }
-
-              // Increment usage
-              voucher.usedCount += 1;
-              await voucherRepo.save(voucher);
-            }
-          }
+        if (!voucher) {
+          throw new BadRequestException(`Mã voucher "${normalizedCode}" không tồn tại hoặc đã ngừng áp dụng!`);
         }
+
+        const today = new Date().toISOString().slice(0, 10);
+        if (voucher.startDate > today || voucher.endDate < today) {
+          throw new BadRequestException(`Mã voucher "${voucher.code}" đã hết hạn sử dụng hoặc chưa bắt đầu!`);
+        }
+
+        if (voucher.usageLimit > 0 && voucher.usedCount >= voucher.usageLimit) {
+          throw new BadRequestException(`Mã voucher "${voucher.code}" đã đạt giới hạn tối đa số lượt sử dụng!`);
+        }
+
+        if (voucher.applicableType && voucher.applicableType === 'monthly_pass') {
+          throw new BadRequestException(`Mã voucher "${voucher.code}" chỉ áp dụng cho Vé Tháng, không áp dụng cho Vé Lượt!`);
+        }
+
+        if (
+          voucher.applicableRouteIds &&
+          Array.isArray(voucher.applicableRouteIds) &&
+          voucher.applicableRouteIds.length > 0 &&
+          trip.routeId &&
+          !voucher.applicableRouteIds.includes(trip.routeId)
+        ) {
+          throw new BadRequestException(`Mã voucher "${voucher.code}" không áp dụng cho tuyến xe này!`);
+        }
+
+        if (totalAmount < Number(voucher.minOrderValue)) {
+          throw new BadRequestException(
+            `Đơn hàng chưa đạt giá trị tối thiểu ${Number(voucher.minOrderValue).toLocaleString('vi-VN')} đ để áp dụng mã "${voucher.code}"!`,
+          );
+        }
+
+        if (voucher.discountType === 'percentage') {
+          discountAmount = Math.round((totalAmount * Number(voucher.discountValue)) / 100);
+          if (voucher.maxDiscountAmount && discountAmount > Number(voucher.maxDiscountAmount)) {
+            discountAmount = Number(voucher.maxDiscountAmount);
+          }
+        } else {
+          discountAmount = Number(voucher.discountValue);
+        }
+
+        // Khống chế mức giảm giá (Cap Discount): Giới hạn không để số tiền sau giảm tụt dưới 10.000 VNĐ
+        // Đảm bảo đáp ứng hạn mức chuyển tiền/thanh toán tối thiểu của ngân hàng và VNPay Sandbox
+        const maxAllowedDiscount = Math.max(0, totalAmount - 10000);
+        if (discountAmount > maxAllowedDiscount) {
+          discountAmount = maxAllowedDiscount;
+        }
+
+        // Tăng số lượt sử dụng voucher nguyên tử
+        voucher.usedCount += 1;
+        await voucherRepo.save(voucher);
       }
 
       const finalAmount = Math.max(10000, totalAmount - discountAmount);

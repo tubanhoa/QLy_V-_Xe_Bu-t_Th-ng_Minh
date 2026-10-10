@@ -110,13 +110,18 @@ export class ReviewMonthlyPassDto {
 }
 
 export class CreateVoucherDto {
-  @ApiProperty({ example: 'ICTU2026', description: 'Mã voucher' })
+  @ApiProperty({ example: 'ICTU2026', description: 'Mã voucher (tự động in hoa)' })
   @IsString()
   @IsNotEmpty()
   code: string;
 
-  @ApiProperty({ example: 'percentage', enum: ['percentage', 'fixed_amount'] })
+  @ApiPropertyOptional({ example: 'Chào mừng năm học mới 2026 - Giảm giá vé xe buýt', description: 'Mô tả chiến dịch' })
+  @IsOptional()
   @IsString()
+  description?: string;
+
+  @ApiProperty({ example: 'percentage', enum: ['percentage', 'fixed_amount'], description: 'Loại giảm giá' })
+  @IsEnum(['percentage', 'fixed_amount'])
   discountType: 'percentage' | 'fixed_amount';
 
   @ApiProperty({ example: 20, description: 'Giá trị giảm (20% hoặc 10000 VND)' })
@@ -133,11 +138,11 @@ export class CreateVoucherDto {
   @IsNumber()
   maxDiscountAmount?: number;
 
-  @ApiProperty({ example: '2026-09-01' })
+  @ApiProperty({ example: '2026-09-01', description: 'Ngày bắt đầu áp dụng (YYYY-MM-DD)' })
   @IsDateString()
   startDate: string;
 
-  @ApiProperty({ example: '2026-12-31' })
+  @ApiProperty({ example: '2026-12-31', description: 'Ngày hết hạn sử dụng (YYYY-MM-DD)' })
   @IsDateString()
   endDate: string;
 
@@ -145,15 +150,131 @@ export class CreateVoucherDto {
   @IsOptional()
   @IsNumber()
   usageLimit?: number;
+
+  @ApiPropertyOptional({
+    example: 'all',
+    enum: ['all', 'single_ticket', 'monthly_pass'],
+    description: 'Áp dụng cho vé lượt, vé tháng hoặc tất cả',
+  })
+  @IsOptional()
+  @IsEnum(['all', 'single_ticket', 'monthly_pass'])
+  applicableType?: 'all' | 'single_ticket' | 'monthly_pass';
+
+  @ApiPropertyOptional({
+    example: ['uuid-tuyen-1', 'uuid-tuyen-2'],
+    description: 'Danh sách ID tuyến xe áp dụng (rỗng = mọi tuyến)',
+  })
+  @IsOptional()
+  applicableRouteIds?: string[];
+
+  @ApiPropertyOptional({ example: 'active', enum: ['active', 'inactive'], description: 'Trạng thái kích hoạt' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class UpdateVoucherDto {
+  @ApiPropertyOptional({ example: 'Khuyến mãi đặc biệt dành cho sinh viên ICTU' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ example: 'percentage', enum: ['percentage', 'fixed_amount'] })
+  @IsOptional()
+  @IsEnum(['percentage', 'fixed_amount'])
+  discountType?: 'percentage' | 'fixed_amount';
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @IsNumber()
+  discountValue?: number;
+
+  @ApiPropertyOptional({ example: 50000 })
+  @IsOptional()
+  @IsNumber()
+  minOrderValue?: number;
+
+  @ApiPropertyOptional({ example: 20000 })
+  @IsOptional()
+  @IsNumber()
+  maxDiscountAmount?: number;
+
+  @ApiPropertyOptional({ example: '2026-09-01' })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-12-31' })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 1000 })
+  @IsOptional()
+  @IsNumber()
+  usageLimit?: number;
+
+  @ApiPropertyOptional({ enum: ['all', 'single_ticket', 'monthly_pass'] })
+  @IsOptional()
+  @IsEnum(['all', 'single_ticket', 'monthly_pass'])
+  applicableType?: 'all' | 'single_ticket' | 'monthly_pass';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  applicableRouteIds?: string[];
+
+  @ApiPropertyOptional({ enum: ['active', 'inactive'] })
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
 
 export class ValidateVoucherDto {
-  @ApiProperty({ example: 'ICTU2026' })
+  @ApiProperty({ example: 'ICTU2026', description: 'Mã voucher' })
   @IsString()
   @IsNotEmpty()
   code: string;
 
-  @ApiProperty({ example: 50000, description: 'Tổng tiền đơn hàng' })
+  @ApiProperty({ example: 50000, description: 'Tổng tiền đơn hàng trước giảm giá' })
   @IsNumber()
   orderAmount: number;
+
+  @ApiPropertyOptional({
+    example: 'single_ticket',
+    enum: ['single_ticket', 'monthly_pass'],
+    description: 'Loại dịch vụ thanh toán',
+  })
+  @IsOptional()
+  @IsEnum(['single_ticket', 'monthly_pass'])
+  serviceType?: 'single_ticket' | 'monthly_pass';
+
+  @ApiPropertyOptional({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6', description: 'ID tuyến xe buýt (nếu có)' })
+  @IsOptional()
+  @IsString()
+  routeId?: string;
+}
+
+export class QueryVoucherDto {
+  @ApiPropertyOptional({ example: 1, default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20, default: 20 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'ICTU', description: 'Tìm theo mã hoặc mô tả' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ example: 'active', enum: ['all', 'active', 'inactive', 'expired'] })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ enum: ['all', 'single_ticket', 'monthly_pass'] })
+  @IsOptional()
+  @IsString()
+  applicableType?: string;
 }
