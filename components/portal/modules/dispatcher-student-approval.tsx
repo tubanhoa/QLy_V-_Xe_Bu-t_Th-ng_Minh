@@ -36,6 +36,7 @@ import {
   type PriorityVerificationItem,
 } from '@/lib/services/priority-verification.service'
 import { promotionService } from '@/lib/services/promotion.service'
+import { formatProofUrl } from '@/lib/utils'
 
 interface StudentPassApp {
   id: string
@@ -89,6 +90,12 @@ export function DispatcherStudentApproval() {
   const [passStatusFilter, setPassStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [passSearch, setPassSearch] = useState('')
   const [previewPass, setPreviewPass] = useState<StudentPassApp | null>(null)
+
+  // State từ chối vé tháng kèm lý do
+  const [passRejectModalOpen, setPassRejectModalOpen] = useState(false)
+  const [rejectingPass, setRejectingPass] = useState<{ id: string; name: string } | null>(null)
+  const [passRejectReason, setPassRejectReason] = useState('')
+  const [passRejectError, setPassRejectError] = useState<string | null>(null)
 
   // Chung
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -151,9 +158,7 @@ export function DispatcherStudentApproval() {
           endDate: item.endDate,
           appliedDate: item.createdAt,
           status: (item.approvalStatus?.toLowerCase() as any) || 'pending',
-          idCardPhotoUrl:
-            item.proofImageUrl ||
-            'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
+          idCardPhotoUrl: formatProofUrl(item.proofImageUrl),
           rejectionReason: item.rejectionReason,
           approvedBy: item.approvedByUser?.fullName,
         }))
@@ -271,24 +276,47 @@ export function DispatcherStudentApproval() {
     }
   }
 
-  const handleRejectPass = async (id: string, name: string) => {
-    const reason = prompt('Nhập lý do từ chối vé tháng:', 'Ảnh thẻ sinh viên không hợp lệ hoặc đã hết hạn')
-    if (reason === null) return
+  const handleOpenPassRejectModal = (id: string, name: string) => {
+    setRejectingPass({ id, name })
+    setPassRejectReason('')
+    setPassRejectError(null)
+    setPassRejectModalOpen(true)
+  }
+
+  const handleConfirmRejectPass = async () => {
+    if (!rejectingPass) return
+    if (!passRejectReason.trim()) {
+      setPassRejectError('Vui lòng nhập lý do từ chối cụ thể để hướng dẫn sinh viên.')
+      return
+    }
 
     setIsProcessing(true)
+    setPassRejectError(null)
     try {
-      const res = await promotionService.reviewMonthlyPass(id, 'rejected', reason)
+      const res = await promotionService.reviewMonthlyPass(
+        rejectingPass.id,
+        'rejected',
+        passRejectReason.trim()
+      )
       if (res.success) {
         setPasses((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, status: 'rejected', rejectionReason: reason } : a))
+          prev.map((a) =>
+            a.id === rejectingPass.id
+              ? { ...a, status: 'rejected', rejectionReason: passRejectReason.trim() }
+              : a
+          )
         )
-        setPreviewPass(null)
-        setFeedback(`Đã từ chối vé tháng của: ${name} (${reason})`)
+        if (previewPass?.id === rejectingPass.id) {
+          setPreviewPass(null)
+        }
+        setPassRejectModalOpen(false)
+        setRejectingPass(null)
+        setFeedback(`Đã từ chối vé tháng của: ${rejectingPass.name}. Đã gửi lý do chi tiết tới sinh viên.`)
       } else {
-        alert(res.message || 'Không thể từ chối vé tháng này')
+        setPassRejectError(res.message || 'Không thể từ chối vé tháng này')
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi khi gửi yêu cầu từ chối')
+      setPassRejectError(err.message || 'Lỗi khi gửi yêu cầu từ chối')
     } finally {
       setIsProcessing(false)
       setTimeout(() => setFeedback(null), 4000)
@@ -924,7 +952,7 @@ export function DispatcherStudentApproval() {
                         <button
                           type="button"
                           disabled={isProcessing}
-                          onClick={() => handleRejectPass(item.id, item.studentName)}
+                          onClick={() => handleOpenPassRejectModal(item.id, item.studentName)}
                           className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300"
                         >
                           Từ chối
@@ -1240,6 +1268,82 @@ export function DispatcherStudentApproval() {
       )}
 
       {/* ========================================================================= */}
+      {/* MODAL TỪ CHỐI VÉ THÁNG KÈM LÝ DO CỤ THỂ                                   */}
+      {/* ========================================================================= */}
+      {passRejectModalOpen && rejectingPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="text-base font-bold text-red-600 flex items-center gap-2">
+                <AlertCircle size={18} />
+                Từ Chối Hồ Sơ Vé Tháng
+              </h3>
+              <button
+                onClick={() => setPassRejectModalOpen(false)}
+                className="rounded-xl p-1 text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Vui lòng nhập lý do từ chối hồ sơ vé tháng của{' '}
+              <strong className="text-foreground">{rejectingPass.name}</strong>. Lý do này sẽ được thông báo trực tiếp tới sinh viên để họ cập nhật lại ảnh minh chứng.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Lý do từ chối (Bắt buộc):</label>
+              <textarea
+                rows={3}
+                value={passRejectReason}
+                onChange={(e) => setPassRejectReason(e.target.value)}
+                placeholder="Ví dụ: Ảnh thẻ sinh viên bị mờ không nhìn rõ niên khóa, hoặc thẻ đã hết hạn..."
+                className="w-full rounded-2xl border border-border bg-card p-3 text-xs text-foreground focus:border-red-500 focus:outline-none"
+              />
+              {/* Quick Rejection Chips cho vé tháng */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  'Ảnh chụp mờ, lóa sáng hoặc mất góc không rõ thông tin',
+                  'Thẻ sinh viên đã hết hạn hoặc không có dấu trường',
+                  'Thông tin khai báo (Họ tên, Mã SV) không khớp với ảnh',
+                  'Ảnh không đúng loại giấy tờ quy định (Thẻ SV hoặc CCCD)',
+                  'Ảnh CCCD thiếu mặt sau hoặc không rõ số định danh',
+                ].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setPassRejectReason(reason)}
+                    className="px-2 py-1 rounded-lg bg-muted text-[10px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-700 transition-colors text-left cursor-pointer"
+                  >
+                    + {reason}
+                  </button>
+                ))}
+              </div>
+              {passRejectError && <p className="text-[11px] text-red-600">{passRejectError}</p>}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setPassRejectModalOpen(false)}
+                className="rounded-xl border border-border px-3.5 py-2 text-xs font-medium text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={handleConfirmRejectPass}
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                {isProcessing ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL XEM CHI TIẾT VÉ THÁNG (PASS PREVIEW)                                */}
       {/* ========================================================================= */}
       {previewPass && (
@@ -1265,19 +1369,47 @@ export function DispatcherStudentApproval() {
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4">
               <div>
-                <span className="text-xs font-semibold text-foreground block mb-2">
-                  Ảnh Thẻ Sinh Viên / CCCD Đối Chiếu:
-                </span>
-                <div className="relative h-56 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-foreground">
+                    Ảnh Thẻ Sinh Viên / CCCD Đối Chiếu:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLightboxImage({
+                        url: formatProofUrl(previewPass.idCardPhotoUrl),
+                        title: `Minh chứng vé tháng - ${previewPass.studentName} (${previewPass.passCode})`,
+                      })
+                    }
+                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <ZoomIn size={12} /> Soi chi tiết (Lightbox)
+                  </button>
+                </div>
+                <div
+                  onClick={() =>
+                    setLightboxImage({
+                      url: formatProofUrl(previewPass.idCardPhotoUrl),
+                      title: `Minh chứng vé tháng - ${previewPass.studentName} (${previewPass.passCode})`,
+                    })
+                  }
+                  className="relative h-56 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center cursor-zoom-in group"
+                >
                   <img
-                    src={previewPass.idCardPhotoUrl}
+                    src={formatProofUrl(previewPass.idCardPhotoUrl)}
                     alt={`Thẻ sinh viên ${previewPass.studentName}`}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
+                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="px-3 py-1.5 rounded-xl bg-black/75 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                      <ZoomIn size={14} /> Phóng to & Xoay ảnh
+                    </span>
+                  </div>
                   <a
-                    href={previewPass.idCardPhotoUrl}
+                    href={formatProofUrl(previewPass.idCardPhotoUrl)}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="absolute bottom-2 right-2 rounded-xl bg-black/70 backdrop-blur-sm px-2.5 py-1 text-[11px] font-semibold text-white flex items-center gap-1 hover:bg-black"
                   >
                     <ExternalLink size={12} /> Xem ảnh gốc
@@ -1323,8 +1455,8 @@ export function DispatcherStudentApproval() {
                   <button
                     type="button"
                     disabled={isProcessing}
-                    onClick={() => handleRejectPass(previewPass.id, previewPass.studentName)}
-                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    onClick={() => handleOpenPassRejectModal(previewPass.id, previewPass.studentName)}
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50 cursor-pointer"
                   >
                     Từ chối
                   </button>

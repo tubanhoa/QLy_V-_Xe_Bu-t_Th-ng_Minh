@@ -87,12 +87,14 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type MonthlyPassPaymentStatus = 'unpaid' | 'paid' | 'refunded'
 
 export interface RegisterMonthlyPassPayload {
-  routeId: string
+  routeId?: string
   category: MonthlyPassCategory
-  startDate: string // YYYY-MM-DD
-  endDate: string   // YYYY-MM-DD
+  startDate?: string // YYYY-MM-DD
+  endDate?: string   // YYYY-MM-DD (tùy chọn - backend tự tính)
   durationMonths?: number
   proofImageUrl?: string
+  proofType?: 'student_card' | 'id_card'
+  autoApprove?: boolean
 }
 
 export interface MonthlyPass {
@@ -106,6 +108,8 @@ export interface MonthlyPass {
   durationMonths?: number
   price: number
   proofImageUrl?: string
+  proofType?: 'student_card' | 'id_card'
+  rejectionReason?: string | null
   qrPayload?: string
   user?: {
     id: string

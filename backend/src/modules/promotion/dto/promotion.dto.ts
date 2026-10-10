@@ -6,9 +6,22 @@ import {
   IsEnum,
   IsDateString,
   IsBoolean,
+  ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MonthlyPassCategory, ApprovalStatus, PaymentMethod } from '../../../common/constants/status.constant.js';
+import { PaginationDto } from '../../../common/dto/pagination.dto.js';
+
+export class ListAdminMonthlyPassesQueryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    enum: ApprovalStatus,
+    description: 'Lọc theo trạng thái xét duyệt: pending, approved, rejected',
+  })
+  @IsOptional()
+  @IsEnum(ApprovalStatus)
+  status?: ApprovalStatus;
+}
 
 export class CalculateMonthlyPassPriceDto {
   @ApiProperty({ enum: MonthlyPassCategory, example: MonthlyPassCategory.STUDENT })
@@ -48,11 +61,15 @@ export class RegisterMonthlyPassDto {
 
   @ApiPropertyOptional({ example: '2026-10-01', description: 'Ngày bắt đầu hiệu lực (YYYY-MM-DD)' })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() === '' ? undefined : value))
+  @ValidateIf((o) => typeof o.startDate === 'string' && o.startDate.trim().length > 0)
   @IsDateString()
   startDate?: string;
 
   @ApiPropertyOptional({ example: '2026-10-31', description: 'Ngày hết hạn (YYYY-MM-DD) - tự động tính nếu bỏ trống' })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() === '' ? undefined : value))
+  @ValidateIf((o) => typeof o.endDate === 'string' && o.endDate.trim().length > 0)
   @IsDateString()
   endDate?: string;
 
@@ -60,6 +77,28 @@ export class RegisterMonthlyPassDto {
   @IsOptional()
   @IsString()
   proofImageUrl?: string;
+
+  @ApiPropertyOptional({ example: 'student_card', description: 'Loại giấy tờ minh chứng: student_card hoặc id_card' })
+  @IsOptional()
+  @IsString()
+  proofType?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Tự động duyệt hồ sơ (Chế độ Demo)' })
+  @IsOptional()
+  @IsBoolean()
+  autoApprove?: boolean;
+}
+
+export class ResubmitMonthlyPassProofDto {
+  @ApiProperty({ example: 'https://storage.ictu.edu.vn/cards/student_card_new.jpg', description: 'URL ảnh minh chứng mới' })
+  @IsNotEmpty({ message: 'URL ảnh minh chứng không được để trống' })
+  @IsString()
+  proofImageUrl: string;
+
+  @ApiPropertyOptional({ example: 'student_card', description: 'Loại giấy tờ minh chứng: student_card hoặc id_card' })
+  @IsOptional()
+  @IsString()
+  proofType?: string;
 }
 
 export class CreateMonthlyPassPaymentDto {

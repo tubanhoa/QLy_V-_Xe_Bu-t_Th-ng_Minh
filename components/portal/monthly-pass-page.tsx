@@ -37,6 +37,7 @@ import {
   Zap,
   User,
   AlertTriangle,
+  IdCard,
 } from 'lucide-react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
@@ -54,7 +55,7 @@ import {
   MONTHLY_PASS_CATEGORY_LABEL,
   MONTHLY_PASS_CATEGORY_PRICE,
 } from '@/lib/types/promotion'
-import { cn } from '@/lib/utils'
+import { cn, formatProofUrl } from '@/lib/utils'
 
 const CATEGORIES: {
   key: MonthlyPassCategory
@@ -106,6 +107,7 @@ export function MonthlyPassPage() {
   const [submitting, setSubmitting] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
+  const [proofType, setProofType] = useState<'student_card' | 'id_card'>('student_card')
 
   // Payment State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -217,9 +219,9 @@ export function MonthlyPassPage() {
       routeId,
       category,
       startDate,
-      endDate: '', // Backend tự tính an toàn
       durationMonths,
       proofImageUrl: uploadedProofUrl || undefined,
+      proofType,
     }
 
     const res = await promotionService.registerMonthlyPass(payload)
@@ -536,15 +538,45 @@ export function MonthlyPassPage() {
               </div>
 
               {/* Proof Image Upload */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-700">
-                  Ảnh minh chứng (Thẻ SV / Giấy báo nhập học / Thẻ CCCD)
+                  Giấy tờ minh chứng ({category === 'worker' ? 'Thẻ Nhân Viên / CCCD' : 'Thẻ SV / CCCD'})
                   {category === 'worker' && (
                     <span className="font-normal text-slate-400 ml-1.5">
                       (Không bắt buộc đối với cán bộ/người đi làm)
                     </span>
                   )}
                 </label>
+
+                {/* Chọn loại giấy tờ */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProofType('student_card')}
+                    className={cn(
+                      'p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer',
+                      proofType === 'student_card'
+                        ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold ring-1 ring-[#005A36]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                    )}
+                  >
+                    <GraduationCap size={16} />
+                    <span className="text-xs font-bold">Thẻ Sinh Viên</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProofType('id_card')}
+                    className={cn(
+                      'p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer',
+                      proofType === 'id_card'
+                        ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold ring-1 ring-[#005A36]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                    )}
+                  >
+                    <IdCard size={16} />
+                    <span className="text-xs font-bold">Căn Cước (CCCD)</span>
+                  </button>
+                </div>
 
                 <input
                   ref={fileInputRef}
@@ -784,7 +816,7 @@ export function MonthlyPassPage() {
                           {pass.proofImageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={pass.proofImageUrl}
+                              src={formatProofUrl(pass.proofImageUrl)}
                               alt="Ảnh thẻ"
                               className="w-full h-full object-cover"
                             />
@@ -865,8 +897,14 @@ export function MonthlyPassPage() {
                         )}
 
                         {isPending && (
-                          <div className="w-full text-center text-[10px] text-emerald-200/80 italic py-1">
-                            Ban Quản Lý xe buýt đang kiểm tra hồ sơ của bạn
+                          <div className="w-full text-center text-[10px] text-amber-200 font-semibold py-1">
+                            Ban Quản Lý đang thẩm định hồ sơ của bạn...
+                          </div>
+                        )}
+
+                        {pass.approvalStatus === 'rejected' && (
+                          <div className="w-full text-center text-[10px] text-rose-300 font-semibold py-1">
+                            Hồ sơ bị từ chối: {pass.rejectionReason || 'Chưa đạt yêu cầu của BQL'}
                           </div>
                         )}
                       </div>

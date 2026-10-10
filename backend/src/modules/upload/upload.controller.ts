@@ -6,7 +6,14 @@ import {
   Body,
   BadRequestException,
   UseGuards,
+  Get,
+  Param,
+  Res,
+  NotFoundException,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { validateProofImage, saveUploadedFileLocally } from '../../common/utils/file-upload.util.js';
@@ -86,5 +93,37 @@ export class UploadController {
       mimeType: validation.mimeType,
       sizeBytes: validation.sizeBytes,
     };
+  }
+
+  @Public()
+  @Get(['uploads/:subDir/:filename', 'api/v1/uploads/:subDir/:filename', 'api/uploads/:subDir/:filename'])
+  @ApiOperation({ summary: 'Xem ảnh minh chứng đã tải lên' })
+  async getUploadedFile(
+    @Param('subDir') subDir: string,
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const safeSubDir = subDir.replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeFilename = path.basename(filename);
+    const filePath = path.resolve(process.cwd(), 'uploads', safeSubDir, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException(`Không tìm thấy tệp ảnh minh chứng: ${safeFilename}`);
+    }
+
+    const ext = path.extname(safeFilename).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
   }
 }

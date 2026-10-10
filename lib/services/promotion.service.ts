@@ -253,10 +253,18 @@ class PromotionService {
     payload: RegisterMonthlyPassPayload,
   ): Promise<UnifiedApiResponse<MonthlyPass>> {
     try {
+      const cleanPayload: Record<string, any> = { ...payload }
+      if (!cleanPayload.endDate || (typeof cleanPayload.endDate === 'string' && cleanPayload.endDate.trim() === '')) {
+        delete cleanPayload.endDate
+      }
+      if (!cleanPayload.startDate || (typeof cleanPayload.startDate === 'string' && cleanPayload.startDate.trim() === '')) {
+        delete cleanPayload.startDate
+      }
+
       const response = await fetch(`${this.baseUrl}/monthly-passes/register`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(cleanPayload),
       })
 
       const resJson = await response.json().catch(() => null)
@@ -382,6 +390,41 @@ class PromotionService {
       return { success: true, data: resJson?.data || resJson }
     } catch (error: any) {
       console.error('[PromotionService.reviewMonthlyPass]', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /**
+   * Cập nhật lại ảnh minh chứng cho vé tháng bị từ chối và gửi lại yêu cầu duyệt
+   * Endpoint: PATCH /api/v1/monthly-passes/:id/resubmit-proof
+   */
+  async resubmitMonthlyPassProof(
+    id: string,
+    proofImageUrl: string,
+    proofType?: string,
+  ): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monthly-passes/${id}/resubmit-proof`, {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ proofImageUrl, proofType }),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể gửi lại minh chứng vé tháng',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[PromotionService.resubmitMonthlyPassProof]', error)
       return {
         success: false,
         message: error?.message || 'Lỗi kết nối máy chủ',
