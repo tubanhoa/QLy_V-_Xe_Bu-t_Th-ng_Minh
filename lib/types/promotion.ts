@@ -6,19 +6,78 @@
 
 // ─── Voucher ──────────────────────────────────────────────────────────────────
 
+export type VoucherDiscountType = 'percentage' | 'fixed_amount'
+export type VoucherApplicableType = 'all' | 'single_ticket' | 'monthly_pass'
+export type VoucherStatus = 'active' | 'inactive' | 'expired'
+
+export interface VoucherItem {
+  id: string
+  code: string
+  description?: string
+  discountType: VoucherDiscountType
+  discountValue: number | string
+  minOrderValue?: number | string
+  maxDiscountAmount?: number | string
+  startDate: string
+  endDate: string
+  usageLimit: number
+  usedCount: number
+  status: VoucherStatus | string
+  applicableType?: VoucherApplicableType
+  applicableRouteIds?: string[]
+  remainingUses?: number
+  dynamicStatus?: 'active' | 'inactive' | 'expired' | 'depleted'
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CreateVoucherPayload {
+  code: string
+  description?: string
+  discountType: VoucherDiscountType
+  discountValue: number
+  minOrderValue?: number
+  maxDiscountAmount?: number
+  startDate: string
+  endDate: string
+  usageLimit?: number
+  applicableType?: VoucherApplicableType
+  applicableRouteIds?: string[]
+  status?: 'active' | 'inactive'
+}
+
+export interface UpdateVoucherPayload {
+  description?: string
+  discountType?: VoucherDiscountType
+  discountValue?: number
+  minOrderValue?: number
+  maxDiscountAmount?: number
+  startDate?: string
+  endDate?: string
+  usageLimit?: number
+  applicableType?: VoucherApplicableType
+  applicableRouteIds?: string[]
+  status?: 'active' | 'inactive'
+}
+
 export interface ValidateVoucherPayload {
   code: string
   orderAmount: number
+  serviceType?: 'single_ticket' | 'monthly_pass' | 'all'
+  routeId?: string
 }
 
 export interface VoucherValidationResult {
   valid: boolean
   code: string
-  discountType: 'percentage' | 'fixed_amount'
+  voucherId?: string
+  discountType: VoucherDiscountType
   discountValue: number
   discountAmount: number
   finalAmount: number
   message?: string
+  description?: string
+  minOrderValue?: number
 }
 
 // ─── Monthly Pass ─────────────────────────────────────────────────────────────

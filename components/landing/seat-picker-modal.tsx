@@ -64,6 +64,7 @@ interface SeatPickerModalProps {
   initialOrigin?: string
   initialDestination?: string
   selectedTrip?: TripSearchResult | null
+  initialVoucherCode?: string
   onViewMyTickets?: (ticketId?: string) => void
 }
 
@@ -94,6 +95,7 @@ export function SeatPickerModal({
   initialOrigin = 'KTX ICTU',
   initialDestination = 'Bến xe Đồng Quang',
   selectedTrip = null,
+  initialVoucherCode,
   onViewMyTickets,
 }: SeatPickerModalProps) {
   const { isAuthenticated, user } = useAuth()
@@ -943,6 +945,9 @@ export function SeatPickerModal({
                     orderAmount={totalPrice}
                     onApplied={setVoucherResult}
                     disabled={selectedSeats.length === 0 || isSubmitting}
+                    initialCode={initialVoucherCode}
+                    routeId={selectedTrip?.routeId}
+                    serviceType="single_ticket"
                   />
                 </div>
 
