@@ -38,6 +38,7 @@ import {
   Zap,
   User,
   AlertTriangle,
+  IdCard,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { promotionService } from '@/lib/services/promotion.service'
@@ -58,7 +59,7 @@ import {
   MONTHLY_PASS_CATEGORY_LABEL,
   MONTHLY_PASS_CATEGORY_PRICE,
 } from '@/lib/types/promotion'
-import { cn } from '@/lib/utils'
+import { cn, formatProofUrl } from '@/lib/utils'
 
 interface MonthlyPassModalProps {
   open: boolean
@@ -145,6 +146,18 @@ export function MonthlyPassModal({
   const [submitting, setSubmitting] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
+  const [proofType, setProofType] = useState<'student_card' | 'id_card'>('student_card')
+
+  // Modal Cập nhật lại ảnh minh chứng (khi hồ sơ bị từ chối)
+  const [resubmitModalOpen, setResubmitModalOpen] = useState(false)
+  const [targetResubmitPass, setTargetResubmitPass] = useState<MonthlyPass | null>(null)
+  const [resubmitProofType, setResubmitProofType] = useState<'student_card' | 'id_card'>('student_card')
+  const [resubmitProofPreview, setResubmitProofPreview] = useState<string | null>(null)
+  const [resubmitProofUrl, setResubmitProofUrl] = useState<string | null>(null)
+  const [isUploadingResubmit, setIsUploadingResubmit] = useState(false)
+  const [submittingResubmit, setSubmittingResubmit] = useState(false)
+  const [resubmitError, setResubmitError] = useState<string | null>(null)
+  const resubmitFileInputRef = useRef<HTMLInputElement>(null)
 
   // Modal Thanh Toán
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -285,9 +298,9 @@ export function MonthlyPassModal({
       routeId,
       category,
       startDate,
-      endDate: '', // Backend tự tính an toàn
       durationMonths,
       proofImageUrl: uploadedProofUrl || undefined,
+      proofType,
     }
 
     const res = await promotionService.registerMonthlyPass(payload)
@@ -298,6 +311,65 @@ export function MonthlyPassModal({
       loadMyPasses()
     } else {
       setRegisterError(res.message || 'Không thể gửi hồ sơ đăng ký vé tháng. Vui lòng thử lại.')
+    }
+  }
+
+  // Mở modal gửi lại ảnh minh chứng cho thẻ bị từ chối
+  const handleOpenResubmitModal = (pass: MonthlyPass) => {
+    setTargetResubmitPass(pass)
+    setResubmitProofType(pass.proofType === 'id_card' ? 'id_card' : 'student_card')
+    setResubmitProofPreview(null)
+    setResubmitProofUrl(null)
+    setResubmitError(null)
+    setResubmitModalOpen(true)
+  }
+
+  const handleUploadResubmitFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setResubmitError(null)
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+    if (!allowed.includes(file.type) || file.type.includes('svg')) {
+      setResubmitError('Chỉ hỗ trợ tải tệp ảnh định dạng JPG, PNG hoặc WebP.')
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setResubmitError('Dung lượng tệp vượt quá 3MB.')
+      return
+    }
+    const preview = URL.createObjectURL(file)
+    setResubmitProofPreview(preview)
+    setIsUploadingResubmit(true)
+    const res = await promotionService.uploadProofImage(file)
+    setIsUploadingResubmit(false)
+    if (res.success && res.data?.url) {
+      setResubmitProofUrl(res.data.url)
+    } else {
+      setResubmitError(res.message || 'Lỗi khi tải ảnh lên máy chủ. Vui lòng thử lại.')
+    }
+  }
+
+  const handleExecuteResubmitProof = async () => {
+    if (!targetResubmitPass) return
+    if (!resubmitProofUrl) {
+      setResubmitError('Vui lòng chọn ảnh minh chứng mới trước khi gửi.')
+      return
+    }
+    setSubmittingResubmit(true)
+    setResubmitError(null)
+    const res = await promotionService.resubmitMonthlyPassProof(
+      targetResubmitPass.id,
+      resubmitProofUrl,
+      resubmitProofType,
+    )
+    setSubmittingResubmit(false)
+    if (res.success) {
+      setResubmitModalOpen(false)
+      setTargetResubmitPass(null)
+      loadMyPasses()
+      alert('Đã gửi lại ảnh minh chứng thành công! Hồ sơ đã được chuyển lại về trạng thái Chờ duyệt.')
+    } else {
+      setResubmitError(res.message || 'Không thể cập nhật ảnh minh chứng.')
     }
   }
 
@@ -810,16 +882,77 @@ export function MonthlyPassModal({
                     </div>
                   </div>
 
-                  {/* Ảnh minh chứng (Thẻ sinh viên / Giấy báo / CCCD) */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600">
-                      4. Ảnh minh chứng (Thẻ SV / Giấy báo nhập học / Thẻ CCCD)
-                      {category === 'worker' && (
-                        <span className="font-normal text-slate-400 ml-1.5 lowercase">
-                          (không bắt buộc đối với vé phổ thông)
-                        </span>
-                      )}
-                    </label>
+                  {/* Lựa chọn loại giấy tờ minh chứng & Upload */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600">
+                        4. Giấy tờ minh chứng ({category === 'worker' ? 'Thẻ Nhân Viên / CCCD' : 'Thẻ Sinh Viên / CCCD'})
+                        {category === 'worker' && (
+                          <span className="font-normal text-slate-400 ml-1.5 lowercase">
+                            (không bắt buộc đối với vé phổ thông)
+                          </span>
+                        )}
+                      </label>
+                    </div>
+
+                    {/* Selector chọn loại giấy tờ: Thẻ sinh viên HOẶC Căn cước công dân */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setProofType('student_card')}
+                        className={cn(
+                          'p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer',
+                          proofType === 'student_card'
+                            ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold shadow-xs ring-1 ring-[#005A36]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'p-2 rounded-lg shrink-0',
+                            proofType === 'student_card'
+                              ? 'bg-[#005A36] text-white'
+                              : 'bg-slate-100 text-slate-500',
+                          )}
+                        >
+                          <GraduationCap size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-black leading-tight truncate">Thẻ Sinh Viên</div>
+                          <div className="text-[10px] text-slate-500 leading-tight truncate mt-0.5">
+                            Rõ họ tên, mã SV & trường
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setProofType('id_card')}
+                        className={cn(
+                          'p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer',
+                          proofType === 'id_card'
+                            ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold shadow-xs ring-1 ring-[#005A36]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'p-2 rounded-lg shrink-0',
+                            proofType === 'id_card'
+                              ? 'bg-[#005A36] text-white'
+                              : 'bg-slate-100 text-slate-500',
+                          )}
+                        >
+                          <IdCard size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-black leading-tight truncate">Căn Cước Công Dân</div>
+                          <div className="text-[10px] text-slate-500 leading-tight truncate mt-0.5">
+                            Mặt trước CCCD gắn chip
+                          </div>
+                        </div>
+                      </button>
+                    </div>
 
                     <input
                       ref={fileInputRef}
@@ -842,7 +975,7 @@ export function MonthlyPassModal({
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-900 truncate">
-                              {proofFileName || 'anh-the-sinh-vien.jpg'}
+                              {proofFileName || (proofType === 'student_card' ? 'anh-the-sinh-vien.jpg' : 'anh-the-cccd.jpg')}
                             </p>
                             {isUploadingProof ? (
                               <p className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
@@ -852,7 +985,7 @@ export function MonthlyPassModal({
                             ) : uploadedProofUrl ? (
                               <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
                                 <CheckCircle2 size={12} />
-                                <span>Đã tải lên và xác thực tệp thành công</span>
+                                <span>Đã tải lên và xác thực tệp thành công ({proofType === 'student_card' ? 'Thẻ SV' : 'CCCD'})</span>
                               </p>
                             ) : (
                               <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
@@ -894,13 +1027,28 @@ export function MonthlyPassModal({
                           <Upload size={18} />
                         </div>
                         <p className="text-xs font-bold text-slate-700 group-hover:text-[#005A36]">
-                          Chạm để tải ảnh sinh viên hoặc CCCD
+                          Chạm để tải ảnh {proofType === 'student_card' ? 'Thẻ Sinh Viên' : 'Căn cước công dân (CCCD)'}
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          Hỗ trợ định dạng JPG, PNG, WebP dưới 3MB · Chụp rõ họ tên và mã số thẻ
+                          Hỗ trợ JPG, PNG, WebP dưới 3MB · Hồ sơ sẽ được chuyển đến BQL xét duyệt thủ công
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Thông báo quy trình phê duyệt thủ công của Admin */}
+                  <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3 sm:p-3.5 flex items-start gap-3 text-xs">
+                    <div className="size-8 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                      <ShieldCheck size={16} />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-teal-950 block text-xs">
+                        Quy trình phê duyệt vé tháng HSSV
+                      </span>
+                      <span className="text-[11px] text-teal-800/90 leading-relaxed block mt-0.5">
+                        Hồ sơ đăng ký sẽ được Quản trị viên (Admin) thẩm định ảnh thẻ trong Dashboard. Sau khi được duyệt, cổng thanh toán sẽ tự động mở để bạn thanh toán và kích hoạt mã QR lên xe.
+                      </span>
+                    </div>
                   </div>
 
                   {registerError && (
@@ -1059,7 +1207,7 @@ export function MonthlyPassModal({
                               {pass.proofImageUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                  src={pass.proofImageUrl}
+                                  src={formatProofUrl(pass.proofImageUrl)}
                                   alt="Ảnh thẻ"
                                   className="w-full h-full object-cover"
                                 />
@@ -1141,8 +1289,33 @@ export function MonthlyPassModal({
                             )}
 
                             {isPending && (
-                              <div className="w-full text-center text-[10px] text-emerald-200/80 italic py-1">
-                                Ban Quản Lý xe buýt đang kiểm tra hồ sơ của bạn
+                              <div className="w-full flex items-center gap-2 py-1.5 px-3 rounded-xl bg-amber-500/20 border border-amber-400/30 text-amber-100">
+                                <Clock size={13} className="shrink-0 text-amber-300 animate-spin" />
+                                <span className="text-[11px] font-semibold truncate">
+                                  Hồ sơ đang chờ Ban Quản Trị thẩm định & phê duyệt
+                                </span>
+                              </div>
+                            )}
+
+                            {pass.approvalStatus === 'rejected' && (
+                              <div className="w-full space-y-2 pt-1">
+                                <div className="p-2.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs">
+                                  <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                                    <AlertCircle size={14} className="shrink-0" />
+                                    <span>Hồ sơ bị từ chối phê duyệt</span>
+                                  </div>
+                                  <p className="text-[11px] mt-1 text-rose-100/90 leading-tight">
+                                    Lý do: <span className="font-semibold">{pass.rejectionReason || 'Ảnh minh chứng chưa đáp ứng yêu cầu của Ban Quản Trị.'}</span>
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenResubmitModal(pass)}
+                                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Upload size={14} />
+                                  <span>Cập nhật lại ảnh minh chứng</span>
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1837,6 +2010,177 @@ export function MonthlyPassModal({
                   <>
                     <RefreshCw size={15} />
                     <span>Xác Nhận Gia Hạn & Thanh Toán</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CẬP NHẬT LẠI ẢNH MINH CHỨNG (KHI HỒ SƠ BỊ TỪ CHỐI) */}
+      {resubmitModalOpen && targetResubmitPass && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 p-5 space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="size-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <Upload size={18} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">Cập Nhật Minh Chứng Mới</h4>
+                  <p className="text-[11px] text-slate-500 font-mono">Mã vé: {targetResubmitPass.passCode}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResubmitModalOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Hiển thị lý do từ chối trước đó */}
+            {targetResubmitPass.rejectionReason && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-rose-900">
+                  <AlertCircle size={14} />
+                  <span>Lý do Admin đã từ chối:</span>
+                </div>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  {targetResubmitPass.rejectionReason}
+                </p>
+              </div>
+            )}
+
+            {/* Chọn loại giấy tờ */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                Chọn loại giấy tờ bổ sung:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResubmitProofType('student_card')}
+                  className={cn(
+                    'p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer',
+                    resubmitProofType === 'student_card'
+                      ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold ring-1 ring-[#005A36]'
+                      : 'border-slate-200 bg-white text-slate-600',
+                  )}
+                >
+                  <GraduationCap size={16} />
+                  <span className="text-xs font-bold">Thẻ Sinh Viên</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResubmitProofType('id_card')}
+                  className={cn(
+                    'p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer',
+                    resubmitProofType === 'id_card'
+                      ? 'border-[#005A36] bg-emerald-50/80 text-[#005A36] font-bold ring-1 ring-[#005A36]'
+                      : 'border-slate-200 bg-white text-slate-600',
+                  )}
+                >
+                  <IdCard size={16} />
+                  <span className="text-xs font-bold">Căn Cước (CCCD)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Vùng chọn ảnh */}
+            <input
+              ref={resubmitFileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleUploadResubmitFile}
+              className="hidden"
+            />
+
+            {resubmitProofPreview ? (
+              <div className="rounded-2xl border border-emerald-300 bg-emerald-50/50 p-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="size-12 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={resubmitProofPreview}
+                      alt="Ảnh mới"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      Ảnh minh chứng mới
+                    </p>
+                    {isUploadingResubmit ? (
+                      <p className="text-[10px] text-amber-700 flex items-center gap-1 font-semibold">
+                        <Loader2 size={10} className="animate-spin" />
+                        <span>Đang tải lên...</span>
+                      </p>
+                    ) : resubmitProofUrl ? (
+                      <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                        <CheckCircle2 size={10} />
+                        <span>Đã tải ảnh lên thành công</span>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => resubmitFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Đổi ảnh
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={() => resubmitFileInputRef.current?.click()}
+                className="rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#005A36] bg-slate-50/60 hover:bg-emerald-50/30 p-5 text-center transition-all cursor-pointer group space-y-1"
+              >
+                <div className="size-9 rounded-xl bg-white border border-slate-200 text-slate-400 group-hover:text-[#005A36] flex items-center justify-center mx-auto shadow-2xs">
+                  <Upload size={16} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 group-hover:text-[#005A36]">
+                  Chạm để tải ảnh mới rõ nét
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Ảnh chụp góc thẳng, đủ ánh sáng, không bị lóa hoặc mất góc
+                </p>
+              </div>
+            )}
+
+            {resubmitError && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700 flex items-center gap-1.5">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{resubmitError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setResubmitModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={submittingResubmit || isUploadingResubmit || !resubmitProofUrl}
+                onClick={handleExecuteResubmitProof}
+                className="flex-1 py-2.5 rounded-xl bg-[#005A36] hover:bg-[#004529] disabled:opacity-50 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {submittingResubmit ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Đang gửi lại...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={14} />
+                    <span>Gửi Lại Duyệt</span>
                   </>
                 )}
               </button>

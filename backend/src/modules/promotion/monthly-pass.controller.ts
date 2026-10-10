@@ -13,10 +13,12 @@ import { MonthlyPassService } from './monthly-pass.service.js';
 import {
   CalculateMonthlyPassPriceDto,
   RegisterMonthlyPassDto,
+  ResubmitMonthlyPassProofDto,
   ReviewMonthlyPassDto,
   CreateMonthlyPassPaymentDto,
   ConfirmMonthlyPassPaymentDto,
   RenewMonthlyPassDto,
+  ListAdminMonthlyPassesQueryDto,
 } from './dto/promotion.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -115,16 +117,27 @@ export class MonthlyPassController {
     return this.monthlyPassService.renew(id, dto, userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Patch('monthly-passes/:id/resubmit-proof')
+  @ApiOperation({ summary: 'Cập nhật ảnh minh chứng mới khi bị từ chối và gửi lại yêu cầu duyệt' })
+  async resubmitProof(
+    @Param('id') id: string,
+    @Body() dto: ResubmitMonthlyPassProofDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.monthlyPassService.resubmitProof(id, dto, userId);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT')
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('admin/monthly-passes')
   @ApiOperation({ summary: 'Danh sách hồ sơ đăng ký vé tháng (Manager, Admin)' })
   async getAdminPasses(
-    @Query() pagination: PaginationDto,
-    @Query('status') status?: ApprovalStatus,
+    @Query() query: ListAdminMonthlyPassesQueryDto,
   ) {
-    return this.monthlyPassService.getAdminPasses(pagination, status);
+    return this.monthlyPassService.getAdminPasses(query, query.status);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -13,6 +13,7 @@ import { RouteEntity } from '../../database/entities/route.entity.js';
 import {
   CalculateMonthlyPassPriceDto,
   RegisterMonthlyPassDto,
+  ResubmitMonthlyPassProofDto,
   ReviewMonthlyPassDto,
   CreateMonthlyPassPaymentDto,
   ConfirmMonthlyPassPaymentDto,
@@ -203,7 +204,8 @@ export class MonthlyPassService {
     const startDate = dto.startDate || todayStr;
     const endDate = dto.endDate || this.calculateEndDate(startDate, durationMonths);
 
-    // Đối với người đi làm / phổ thông (không cần đối soát thẻ SV/CCCD) -> tự động APPROVED để thanh toán ngay
+    // Đối với người đi làm / phổ thông không trợ giá -> tự động APPROVED để thanh toán ngay
+    // Đối với Sinh viên (STUDENT) hoặc Người cao tuổi (ELDERLY) -> Bắt buộc PENDING để Admin phê duyệt thủ công
     const initialApprovalStatus =
       dto.category === MonthlyPassCategory.WORKER
         ? ApprovalStatus.APPROVED
@@ -708,7 +710,7 @@ export class MonthlyPassService {
       .leftJoinAndSelect('pass.approvedByUser', 'approvedByUser');
 
     if (status) {
-      query.andWhere('pass.approvalStatus = :status', { status });
+      query.andWhere('LOWER(pass.approvalStatus) = LOWER(:status)', { status });
     }
 
     query.orderBy('pass.createdAt', 'DESC').skip(skip).take(limit);
@@ -768,5 +770,49 @@ export class MonthlyPassService {
     }
 
     return pass;
+  }
+
+  /**
+   * Sinh viên / Hành khách cập nhật lại ảnh minh chứng khi bị từ chối
+   */
+  async resubmitProof(id: string, dto: ResubmitMonthlyPassProofDto, userId: string) {
+    const pass = await this.monthlyPassRepository.findOne({
+      where: { id },
+      relations: { route: true, user: true },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Không tìm thấy thông tin vé tháng');
+    }
+
+    if (pass.userId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền thao tác trên vé tháng này');
+    }
+
+    // Cho phép gửi lại ảnh nếu đang bị REJECTED hoặc PENDING
+    pass.proofImageUrl = dto.proofImageUrl;
+    pass.approvalStatus = ApprovalStatus.PENDING;
+    pass.rejectionReason = null;
+
+    const saved = await this.monthlyPassRepository.save(pass);
+
+    if (this.notificationCenterService && pass.userId) {
+      await this.notificationCenterService
+        .saveNotification({
+          userId: pass.userId,
+          type: 'SYSTEM',
+          title: 'Đã cập nhật ảnh minh chứng vé tháng',
+          message: `Hồ sơ vé tháng ${pass.passCode} đã được tải lên ảnh mới thành công và chuyển sang trạng thái Chờ duyệt. Ban Quản Lý sẽ sớm thẩm định lại hồ sơ của bạn.`,
+          deepLink: '/portal/monthly-pass',
+          data: {
+            passId: saved.id,
+            passCode: saved.passCode,
+            status: saved.approvalStatus,
+          },
+        })
+        .catch(() => {});
+    }
+
+    return saved;
   }
 }
