@@ -7,6 +7,7 @@ import {
   CreditCard,
   FileBarChart2,
   GraduationCap,
+  IdCard,
   LayoutDashboard,
   MessageSquare,
   Navigation,
@@ -165,6 +166,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       icon: Users,
     },
     {
+      key: 'driver-licenses',
+      label: 'Hồ sơ & Bằng lái Tài xế',
+      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
+      icon: IdCard,
+    },
+    {
       key: 'reports',
       label: 'Báo cáo & Nhật ký',
       description: 'Audit logs, báo cáo tài chính & viễn thông',
@@ -202,6 +209,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       description: 'Duyệt thẻ sinh viên, hình ảnh thẻ, gia hạn',
       icon: GraduationCap,
       badge: 12,
+    },
+    {
+      key: 'driver-licenses',
+      label: 'Hồ sơ & Bằng lái Tài xế',
+      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
+      icon: IdCard,
     },
     {
       key: 'incidents',

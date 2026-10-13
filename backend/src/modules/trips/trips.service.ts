@@ -19,6 +19,7 @@ import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
+import { DriverProfileEntity, DriverLicenseStatus } from '../../database/entities/driver-profile.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto, CreateAdhocTripDto } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import {
@@ -63,6 +64,9 @@ export class TripsService {
     @Optional()
     @InjectRepository(MonthlyPassEntity)
     private readonly monthlyPassRepository?: Repository<MonthlyPassEntity>,
+    @Optional()
+    @InjectRepository(DriverProfileEntity)
+    private readonly driverProfileRepository?: Repository<DriverProfileEntity>,
     @Inject(forwardRef(() => SeatLockService))
     @Optional()
     private readonly seatLockService?: SeatLockService,
@@ -539,21 +543,49 @@ export class TripsService {
         );
       }
 
-      // Kiểm tra bằng lái hợp lệ (Hạng D hoặc Hạng E theo Luật Giao thông Đường bộ)
-      const license = (driver.faculty || '').toUpperCase().trim();
-      const isValidLicense =
-        /\b(D|E|FD|FE)\b/i.test(license) ||
-        license.includes('HẠNG D') ||
-        license.includes('HẠNG E') ||
-        license.includes('BẰNG D') ||
-        license.includes('BẰNG E') ||
-        license.includes('GPLX D') ||
-        license.includes('GPLX E');
+      // Kiểm tra bằng lái hợp lệ từ bảng driver_profiles
+      let profile: DriverProfileEntity | null = null;
+      if (this.driverProfileRepository) {
+        profile = await this.driverProfileRepository.findOne({ where: { userId: driver.id } });
+      }
 
-      if (!isValidLicense) {
-        throw new BadRequestException(
-          `Tài xế ${driver.fullName} không đủ điều kiện giấy phép lái xe để điều khiển xe buýt chở khách (Yêu cầu tối thiểu GPLX Hạng D hoặc Hạng E, hiện có: "${driver.faculty || 'Chưa cập nhật'}"). Vui lòng cập nhật GPLX hợp lệ trước khi phân công!`,
-        );
+      if (!profile) {
+        // Fallback kiểm tra driver.faculty nếu chưa có profile
+        const legacyLicense = (driver.faculty || '').toUpperCase().trim();
+        const hasLegacyValid =
+          /\b(D|E|FD|FE)\b/i.test(legacyLicense) ||
+          legacyLicense.includes('HẠNG D') ||
+          legacyLicense.includes('HẠNG E') ||
+          legacyLicense.includes('BẰNG D') ||
+          legacyLicense.includes('BẰNG E') ||
+          legacyLicense.includes('GPLX D') ||
+          legacyLicense.includes('GPLX E');
+
+        if (!hasLegacyValid) {
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} chưa có hồ sơ bằng lái trong hệ thống. Vui lòng thẩm định và phê duyệt GPLX trước khi phân công!`,
+          );
+        }
+      } else {
+        if (profile.status !== DriverLicenseStatus.APPROVED) {
+          const statusText =
+            profile.status === DriverLicenseStatus.PENDING
+              ? 'Chờ duyệt'
+              : profile.status === DriverLicenseStatus.REJECTED
+                ? `Đã bị từ chối (${profile.rejectionReason || 'Không hợp lệ'})`
+                : profile.status;
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} chưa đủ điều kiện giấy phép lái xe để điều khiển xe buýt chở khách (Trạng thái hồ sơ: "${statusText}"). Vui lòng phê duyệt GPLX trước khi phân công!`,
+          );
+        }
+
+        const validClasses = ['D', 'E', 'FD', 'FE'];
+        const cleanClass = (profile.licenseClass || '').toUpperCase().trim();
+        if (!validClasses.includes(cleanClass)) {
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} sở hữu GPLX Hạng ${profile.licenseClass}, không đủ điều kiện điều khiển xe buýt chở khách (Yêu cầu tối thiểu Hạng D hoặc Hạng E)!`,
+          );
+        }
       }
 
       // Ràng buộc 3: Chống xung đột lịch trình (Double-booking cho tài xế)

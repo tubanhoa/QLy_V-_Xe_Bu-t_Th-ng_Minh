@@ -93,6 +93,10 @@ const AdminInvoices = dynamic(
   () => import('./modules/admin-invoices').then((m) => m.AdminInvoices),
   { loading: () => <ContentSkeleton /> }
 )
+const AdminDriverLicenses = dynamic(
+  () => import('./modules/admin-driver-licenses').then((m) => m.AdminDriverLicenses),
+  { loading: () => <ContentSkeleton /> }
+)
 
 const SKELETON_MS = 550
 
@@ -235,6 +239,7 @@ export function AppShell() {
       if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} onNavigate={handleNavigate} />
       if (activeItem.key === 'gps') return <DispatcherGpsMap />
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
+      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />
       if (activeItem.key === 'feedback') return <AdminFeedback />
@@ -254,6 +259,7 @@ export function AppShell() {
       if (activeItem.key === 'invoices') return <AdminInvoices />
       if (activeItem.key === 'feedback') return <AdminFeedback />
       if (activeItem.key === 'staff') return <AdminStaff />
+      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses />
       if (activeItem.key === 'reports') return <AdminReports />
       if (activeItem.key === 'settings') return <AdminSettings />
     }

@@ -18,6 +18,7 @@ import { NotificationModule } from './modules/notification/notification.module.j
 import { UploadModule } from './modules/upload/upload.module.js';
 import { InvoiceModule } from './modules/invoice/invoice.module.js';
 import { PriorityVerificationModule } from './modules/priority-verification/priority-verification.module.js';
+import { DriverProfileModule } from './modules/driver-profiles/driver-profile.module.js';
 import { SeedModule } from './database/seeds/seed.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -46,6 +47,7 @@ import { AppService } from './app.service.js';
     UploadModule,
     InvoiceModule,
     PriorityVerificationModule,
+    DriverProfileModule,
     SeedModule,
   ],
   controllers: [AppController],
