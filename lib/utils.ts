@@ -26,10 +26,10 @@ export function formatProofUrl(url?: string | null): string {
     return clean
   }
   if (clean.startsWith('/uploads/')) {
-    return `http://localhost:3001${clean}`
+    return `http://127.0.0.1:3001${clean}`
   }
   if (clean.startsWith('uploads/')) {
-    return `http://localhost:3001/${clean}`
+    return `http://127.0.0.1:3001/${clean}`
   }
   return clean
 }
