@@ -15,6 +15,7 @@ import { PaymentMethod, PaymentStatus } from '../../common/constants/status.cons
 @Index(['bookingId'])
 @Index(['status'])
 @Index(['transactionId'], { unique: true })
+@Index('idx_payments_method', ['paymentMethod', 'status'])
 export class PaymentEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

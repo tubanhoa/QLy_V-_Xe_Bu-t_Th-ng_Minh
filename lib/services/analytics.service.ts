@@ -22,26 +22,72 @@ export interface DailyBreakdownItem {
   cash: number
 }
 
+export interface RevenueReportQueryParams {
+  startDate?: string
+  endDate?: string
+  groupBy?: 'day' | 'month' | 'year'
+  routeId?: string
+  tripId?: string
+  paymentMethod?: string
+}
+
+export interface RevenueTimelineItem {
+  period: string
+  revenue: number
+  bookingCount: number
+  ticketCount: number
+}
+
+export interface RevenueRouteItem {
+  routeId?: string
+  routeCode: string
+  name: string
+  revenue: number
+  ticketCount: number
+  share?: number
+}
+
+export interface RevenueChannelItem {
+  channel: string
+  rawMethod?: string
+  amount: string
+  rawAmount?: number
+  share: number
+  bookingCount?: number
+}
+
+export interface RevenueTripItem {
+  tripId: string
+  departureTime: string
+  revenue: number
+  ticketCount: number
+  vehiclePlate: string
+  routeCode?: string
+  routeName?: string
+  occupancyRate?: number
+}
+
 export interface RevenueStatsResponse {
+  summary?: {
+    totalRevenue: number
+    totalDiscount: number
+    totalPaidBookings: number
+    totalTicketsSold: number
+    averageOrderValue: number
+  }
+  timeline?: RevenueTimelineItem[]
+  trips?: RevenueTripItem[]
+  // Tương thích ngược với các components cũ
   totalRevenue: number
   totalDiscount: number
   totalPaidBookings: number
-  revenueByRoute: Array<{
-    routeCode: string
-    name: string
-    revenue: number
-    ticketCount: number
-  }>
+  revenueByRoute: RevenueRouteItem[]
   revenueByDate: Array<{
     date: string
     revenue: number
   }>
-  revenueByChannel?: Array<{
-    channel: string
-    amount: string
-    share: number
-  }>
-  dailyBreakdown?: DailyBreakdownItem[]
+  revenueByChannel?: RevenueChannelItem[]
+  dailyBreakdown?: Array<DailyBreakdownItem | any>
 }
 
 export interface OccupancyTripItem {
@@ -188,13 +234,22 @@ class AnalyticsService {
 
   /** Lấy thống kê doanh thu thực tế từ Backend Supabase */
   async getRevenueStats(
-    startDate?: string,
-    endDate?: string,
+    queryOrStartDate?: RevenueReportQueryParams | string,
+    legacyEndDate?: string,
   ): Promise<{ success: boolean; data?: RevenueStatsResponse; message?: string }> {
     try {
       const params = new URLSearchParams()
-      if (startDate) params.append('startDate', startDate)
-      if (endDate) params.append('endDate', endDate)
+      if (typeof queryOrStartDate === 'string') {
+        if (queryOrStartDate) params.append('startDate', queryOrStartDate)
+        if (legacyEndDate) params.append('endDate', legacyEndDate)
+      } else if (queryOrStartDate) {
+        if (queryOrStartDate.startDate) params.append('startDate', queryOrStartDate.startDate)
+        if (queryOrStartDate.endDate) params.append('endDate', queryOrStartDate.endDate)
+        if (queryOrStartDate.groupBy) params.append('groupBy', queryOrStartDate.groupBy)
+        if (queryOrStartDate.routeId) params.append('routeId', queryOrStartDate.routeId)
+        if (queryOrStartDate.tripId) params.append('tripId', queryOrStartDate.tripId)
+        if (queryOrStartDate.paymentMethod) params.append('paymentMethod', queryOrStartDate.paymentMethod)
+      }
 
       const res = await this.fetchWithAuth(
         `${this.baseUrl}/reports/revenue${params.toString() ? `?${params.toString()}` : ''}`,

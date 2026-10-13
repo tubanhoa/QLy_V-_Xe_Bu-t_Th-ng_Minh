@@ -21,6 +21,7 @@ import { PaymentEntity } from './payment.entity.js';
 @Index(['tripId'])
 @Index(['status'])
 @Index(['bookingCode'], { unique: true })
+@Index('idx_bookings_report_filter', ['bookingTime', 'status'])
 export class BookingEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
