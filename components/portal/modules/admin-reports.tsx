@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Download,
   FileBarChart2,
@@ -28,6 +28,11 @@ import {
   CheckCircle2,
   RotateCcw,
   Layers,
+  Printer,
+  Target,
+  FileText,
+  CheckCheck,
+  Flag,
 } from 'lucide-react'
 import {
   analyticsService,
@@ -88,6 +93,14 @@ export function AdminReports() {
   // Kiểu biểu đồ xu hướng (Cột vs Đường)
   const [chartMode, setChartMode] = useState<'bar' | 'line'>('bar')
 
+  // ĐỀ XUẤT 1: ĐƯỜNG MỤC TIÊU KPI DOANH THU (BENCHMARK THRESHOLD LINE)
+  const [showTargetLine, setShowTargetLine] = useState<boolean>(true)
+  const [targetRevenue, setTargetRevenue] = useState<number>(30000)
+  const [showTargetConfig, setShowTargetConfig] = useState<boolean>(false)
+
+  // ĐỀ XUẤT 2: MODAL XEM TRƯỚC IN ẤN / XUẤT PDF KHỔ A4 (PRINT PREVIEW)
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false)
+
   // Trạng thái hover trên biểu đồ xu hướng & biểu đồ tròn
   const [hoveredTimelineIndex, setHoveredTimelineIndex] = useState<number | null>(null)
   const [hoveredRouteIndex, setHoveredRouteIndex] = useState<number | null>(null)
@@ -111,21 +124,25 @@ export function AdminReports() {
       setStartDate(past)
       setEndDate(todayStr)
       setGroupBy('day')
+      setTargetRevenue(30000)
     } else if (preset === '30d') {
       const past = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10)
       setStartDate(past)
       setEndDate(todayStr)
       setGroupBy('day')
+      setTargetRevenue(30000)
     } else if (preset === 'month') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
       setStartDate(firstDay)
       setEndDate(todayStr)
       setGroupBy('day')
+      setTargetRevenue(30000)
     } else if (preset === 'quarter') {
       const past = new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10)
       setStartDate(past)
       setEndDate(todayStr)
       setGroupBy('month')
+      setTargetRevenue(100000)
     }
   }, [])
 
@@ -270,18 +287,37 @@ export function AdminReports() {
     return []
   }, [revenueData])
 
-  // Cực đại doanh thu trong chuỗi thời gian
+  // Cực đại doanh thu trong chuỗi thời gian (có tính cả mức mục tiêu)
   const maxTimelineRevenue = useMemo(() => {
-    if (timelineData.length === 0) return 100000
-    const maxVal = Math.max(...timelineData.map((t) => t.revenue))
-    return maxVal > 0 ? maxVal : 100000
-  }, [timelineData])
+    const maxVal = timelineData.length > 0 ? Math.max(...timelineData.map((t) => t.revenue)) : 100000
+    const ceiling = showTargetLine ? Math.max(maxVal, targetRevenue) : maxVal
+    return ceiling > 0 ? ceiling * 1.15 : 100000
+  }, [timelineData, showTargetLine, targetRevenue])
+
+  // Thống kê số kỳ đạt mục tiêu KPI
+  const targetStats = useMemo(() => {
+    if (timelineData.length === 0) return { achievedCount: 0, total: 0, percentage: 0 }
+    const achieved = timelineData.filter((t) => t.revenue >= targetRevenue).length
+    const pct = Math.round((achieved / timelineData.length) * 100)
+    return {
+      achievedCount: achieved,
+      total: timelineData.length,
+      percentage: pct,
+    }
+  }, [timelineData, targetRevenue])
 
   // Tuyến có doanh thu cao nhất
   const topRoute = useMemo(() => {
     if (!revenueData?.revenueByRoute || revenueData.revenueByRoute.length === 0) return null
     return [...revenueData.revenueByRoute].sort((a, b) => b.revenue - a.revenue)[0]
   }, [revenueData])
+
+  // Tên tuyến đang chọn trong dropdown
+  const currentSelectedRouteName = useMemo(() => {
+    if (!selectedRouteId) return 'Tất cả các tuyến'
+    const found = routesList.find((r) => r.id === selectedRouteId)
+    return found ? `[${found.routeCode}] ${found.name}` : selectedRouteId
+  }, [selectedRouteId, routesList])
 
   // Xuất file CSV / Excel chuẩn UTF-8 BOM
   const handleExportCSV = () => {
@@ -291,8 +327,7 @@ export function AdminReports() {
       csv += `Thời gian xuất báo cáo:,"${new Date().toLocaleString('vi-VN')}"\n`
       csv += `Khoảng thời gian:,"${startDate} đến ${endDate} (${groupBy === 'day' ? 'Theo ngày' : groupBy === 'month' ? 'Theo tháng' : 'Theo năm'})"\n`
       if (selectedRouteId) {
-        const found = routesList.find((r) => r.id === selectedRouteId)
-        csv += `Lọc theo tuyến:,"[${found?.routeCode || ''}] ${found?.name || selectedRouteId}"\n`
+        csv += `Lọc theo tuyến:,"${currentSelectedRouteName}"\n`
       }
       if (selectedPaymentMethod) {
         csv += `Lọc theo kênh thanh toán:,"${selectedPaymentMethod.toUpperCase()}"\n`
@@ -313,9 +348,9 @@ export function AdminReports() {
 
       // 2. DOANH THU THEO THỜI GIAN
       csv += `--- II. DIỄN BIẾN DOANH THU THEO THỜI GIAN ---\n`
-      csv += `Thời kỳ (Kỳ),Doanh thu (VNĐ),Số vé bán ra,Số lượt đặt vé\n`
+      csv += `Thời kỳ (Kỳ),Doanh thu (VNĐ),Số vé bán ra,Số lượt đặt vé,Đạt mục tiêu (${formatVnd(targetRevenue)})\n`
       timelineData.forEach((t) => {
-        csv += `"${t.period}",${t.revenue},${t.ticketCount},${t.bookingCount}\n`
+        csv += `"${t.period}",${t.revenue},${t.ticketCount},${t.bookingCount},"${t.revenue >= targetRevenue ? 'ĐẠT' : 'CHƯA ĐẠT'}"\n`
       })
       csv += `\n`
 
@@ -369,12 +404,17 @@ export function AdminReports() {
     }
   }
 
+  // Kích hoạt In ấn trang chuẩn
+  const handleTriggerPrint = () => {
+    window.print()
+  }
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       {/* =========================================================================
           1. HEADER & BỘ LỌC TỔNG THỂ
       ========================================================================= */}
-      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm">
+      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
@@ -400,7 +440,7 @@ export function AdminReports() {
               type="button"
               onClick={loadReportsData}
               disabled={loading}
-              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors disabled:opacity-60 cursor-pointer"
               title="Làm mới dữ liệu từ CSDL"
             >
               <RefreshCw className={`size-3.5 text-emerald-600 dark:text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
@@ -410,7 +450,7 @@ export function AdminReports() {
             <button
               type="button"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors ${
+              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
                 showAdvancedFilters || selectedRouteId || selectedPaymentMethod
                   ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : 'border-border bg-card text-foreground hover:bg-accent'
@@ -423,13 +463,25 @@ export function AdminReports() {
               )}
             </button>
 
+            {/* NÚT IN BÁO CÁO / XEM TRƯỚC KHỔ A4 */}
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-xs sm:text-sm font-semibold text-foreground hover:bg-accent active:scale-95 transition-all cursor-pointer shadow-sm"
+              title="Xem trước mẫu in A4 & Xuất PDF"
+            >
+              <Printer className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <span>In Báo Cáo (A4 / PDF)</span>
+            </button>
+
+            {/* NÚT XUẤT CSV / EXCEL */}
             <button
               type="button"
               onClick={handleExportCSV}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer"
             >
               <Download className="size-4" />
-              <span>Xuất Báo Cáo Excel / CSV</span>
+              <span>Xuất Excel / CSV</span>
             </button>
           </div>
         </div>
@@ -455,7 +507,7 @@ export function AdminReports() {
                   key={preset.id}
                   type="button"
                   onClick={() => applyPreset(preset.id)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                     datePreset === preset.id
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -476,7 +528,7 @@ export function AdminReports() {
               <button
                 type="button"
                 onClick={() => setGroupBy('day')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                   groupBy === 'day' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -485,7 +537,7 @@ export function AdminReports() {
               <button
                 type="button"
                 onClick={() => setGroupBy('month')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                   groupBy === 'month' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -494,7 +546,7 @@ export function AdminReports() {
               <button
                 type="button"
                 onClick={() => setGroupBy('year')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                   groupBy === 'year' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -572,7 +624,7 @@ export function AdminReports() {
                   <button
                     type="button"
                     onClick={handleResetFilters}
-                    className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-muted/60 px-2.5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-muted/60 px-2.5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title="Đặt lại bộ lọc mặc định"
                   >
                     <RotateCcw className="size-3.5" />
@@ -694,6 +746,7 @@ export function AdminReports() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* =====================================================================
             BIỂU ĐỒ 1: THEO DÕI DOANH THU THEO NGÀY / THÁNG (LEFT 8 COLS)
+            (TÍCH HỢP ĐƯỜNG MỤC TIÊU KPI / THRESHOLD LINE)
         ===================================================================== */}
         <div className="lg:col-span-8 rounded-3xl border border-border bg-card p-6 shadow-sm flex flex-col justify-between">
           <div>
@@ -704,34 +757,109 @@ export function AdminReports() {
                   Diễn Biến Doanh Thu Theo {groupBy === 'day' ? 'Ngày' : groupBy === 'month' ? 'Tháng' : 'Năm'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Biểu đồ trực quan hóa doanh thu và biến động sản lượng vé qua thời gian
+                  Biểu đồ trực quan hóa doanh thu, so sánh mục tiêu KPI và biến động sản lượng vé
                 </p>
               </div>
 
-              {/* Chuyển đổi Cột vs Đường */}
-              <div className="flex rounded-xl border border-border bg-muted/40 p-1">
-                <button
-                  type="button"
-                  onClick={() => setChartMode('bar')}
-                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    chartMode === 'bar' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  title="Biểu đồ Cột"
-                >
-                  <BarChart3 className="size-3.5" />
-                  <span>Cột</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartMode('line')}
-                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    chartMode === 'line' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  title="Biểu đồ Đường mềm"
-                >
-                  <LineChart className="size-3.5" />
-                  <span>Đường</span>
-                </button>
+              {/* Điều khiển: Bật/Tắt Đường mục tiêu & Chuyển đổi Cột vs Đường */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Nút bật/tắt & Cấu hình Đường mục tiêu KPI */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowTargetConfig(!showTargetConfig)}
+                    className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      showTargetLine
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border-border bg-muted/40 text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Bật/Tắt & Điều chỉnh mức mục tiêu KPI"
+                  >
+                    <Target className="size-3.5" />
+                    <span>Mục tiêu: {formatVnd(targetRevenue)}</span>
+                  </button>
+
+                  {/* Popover điều chỉnh mức mục tiêu */}
+                  {showTargetConfig && (
+                    <div className="absolute right-0 top-9 z-30 w-64 rounded-2xl border border-border bg-card p-3 shadow-xl animate-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between pb-2 border-b border-border">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                          <Target className="size-3.5 text-amber-500" /> Cấu hình Mục tiêu KPI
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowTargetConfig(false)}
+                          className="rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                      <div className="mt-2.5 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Hiển thị đường mốc:</span>
+                          <input
+                            type="checkbox"
+                            checked={showTargetLine}
+                            onChange={(e) => setShowTargetLine(e.target.checked)}
+                            className="rounded cursor-pointer accent-amber-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Mức doanh thu mục tiêu (VNĐ):</label>
+                          <input
+                            type="number"
+                            step="5000"
+                            min="0"
+                            value={targetRevenue}
+                            onChange={(e) => setTargetRevenue(Number(e.target.value) || 0)}
+                            className="w-full rounded-xl border border-border bg-background p-1.5 font-mono text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex gap-1 pt-1">
+                          {[20000, 30000, 50000, 100000].map((quick) => (
+                            <button
+                              key={quick}
+                              type="button"
+                              onClick={() => {
+                                setTargetRevenue(quick)
+                                setShowTargetLine(true)
+                              }}
+                              className="rounded-lg bg-muted px-1.5 py-0.5 text-[10px] font-mono font-medium hover:bg-accent text-foreground cursor-pointer"
+                            >
+                              {quick / 1000}k
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chuyển đổi Cột vs Đường */}
+                <div className="flex rounded-xl border border-border bg-muted/40 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setChartMode('bar')}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      chartMode === 'bar' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Biểu đồ Cột"
+                  >
+                    <BarChart3 className="size-3.5" />
+                    <span>Cột</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMode('line')}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      chartMode === 'line' ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Biểu đồ Đường mềm"
+                  >
+                    <LineChart className="size-3.5" />
+                    <span>Đường</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -750,8 +878,17 @@ export function AdminReports() {
                   {/* Floating Tooltip khi hover */}
                   {hoveredTimelineIndex !== null && timelineData[hoveredTimelineIndex] && (
                     <div className="absolute top-0 right-4 z-20 rounded-2xl border border-emerald-500/30 bg-card/95 backdrop-blur-md p-3 shadow-xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                      <div className="text-xs font-mono text-muted-foreground">
-                        Kỳ: <span className="font-bold text-foreground">{timelineData[hoveredTimelineIndex].period}</span>
+                      <div className="flex items-center justify-between gap-3 text-xs font-mono text-muted-foreground">
+                        <span>Kỳ: <strong className="text-foreground">{timelineData[hoveredTimelineIndex].period}</strong></span>
+                        {showTargetLine && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            timelineData[hoveredTimelineIndex].revenue >= targetRevenue
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          }`}>
+                            {timelineData[hoveredTimelineIndex].revenue >= targetRevenue ? '✔ Đạt KPI' : 'Chưa đạt'}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 text-base font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
                         {formatVnd(timelineData[hoveredTimelineIndex].revenue)}
@@ -806,6 +943,36 @@ export function AdminReports() {
                           </g>
                         )
                       })}
+
+                      {/* ĐƯỜNG MỤC TIÊU KPI DOANH THU (BENCHMARK THRESHOLD LINE) */}
+                      {showTargetLine && targetRevenue > 0 && (
+                        (() => {
+                          const yTarget = 220 - (targetRevenue / maxTimelineRevenue) * 190
+                          const totalW = Math.max(600, timelineData.length * 60)
+                          return (
+                            <g className="transition-all duration-300">
+                              <line
+                                x1="0"
+                                y1={yTarget}
+                                x2={totalW}
+                                y2={yTarget}
+                                stroke="#F59E0B"
+                                strokeDasharray="6 4"
+                                strokeWidth="2"
+                                className="opacity-80"
+                              />
+                              <text
+                                x={totalW - 8}
+                                y={yTarget - 6}
+                                textAnchor="end"
+                                className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono font-bold select-none"
+                              >
+                                🎯 Mục tiêu: {formatVnd(targetRevenue)}
+                              </text>
+                            </g>
+                          )
+                        })()
+                      )}
 
                       {/* Đường đáy (Baseline) */}
                       <line
@@ -871,6 +1038,7 @@ export function AdminReports() {
                         const y = 220 - height
                         const barWidth = Math.min(36, Math.max(16, step * 0.55))
                         const isHovered = hoveredTimelineIndex === idx
+                        const isAchieved = showTargetLine && item.revenue >= targetRevenue
 
                         return (
                           <g
@@ -887,7 +1055,13 @@ export function AdminReports() {
                                 width={barWidth}
                                 height={height}
                                 rx="6"
-                                fill={isHovered ? '#059669' : 'url(#revenueGradientBar)'}
+                                fill={
+                                  isHovered
+                                    ? '#059669'
+                                    : isAchieved
+                                    ? 'url(#revenueGradientBar)'
+                                    : 'url(#revenueGradientBar)'
+                                }
                                 className={`transition-all duration-200 ${
                                   isHovered ? 'filter drop-shadow(0 4px 8px rgba(16, 185, 129, 0.4))' : ''
                                 }`}
@@ -900,10 +1074,21 @@ export function AdminReports() {
                               cy={y}
                               r={isHovered ? 6 : chartMode === 'line' ? 4 : 0}
                               fill="#FFFFFF"
-                              stroke="#10B981"
+                              stroke={isAchieved ? '#10B981' : '#10B981'}
                               strokeWidth={isHovered ? 3 : 2}
                               className="transition-all duration-150"
                             />
+
+                            {/* Dấu chấm chỉ báo Đạt mục tiêu (Target Indicator) */}
+                            {showTargetLine && (
+                              <circle
+                                cx={cx}
+                                cy={chartMode === 'bar' ? y - 6 : y - 10}
+                                r={isAchieved ? 3 : 2}
+                                fill={isAchieved ? '#10B981' : '#F59E0B'}
+                                className="opacity-80"
+                              />
+                            )}
 
                             {/* Nhãn trục X (Kỳ/Ngày) */}
                             <text
@@ -926,15 +1111,21 @@ export function AdminReports() {
             </div>
           </div>
 
-          {/* Footer thông tin thống kê tóm tắt */}
+          {/* Footer thông tin thống kê tóm tắt & Tỷ lệ đạt KPI */}
           <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <span>
-                Tổng số kỳ hiển thị: <strong className="text-foreground">{timelineData.length}</strong>
+                Tổng số kỳ: <strong className="text-foreground">{timelineData.length}</strong>
               </span>
               <span>
-                Doanh thu đỉnh (Peak): <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{formatVnd(maxTimelineRevenue)}</strong>
+                Đỉnh doanh thu (Peak): <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{formatVnd(Math.max(0, ...timelineData.map(t => t.revenue)))}</strong>
               </span>
+              {showTargetLine && (
+                <span className="flex items-center gap-1 font-mono">
+                  <Flag className="size-3 text-amber-500" />
+                  Đạt mục tiêu: <strong className="text-emerald-600 dark:text-emerald-400">{targetStats.achievedCount}/{targetStats.total} ({targetStats.percentage}%)</strong>
+                </span>
+              )}
             </div>
             <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
               ✓ Dữ liệu tổng hợp thời gian thực theo {groupBy === 'day' ? 'ngày' : groupBy === 'month' ? 'tháng' : 'năm'}
@@ -1174,7 +1365,7 @@ export function AdminReports() {
                 <button
                   type="button"
                   onClick={() => setDetailTab('timeline')}
-                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                     detailTab === 'timeline'
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -1185,7 +1376,7 @@ export function AdminReports() {
                 <button
                   type="button"
                   onClick={() => setDetailTab('trips')}
-                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                     detailTab === 'trips'
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -1207,11 +1398,13 @@ export function AdminReports() {
                       <th className="py-2.5 font-semibold text-right">Số vé bán</th>
                       <th className="py-2.5 font-semibold text-right">Số lượt đặt</th>
                       <th className="py-2.5 font-semibold text-right">Tỷ trọng</th>
+                      <th className="py-2.5 font-semibold text-center">Mục tiêu KPI</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {timelineData.map((item) => {
                       const share = kpiStats.totalRev > 0 ? Math.round((item.revenue / kpiStats.totalRev) * 100) : 0
+                      const isAchieved = item.revenue >= targetRevenue
                       return (
                         <tr key={item.period} className="hover:bg-accent/40 transition-colors">
                           <td className="py-2.5 font-mono font-medium text-foreground">
@@ -1228,6 +1421,16 @@ export function AdminReports() {
                           </td>
                           <td className="py-2.5 font-mono text-right font-semibold text-foreground">
                             {share}%
+                          </td>
+                          <td className="py-2.5 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isAchieved
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {isAchieved ? <CheckCheck className="size-3" /> : <Target className="size-3" />}
+                              {isAchieved ? 'Vượt chỉ tiêu' : 'Chưa đạt'}
+                            </span>
                           </td>
                         </tr>
                       )
@@ -1297,7 +1500,7 @@ export function AdminReports() {
             <button
               type="button"
               onClick={handleExportCSV}
-              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1"
+              className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
             >
               <Download className="size-3" /> Xuất bảng kê đầy đủ
             </button>
@@ -1308,7 +1511,7 @@ export function AdminReports() {
       {/* =========================================================================
           5. NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT TRAIL)
       ========================================================================= */}
-      <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm print:hidden">
         <div className="border-b border-border bg-muted/40 p-5 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-base text-foreground flex items-center gap-2">
@@ -1393,7 +1596,7 @@ export function AdminReports() {
                       <button
                         type="button"
                         onClick={() => setInspectingLog(log)}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
                         title="Xem chi tiết payload"
                       >
                         <Eye className="size-4 text-emerald-600 dark:text-emerald-400" />
@@ -1407,6 +1610,216 @@ export function AdminReports() {
         </div>
       </div>
 
+      {/* =========================================================================
+          6. MODAL XEM TRƯỚC VÀ IN BÁO CÁO KHỔ A4 (PRINT PREVIEW MODAL)
+      ========================================================================= */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-border p-4 bg-muted/40 print:hidden">
+              <div className="flex items-center gap-2">
+                <div className="flex size-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <FileText className="size-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">Xem Trước Báo Cáo Tài Chính (Khổ Giấy A4)</h3>
+                  <p className="text-[11px] text-muted-foreground">Định dạng tiêu chuẩn kế toán và lưu vết hành chính</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTriggerPrint}
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition-colors cursor-pointer"
+                >
+                  <Printer className="size-3.5" />
+                  <span>In / Lưu PDF Ngay</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="rounded-xl p-1.5 text-muted-foreground hover:bg-accent transition-colors cursor-pointer"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Nội dung khổ giấy A4 (Cuộn được trong modal) */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-white text-slate-900 font-sans print:p-0 print:m-0" id="printable-a4-sheet">
+              {/* Tiêu đề Quốc hiệu & Đơn vị chủ quản */}
+              <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">ĐẠI HỌC THÁI NGUYÊN</p>
+                  <p className="text-xs font-extrabold uppercase text-slate-900">TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG</p>
+                  <p className="text-[10px] italic text-slate-500">Trung tâm Quản trị Vận tải & Điều hành Xe Buýt Thông minh (Smart Bus ICTU)</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase text-slate-700">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                  <p className="text-[10px] font-semibold italic text-slate-600">Độc lập - Tự do - Hạnh phúc</p>
+                  <p className="text-[10px] text-slate-500 mt-1 font-mono">Số: {new Date().getFullYear()}/BC-TC-ICTU</p>
+                </div>
+              </div>
+
+              {/* Tên báo cáo */}
+              <div className="text-center my-6">
+                <h2 className="text-xl font-extrabold uppercase tracking-wide text-slate-900">
+                  BÁO CÁO TỔNG HỢP DOANH THU & HIỆU QUẢ TÀI CHÍNH
+                </h2>
+                <p className="text-xs italic text-slate-600 mt-1">
+                  Kỳ báo cáo: Từ ngày <strong>{startDate}</strong> đến ngày <strong>{endDate}</strong> ({groupBy === 'day' ? 'Tổng hợp theo ngày' : groupBy === 'month' ? 'Tổng hợp theo tháng' : 'Tổng hợp theo năm'})
+                </p>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  Phạm vi: {currentSelectedRouteName} | Cổng thanh toán: {selectedPaymentMethod ? selectedPaymentMethod.toUpperCase() : 'Tất cả'}
+                </p>
+              </div>
+
+              {/* Bảng 1: Chỉ tiêu tài chính chủ yếu */}
+              <div className="mb-6">
+                <h4 className="text-xs font-bold uppercase text-slate-900 mb-2 border-l-4 border-emerald-600 pl-2">
+                  I. BẢNG TỔNG HỢP CHỈ TIÊU TÀI CHÍNH CỐT LÕI
+                </h4>
+                <table className="w-full text-xs border border-slate-300">
+                  <thead className="bg-slate-100 text-slate-800">
+                    <tr>
+                      <th className="border border-slate-300 p-2 text-left">Chỉ tiêu tài chính / Vận hành</th>
+                      <th className="border border-slate-300 p-2 text-right">Giá trị thực hiện</th>
+                      <th className="border border-slate-300 p-2 text-left">Ghi chú kế toán</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">1. Tổng doanh thu bán vé thực nhận</td>
+                      <td className="border border-slate-300 p-2 text-right font-bold font-mono text-emerald-800">{formatVnd(kpiStats.totalRev)}</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">Đã thanh toán qua VNPAY/Tiền mặt</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">2. Tổng tiền trợ giá / Voucher HSSV</td>
+                      <td className="border border-slate-300 p-2 text-right font-mono text-amber-700">{formatVnd(kpiStats.totalDis)}</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">Chính sách ưu đãi sinh viên ICTU</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">3. Doanh thu thuần sau giảm trừ (Net)</td>
+                      <td className="border border-slate-300 p-2 text-right font-bold font-mono text-emerald-900">{formatVnd(kpiStats.netRev)}</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">Thực thu ngân sách vận tải</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">4. Tổng sản lượng vé xuất ra</td>
+                      <td className="border border-slate-300 p-2 text-right font-mono font-bold">{kpiStats.ticketsSold} vé</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">{kpiStats.paidBookings} giao dịch hợp lệ</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">5. Giá trị trung bình mỗi đơn (AOV)</td>
+                      <td className="border border-slate-300 p-2 text-right font-mono">{formatVnd(kpiStats.aov)}</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">Mức chi tiêu bình quân/hành khách</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">6. Doanh thu bình quân / Chuyến xe</td>
+                      <td className="border border-slate-300 p-2 text-right font-mono">{formatVnd(kpiStats.avgRevenuePerTrip)}</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">{kpiStats.totalTrips} chuyến xe khai thác</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-300 p-2 font-medium">7. Hệ số lấp đầy ghế bình quân</td>
+                      <td className="border border-slate-300 p-2 text-right font-mono font-bold">{kpiStats.occupancyRate}%</td>
+                      <td className="border border-slate-300 p-2 text-slate-600">Hệ số phụ tải khách/ghế toàn mạng</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bảng 2: Doanh thu theo tuyến */}
+              <div className="mb-6">
+                <h4 className="text-xs font-bold uppercase text-slate-900 mb-2 border-l-4 border-emerald-600 pl-2">
+                  II. PHÂN BỔ DOANH THU THEO TUYẾN ĐƯỜNG
+                </h4>
+                <table className="w-full text-xs border border-slate-300">
+                  <thead className="bg-slate-100 text-slate-800">
+                    <tr>
+                      <th className="border border-slate-300 p-2 text-center w-12">STT</th>
+                      <th className="border border-slate-300 p-2 text-left">Mã & Tên Tuyến Xe Buýt</th>
+                      <th className="border border-slate-300 p-2 text-right">Số vé bán</th>
+                      <th className="border border-slate-300 p-2 text-right">Doanh thu (VNĐ)</th>
+                      <th className="border border-slate-300 p-2 text-right">Tỷ trọng (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueData?.revenueByRoute?.map((r, idx) => (
+                      <tr key={r.routeCode}>
+                        <td className="border border-slate-300 p-2 text-center font-mono">{idx + 1}</td>
+                        <td className="border border-slate-300 p-2 font-medium">
+                          <strong>[{r.routeCode}]</strong> {r.name}
+                        </td>
+                        <td className="border border-slate-300 p-2 text-right font-mono">{r.ticketCount} vé</td>
+                        <td className="border border-slate-300 p-2 text-right font-bold font-mono">{formatVnd(r.revenue)}</td>
+                        <td className="border border-slate-300 p-2 text-right font-mono">{r.share ?? 0}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bảng 3: Diễn biến chuỗi thời gian */}
+              <div className="mb-8">
+                <h4 className="text-xs font-bold uppercase text-slate-900 mb-2 border-l-4 border-emerald-600 pl-2">
+                  III. CHI TIẾT DOANH THU THEO CHU KỲ ({timelineData.length} KỲ)
+                </h4>
+                <table className="w-full text-xs border border-slate-300">
+                  <thead className="bg-slate-100 text-slate-800">
+                    <tr>
+                      <th className="border border-slate-300 p-2 text-left">Kỳ thời gian</th>
+                      <th className="border border-slate-300 p-2 text-right">Doanh thu thực hiện</th>
+                      <th className="border border-slate-300 p-2 text-right">Số vé bán</th>
+                      <th className="border border-slate-300 p-2 text-right">Số đơn đặt</th>
+                      <th className="border border-slate-300 p-2 text-center">Đánh giá KPI ({formatVnd(targetRevenue)})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timelineData.map((item) => (
+                      <tr key={item.period}>
+                        <td className="border border-slate-300 p-2 font-mono">{item.period}</td>
+                        <td className="border border-slate-300 p-2 text-right font-bold font-mono">{formatVnd(item.revenue)}</td>
+                        <td className="border border-slate-300 p-2 text-right font-mono">{item.ticketCount} vé</td>
+                        <td className="border border-slate-300 p-2 text-right font-mono">{item.bookingCount} đơn</td>
+                        <td className="border border-slate-300 p-2 text-center font-semibold">
+                          {item.revenue >= targetRevenue ? '✔ Đạt chỉ tiêu' : 'Chưa đạt'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Phần chữ ký xác nhận 3 bên */}
+              <div className="grid grid-cols-3 gap-6 text-center text-xs mt-10 pt-4">
+                <div>
+                  <p className="font-bold uppercase text-slate-900">NGƯỜI LẬP BÁO CÁO</p>
+                  <p className="text-[10px] italic text-slate-500 mb-16">(Ký, ghi rõ họ tên)</p>
+                  <p className="font-semibold text-slate-800">Quản Trị Viên Hệ Thống</p>
+                </div>
+
+                <div>
+                  <p className="font-bold uppercase text-slate-900">KẾ TOÁN TRƯỞNG</p>
+                  <p className="text-[10px] italic text-slate-500 mb-16">(Ký, ghi rõ họ tên)</p>
+                  <p className="font-semibold text-slate-800">Ban Tài Chính - Kế Toán</p>
+                </div>
+
+                <div>
+                  <p className="font-bold uppercase text-slate-900">TRƯỞNG BAN ĐIỀU HÀNH</p>
+                  <p className="text-[10px] italic text-slate-500 mb-16">(Ký, đóng dấu)</p>
+                  <p className="font-semibold text-slate-800">Giám Đốc Trung Tâm Smart Bus</p>
+                </div>
+              </div>
+
+              <div className="mt-12 text-[10px] text-slate-400 text-center italic border-t border-slate-200 pt-3">
+                Báo cáo được trích xuất tự động từ Hệ thống Quản trị Bán vé & Điều hành Xe Buýt Thông minh Smart Bus ICTU lúc {new Date().toLocaleString('vi-VN')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Xem Chi Tiết Audit Log */}
       {inspectingLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -1419,7 +1832,7 @@ export function AdminReports() {
               <button
                 type="button"
                 onClick={() => setInspectingLog(null)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent transition-colors"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent transition-colors cursor-pointer"
               >
                 <X className="size-4" />
               </button>
@@ -1463,7 +1876,7 @@ export function AdminReports() {
               <button
                 type="button"
                 onClick={() => setInspectingLog(null)}
-                className="rounded-xl bg-muted px-4 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors"
+                className="rounded-xl bg-muted px-4 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors cursor-pointer"
               >
                 Đóng
               </button>
