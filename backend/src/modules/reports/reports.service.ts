@@ -7,6 +7,9 @@ import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { TicketStatus } from '../../common/constants/status.constant.js';
 import { RevenueReportQueryDto, ReportGroupBy } from './dto/revenue-query.dto.js';
 import { OccupancyReportQueryDto } from './dto/occupancy-query.dto.js';
+import type { Response } from 'express';
+import { buildRevenueExcelWorkbook, buildOccupancyExcelWorkbook } from './utils/report-excel.util.js';
+import { buildRevenuePdfDocument, buildOccupancyPdfDocument } from './utils/report-pdf.util.js';
 
 @Injectable()
 export class ReportsService {
@@ -634,5 +637,69 @@ export class ReportsService {
       recommendations,
       trips: processedTrips,
     };
+  }
+
+  /**
+   * Kết xuất Báo cáo Doanh thu dạng Excel (.xlsx) với stream response
+   */
+  async exportRevenueExcel(query: RevenueReportQueryDto, res: Response): Promise<void> {
+    const data = await this.getRevenueStats(query);
+    const workbook = await buildRevenueExcelWorkbook(data, query);
+    const filename = `BaoCao_DoanhThu_${query.startDate || 'all'}_${query.endDate || 'all'}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  /**
+   * Kết xuất Báo cáo Doanh thu dạng PDF (.pdf) với stream response
+   */
+  async exportRevenuePdf(query: RevenueReportQueryDto, res: Response): Promise<void> {
+    const data = await this.getRevenueStats(query);
+    const doc = buildRevenuePdfDocument(data, query);
+    const filename = `BaoCao_DoanhThu_${query.startDate || 'all'}_${query.endDate || 'all'}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    doc.pipe(res);
+    doc.end();
+  }
+
+  /**
+   * Kết xuất Báo cáo Tỷ lệ lấp đầy dạng Excel (.xlsx) với stream response
+   */
+  async exportOccupancyExcel(query: OccupancyReportQueryDto, res: Response): Promise<void> {
+    const data = await this.getOccupancyRate(query);
+    const workbook = await buildOccupancyExcelWorkbook(data, query);
+    const filename = `BaoCao_TyLeLapDay_${query.startDate || query.date || 'all'}_${query.endDate || query.date || 'all'}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  /**
+   * Kết xuất Báo cáo Tỷ lệ lấp đầy dạng PDF (.pdf) với stream response
+   */
+  async exportOccupancyPdf(query: OccupancyReportQueryDto, res: Response): Promise<void> {
+    const data = await this.getOccupancyRate(query);
+    const doc = buildOccupancyPdfDocument(data, query);
+    const filename = `BaoCao_TyLeLapDay_${query.startDate || query.date || 'all'}_${query.endDate || query.date || 'all'}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    doc.pipe(res);
+    doc.end();
   }
 }

@@ -426,6 +426,139 @@ class AnalyticsService {
     }
   }
 
+  /** Xuất Báo cáo Doanh thu ra file Excel (.xlsx) qua stream response */
+  async exportRevenueExcel(
+    query: RevenueReportQueryParams,
+  ): Promise<{ success: boolean; blob?: Blob; filename?: string; message?: string }> {
+    try {
+      const params = new URLSearchParams()
+      if (query.startDate) params.append('startDate', query.startDate)
+      if (query.endDate) params.append('endDate', query.endDate)
+      if (query.groupBy) params.append('groupBy', query.groupBy)
+      if (query.routeId) params.append('routeId', query.routeId)
+      if (query.tripId) params.append('tripId', query.tripId)
+      if (query.paymentMethod) params.append('paymentMethod', query.paymentMethod)
+
+      const res = await this.fetchWithAuth(
+        `${this.baseUrl}/reports/revenue/export/excel${params.toString() ? `?${params.toString()}` : ''}`,
+        { method: 'GET' },
+      )
+      if (!res.ok) {
+        return { success: false, message: 'Lỗi tải xuống báo cáo doanh thu Excel' }
+      }
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `BaoCao_DoanhThu_${query.startDate || 'all'}_${query.endDate || 'all'}.xlsx`
+      return { success: true, blob, filename }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Không thể kết nối đến máy chủ' }
+    }
+  }
+
+  /** Xuất Báo cáo Doanh thu ra file PDF (.pdf) qua stream response */
+  async exportRevenuePdf(
+    query: RevenueReportQueryParams,
+  ): Promise<{ success: boolean; blob?: Blob; filename?: string; message?: string }> {
+    try {
+      const params = new URLSearchParams()
+      if (query.startDate) params.append('startDate', query.startDate)
+      if (query.endDate) params.append('endDate', query.endDate)
+      if (query.groupBy) params.append('groupBy', query.groupBy)
+      if (query.routeId) params.append('routeId', query.routeId)
+      if (query.tripId) params.append('tripId', query.tripId)
+      if (query.paymentMethod) params.append('paymentMethod', query.paymentMethod)
+
+      const res = await this.fetchWithAuth(
+        `${this.baseUrl}/reports/revenue/export/pdf${params.toString() ? `?${params.toString()}` : ''}`,
+        { method: 'GET' },
+      )
+      if (!res.ok) {
+        return { success: false, message: 'Lỗi tải xuống báo cáo doanh thu PDF' }
+      }
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `BaoCao_DoanhThu_${query.startDate || 'all'}_${query.endDate || 'all'}.pdf`
+      return { success: true, blob, filename }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Không thể kết nối đến máy chủ' }
+    }
+  }
+
+  /** Xuất Báo cáo Tỷ lệ lấp đầy ra file Excel (.xlsx) qua stream response */
+  async exportOccupancyExcel(
+    query: OccupancyReportQueryParams,
+  ): Promise<{ success: boolean; blob?: Blob; filename?: string; message?: string }> {
+    try {
+      const params = new URLSearchParams()
+      if (query.startDate) params.append('startDate', query.startDate)
+      if (query.endDate) params.append('endDate', query.endDate)
+      if (query.date) params.append('date', query.date)
+      if (query.routeId) params.append('routeId', query.routeId)
+      if (query.tripId) params.append('tripId', query.tripId)
+      if (query.timeSlot) params.append('timeSlot', query.timeSlot)
+
+      const res = await this.fetchWithAuth(
+        `${this.baseUrl}/reports/occupancy-rate/export/excel${params.toString() ? `?${params.toString()}` : ''}`,
+        { method: 'GET' },
+      )
+      if (!res.ok) {
+        return { success: false, message: 'Lỗi tải xuống báo cáo phụ tải Excel' }
+      }
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `BaoCao_TyLeLapDay_${query.startDate || query.date || 'all'}.xlsx`
+      return { success: true, blob, filename }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Không thể kết nối đến máy chủ' }
+    }
+  }
+
+  /** Xuất Báo cáo Tỷ lệ lấp đầy ra file PDF (.pdf) qua stream response */
+  async exportOccupancyPdf(
+    query: OccupancyReportQueryParams,
+  ): Promise<{ success: boolean; blob?: Blob; filename?: string; message?: string }> {
+    try {
+      const params = new URLSearchParams()
+      if (query.startDate) params.append('startDate', query.startDate)
+      if (query.endDate) params.append('endDate', query.endDate)
+      if (query.date) params.append('date', query.date)
+      if (query.routeId) params.append('routeId', query.routeId)
+      if (query.tripId) params.append('tripId', query.tripId)
+      if (query.timeSlot) params.append('timeSlot', query.timeSlot)
+
+      const res = await this.fetchWithAuth(
+        `${this.baseUrl}/reports/occupancy-rate/export/pdf${params.toString() ? `?${params.toString()}` : ''}`,
+        { method: 'GET' },
+      )
+      if (!res.ok) {
+        return { success: false, message: 'Lỗi tải xuống báo cáo phụ tải PDF' }
+      }
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : `BaoCao_TyLeLapDay_${query.startDate || query.date || 'all'}.pdf`
+      return { success: true, blob, filename }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Không thể kết nối đến máy chủ' }
+    }
+  }
+
+  /** Kích hoạt trình duyệt tự động tải file từ Blob */
+  downloadBlob(blob: Blob, filename: string): void {
+    if (typeof window === 'undefined') return
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
   /** Lấy danh sách đội xe thực tế từ Supabase */
   async getVehicles(): Promise<{ success: boolean; data?: any[] }> {
     try {

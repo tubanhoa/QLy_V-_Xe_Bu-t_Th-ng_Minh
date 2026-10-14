@@ -34,6 +34,7 @@ import {
   CheckCheck,
   Flag,
   Flame,
+  Loader2,
 } from 'lucide-react'
 import {
   analyticsService,
@@ -107,6 +108,8 @@ export function AdminReports() {
 
   // ĐỀ XUẤT 2: MODAL XEM TRƯỚC IN ẤN / XUẤT PDF KHỔ A4 (PRINT PREVIEW)
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false)
+  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false)
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false)
 
   // Trạng thái hover trên biểu đồ xu hướng & biểu đồ tròn
   const [hoveredTimelineIndex, setHoveredTimelineIndex] = useState<number | null>(null)
@@ -332,6 +335,86 @@ export function AdminReports() {
     const found = routesList.find((r) => r.id === selectedRouteId)
     return found ? `[${found.routeCode}] ${found.name}` : selectedRouteId
   }, [selectedRouteId, routesList])
+
+  // Kết xuất Báo cáo ra file Excel (.xlsx) qua stream
+  const handleExportExcel = async () => {
+    try {
+      setIsExportingExcel(true)
+      if (activeMainTab === 'occupancy') {
+        const res = await analyticsService.exportOccupancyExcel({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          routeId: selectedRouteId || undefined,
+        })
+        if (res.success && res.blob) {
+          analyticsService.downloadBlob(res.blob, res.filename || `BaoCao_TyLeLapDay_${startDate}_den_${endDate}.xlsx`)
+          setDownloadSuccess('Đã kết xuất thành công tệp Excel Báo cáo Tỷ lệ lấp đầy (.xlsx)!')
+          setTimeout(() => setDownloadSuccess(null), 4000)
+        } else {
+          alert(res.message || 'Lỗi xuất Excel')
+        }
+      } else {
+        const res = await analyticsService.exportRevenueExcel({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          groupBy,
+          routeId: selectedRouteId || undefined,
+          paymentMethod: selectedPaymentMethod || undefined,
+        })
+        if (res.success && res.blob) {
+          analyticsService.downloadBlob(res.blob, res.filename || `BaoCao_DoanhThu_${startDate}_den_${endDate}.xlsx`)
+          setDownloadSuccess('Đã kết xuất thành công tệp Excel Báo cáo Doanh thu (.xlsx)!')
+          setTimeout(() => setDownloadSuccess(null), 4000)
+        } else {
+          alert(res.message || 'Lỗi xuất Excel')
+        }
+      }
+    } catch (err: any) {
+      alert(`Lỗi xuất Excel: ${err.message}`)
+    } finally {
+      setIsExportingExcel(false)
+    }
+  }
+
+  // Kết xuất Báo cáo ra file PDF (.pdf) chuẩn Ban Giám Đốc qua stream
+  const handleExportPdf = async () => {
+    try {
+      setIsExportingPdf(true)
+      if (activeMainTab === 'occupancy') {
+        const res = await analyticsService.exportOccupancyPdf({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          routeId: selectedRouteId || undefined,
+        })
+        if (res.success && res.blob) {
+          analyticsService.downloadBlob(res.blob, res.filename || `BaoCao_TyLeLapDay_${startDate}_den_${endDate}.pdf`)
+          setDownloadSuccess('Đã kết xuất thành công tệp PDF Báo cáo Tỷ lệ lấp đầy (.pdf)!')
+          setTimeout(() => setDownloadSuccess(null), 4000)
+        } else {
+          alert(res.message || 'Lỗi xuất PDF')
+        }
+      } else {
+        const res = await analyticsService.exportRevenuePdf({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          groupBy,
+          routeId: selectedRouteId || undefined,
+          paymentMethod: selectedPaymentMethod || undefined,
+        })
+        if (res.success && res.blob) {
+          analyticsService.downloadBlob(res.blob, res.filename || `BaoCao_DoanhThu_${startDate}_den_${endDate}.pdf`)
+          setDownloadSuccess('Đã kết xuất thành công tệp PDF Báo cáo Doanh thu (.pdf)!')
+          setTimeout(() => setDownloadSuccess(null), 4000)
+        } else {
+          alert(res.message || 'Lỗi xuất PDF')
+        }
+      }
+    } catch (err: any) {
+      alert(`Lỗi xuất PDF: ${err.message}`)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   // Xuất file CSV / Excel chuẩn UTF-8 BOM
   const handleExportCSV = () => {
@@ -604,25 +687,54 @@ export function AdminReports() {
             <button
               type="button"
               onClick={() => setShowPrintModal(true)}
-              className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-xs sm:text-sm font-semibold text-foreground hover:bg-accent active:scale-95 transition-all cursor-pointer shadow-sm"
-              title="Xem trước mẫu in A4 & Xuất PDF"
+              className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm font-semibold text-foreground hover:bg-accent active:scale-95 transition-all cursor-pointer shadow-sm"
+              title="Xem trước mẫu in A4 & Xuất PDF trình duyệt"
             >
               <Printer className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <span>In Báo Cáo (A4 / PDF)</span>
+              <span className="hidden sm:inline">In Báo Cáo (A4)</span>
             </button>
 
-            {/* NÚT XUẤT CSV / EXCEL */}
+            {/* NÚT XUẤT EXCEL (.xlsx) CHUYÊN NGHIỆP TRÌNH BAN GIÁM ĐỐC */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExportingExcel}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+              title="Xuất bảng tính Excel (.xlsx) với định dạng bảng biểu, KPIs và biểu đồ trình Ban Giám Đốc"
+            >
+              {isExportingExcel ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="size-4" />
+              )}
+              <span>{isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}</span>
+            </button>
+
+            {/* NÚT XUẤT PDF (.pdf) CHUẨN BAN GIÁM ĐỐC */}
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-rose-500/20 hover:from-rose-700 hover:to-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+              title="Xuất tài liệu PDF (.pdf) chèn logo nhà xe, tiêu đề trang trọng và tổng số trang trình Ban Giám Đốc"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+              <span>{isExportingPdf ? 'Đang xuất...' : 'Xuất PDF'}</span>
+            </button>
+
+            {/* NÚT XUẤT CSV DỮ LIỆU THÔ */}
             <button
               type="button"
               onClick={activeMainTab === 'occupancy' ? handleExportOccupancyCSV : handleExportCSV}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md active:scale-95 transition-all cursor-pointer ${
-                activeMainTab === 'occupancy'
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 shadow-amber-500/20 hover:from-amber-700 hover:to-orange-700'
-                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700'
-              }`}
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all cursor-pointer"
+              title="Xuất file CSV dữ liệu thô"
             >
-              <Download className="size-4" />
-              <span>{activeMainTab === 'occupancy' ? 'Xuất CSV Phụ Tải' : 'Xuất Excel / CSV'}</span>
+              <Download className="size-3.5" />
+              <span className="hidden md:inline">CSV</span>
             </button>
           </div>
         </div>
@@ -1670,6 +1782,10 @@ export function AdminReports() {
           selectedRouteId={selectedRouteId}
           onSelectRouteId={setSelectedRouteId}
           onExportCSV={handleExportOccupancyCSV}
+          onExportExcel={handleExportExcel}
+          onExportPDF={handleExportPdf}
+          isExportingExcel={isExportingExcel}
+          isExportingPdf={isExportingPdf}
         />
       )}
 
