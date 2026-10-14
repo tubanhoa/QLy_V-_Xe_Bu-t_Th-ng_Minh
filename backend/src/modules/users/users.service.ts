@@ -209,12 +209,26 @@ export class UsersService {
   async changeRole(id: string, dto: ChangeRoleDto) {
     const user = await this.findById(id);
 
-    const role = await this.roleRepository.findOne({
+    // Không cho phép giáng chức Quản trị viên cấp cao của hệ thống
+    if ((user.email === 'admin@smartbus.ictu.vn' || user.email === 'narukun2812@gmail.com') && dto.role !== Role.ADMIN) {
+      throw new BadRequestException('Không thể hạ vai trò của Quản trị viên cấp cao của hệ thống');
+    }
+
+    let role = await this.roleRepository.findOne({
       where: { name: dto.role },
     });
 
     if (!role) {
-      throw new BadRequestException(`Vai trò ${dto.role} không tồn tại`);
+      const validRoles = Object.values(Role);
+      if (validRoles.includes(dto.role)) {
+        role = this.roleRepository.create({
+          name: dto.role,
+          description: dto.role === Role.CONDUCTOR ? 'Phụ xe / Soát vé viên' : `Vai trò ${dto.role}`,
+        });
+        await this.roleRepository.save(role);
+      } else {
+        throw new BadRequestException(`Vai trò ${dto.role} không tồn tại`);
+      }
     }
 
     const previousRole = user.role?.name || 'unknown';
@@ -233,6 +247,12 @@ export class UsersService {
 
   async changeStatus(id: string, dto: ChangeStatusDto) {
     const user = await this.findById(id);
+
+    // Không cho phép khóa Quản trị viên cấp cao của hệ thống
+    if ((user.email === 'admin@smartbus.ictu.vn' || user.email === 'narukun2812@gmail.com') && dto.status === UserStatus.LOCKED) {
+      throw new BadRequestException('Không thể khóa tài khoản Quản trị viên cấp cao của hệ thống');
+    }
+
     await this.userRepository.update(id, { status: dto.status });
 
     this.auditService.log({

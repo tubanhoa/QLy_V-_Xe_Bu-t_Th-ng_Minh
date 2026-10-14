@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Res,
   UseGuards,
@@ -11,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
-import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/index.js';
+import { RegisterDto, LoginDto, RefreshTokenDto, ChangePasswordDto, UpdateProfileDto } from './dto/index.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
@@ -99,6 +100,32 @@ export class AuthController {
       res.clearCookie('refresh_token');
     }
     return this.authService.logout(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Đổi mật khẩu người dùng đang đăng nhập' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Mật khẩu cũ không chính xác' })
+  async changePassword(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @Patch('profile')
+  @ApiOperation({ summary: 'Cập nhật thông tin hồ sơ cá nhân' })
+  @ApiResponse({ status: 200, description: 'Cập nhật thông tin thành công' })
+  async updateProfile(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(userId, dto);
   }
 }
 

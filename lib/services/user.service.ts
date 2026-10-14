@@ -193,6 +193,7 @@ class UserService {
     phoneNumber?: string
     idCardNumber?: string
     faculty?: string
+    studentId?: string
   }): Promise<{ success: boolean; data?: BackendUser; message?: string }> {
     try {
       const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users`, {
@@ -201,7 +202,52 @@ class UserService {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
-        return { success: false, message: json?.message || 'Không thể cấp tài khoản mới' }
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return { success: false, message: errorMsg || 'Không thể cấp tài khoản mới' }
+      }
+      return { success: true, data: json?.data || json }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /** Lấy chi tiết tài khoản theo ID */
+  async getUserById(userId: string): Promise<{ success: boolean; data?: BackendUser; message?: string }> {
+    try {
+      const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users/${userId}`, {
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { success: false, message: json?.message || 'Không tìm thấy người dùng' }
+      }
+      return { success: true, data: json?.data || json }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /** Cập nhật thông tin tài khoản người dùng (Admin) */
+  async updateUser(
+    userId: string,
+    payload: {
+      fullName?: string
+      phoneNumber?: string
+      avatarUrl?: string
+      studentId?: string
+      faculty?: string
+      idCardNumber?: string
+    },
+  ): Promise<{ success: boolean; data?: BackendUser; message?: string }> {
+    try {
+      const res = await this.fetchWithAuth(`${this.baseUrl}/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return { success: false, message: errorMsg || 'Không thể cập nhật thông tin tài khoản' }
       }
       return { success: true, data: json?.data || json }
     } catch (e: any) {

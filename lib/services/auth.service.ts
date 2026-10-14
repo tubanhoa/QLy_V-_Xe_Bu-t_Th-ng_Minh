@@ -554,6 +554,98 @@ class AuthService {
       return null
     }
   }
+
+  /**
+   * Đổi mật khẩu tài khoản người dùng hiện tại
+   * Endpoint: POST /api/v1/auth/change-password
+   */
+  async changePassword(payload: {
+    oldPassword: string
+    newPassword: string
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const token = this.getToken()
+      if (!token) {
+        return { success: false, message: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' }
+      }
+
+      const res = await fetch(`${this.baseUrl}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return {
+          success: false,
+          message: errorMsg || 'Không thể đổi mật khẩu, vui lòng kiểm tra lại',
+        }
+      }
+
+      return {
+        success: true,
+        message: json?.message || 'Đổi mật khẩu thành công.',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Cập nhật thông tin hồ sơ cá nhân
+   * Endpoint: PATCH /api/v1/auth/profile
+   */
+  async updateProfile(payload: {
+    fullName?: string
+    phoneNumber?: string
+    avatarUrl?: string
+    studentId?: string
+    faculty?: string
+    idCardNumber?: string
+  }): Promise<{ success: boolean; data?: AuthUser; message?: string }> {
+    try {
+      const token = this.getToken()
+      if (!token) {
+        return { success: false, message: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' }
+      }
+
+      const res = await fetch(`${this.baseUrl}/auth/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return {
+          success: false,
+          message: errorMsg || 'Không thể cập nhật hồ sơ cá nhân',
+        }
+      }
+
+      const updatedUser = json?.data?.user || json?.data || json
+      if (updatedUser?.id) {
+        this.updateUserLocally(updatedUser)
+      }
+
+      return {
+        success: true,
+        data: updatedUser,
+        message: 'Cập nhật thông tin hồ sơ thành công',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
 }
 
 export const authService = new AuthService()
