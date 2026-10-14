@@ -32,11 +32,14 @@ import {
   ShieldAlert,
   FileText,
   Trash2,
+  Armchair,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
 import { userService, type BackendUser } from '@/lib/services/user.service'
 import { transitService } from '@/lib/services/transit.service'
+import { bookingService } from '@/lib/services/booking.service'
+import type { SeatMapData } from '@/lib/types/booking'
 import type { TransitRoute } from '@/lib/types/transit'
 import { GanttTimelineChart } from './dispatcher-gantt-chart'
 import { RosterGroupedView } from './dispatcher-roster-view'
@@ -77,16 +80,6 @@ export function DispatcherSchedule() {
     Array<{ id: string; type: 'success' | 'error' | 'warning' | 'info'; message: string }>
   >([])
 
-  // Hộp thoại xác nhận thay thế window.confirm
-  const [confirmDialog, setConfirmDialog] = useState<{
-    title: string
-    message: string
-    confirmText?: string
-    cancelText?: string
-    variant?: 'primary' | 'danger' | 'warning'
-    onConfirm: () => void
-  } | null>(null)
-
   const showToast = useCallback(
     (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
       const id = Math.random().toString(36).slice(2, 9)
@@ -101,6 +94,39 @@ export function DispatcherSchedule() {
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
+
+  // Modal Xem Sơ Đồ Ghế & Danh Sách Hành Khách Realtime của Chuyến Xe
+  const [viewingSeatMapTrip, setViewingSeatMapTrip] = useState<TripItem | null>(null)
+  const [seatMapData, setSeatMapData] = useState<SeatMapData | null>(null)
+  const [isLoadingSeatMap, setIsLoadingSeatMap] = useState(false)
+
+  const handleViewSeatMap = useCallback(async (trip: TripItem) => {
+    setViewingSeatMapTrip(trip)
+    setIsLoadingSeatMap(true)
+    setSeatMapData(null)
+    try {
+      const res = await bookingService.getSeatMap(trip.id)
+      if (res.success && res.data) {
+        setSeatMapData(res.data)
+      } else {
+        showToast(res.message || 'Không thể nạp sơ đồ ghế của chuyến này', 'warning')
+      }
+    } catch {
+      showToast('Lỗi kết nối khi nạp sơ đồ ghế', 'error')
+    } finally {
+      setIsLoadingSeatMap(false)
+    }
+  }, [showToast])
+
+  // Hộp thoại xác nhận thay thế window.confirm
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    confirmText?: string
+    cancelText?: string
+    variant?: 'primary' | 'danger' | 'warning'
+    onConfirm: () => void
+  } | null>(null)
 
   // Modal Tạo Chuyến Tăng Cường (Ad-hoc)
   const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false)
@@ -1388,11 +1414,19 @@ export function DispatcherSchedule() {
 
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Ghế khả dụng:</span>
-                      <span className="font-mono font-semibold text-emerald-600">
-                        {item.availableSeats !== undefined
-                          ? `${item.availableSeats} / ${item.totalSeats || item.vehicle?.seatCapacity || 28}`
-                          : '28 / 28 chỗ'}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleViewSeatMap(item)}
+                        className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
+                        title="Bấm để xem sơ đồ 28 ghế realtime & danh sách khách đã đặt"
+                      >
+                        <Armchair size={12} className="shrink-0" />
+                        <span>
+                          {item.availableSeats !== undefined
+                            ? `${item.availableSeats} / ${item.totalSeats || item.vehicle?.seatCapacity || 28} chỗ`
+                            : '28 / 28 chỗ'}
+                        </span>
+                      </button>
                     </div>
 
                     {!isAssigned && (
@@ -1406,13 +1440,22 @@ export function DispatcherSchedule() {
 
                 {/* FOOTER ACTIONS */}
                 <div className="mt-5 border-t border-border pt-4 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <button
                       type="button"
                       onClick={() => handleOpenDispatch(item)}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
                     >
-                      <Edit2 size={13} /> Điều xe & Phân tài xế
+                      <Edit2 size={13} /> Điều xe
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleViewSeatMap(item)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
+                      title="Xem sơ đồ ghế và danh sách khách của chuyến"
+                    >
+                      <Armchair size={13} /> Sơ đồ ghế
                     </button>
 
                     {(item.driverId || item.driver || item.conductorId || item.conductor) && (
@@ -2121,6 +2164,213 @@ export function DispatcherSchedule() {
                 }`}
               >
                 {confirmDialog.confirmText || 'Xác nhận'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: SƠ ĐỒ GHẾ & TÌNH TRẠNG ĐẶT CHỖ REALTIME (ADMIN SEAT MANIFEST)     */}
+      {/* ========================================================================= */}
+      {viewingSeatMapTrip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl rounded-3xl border border-border bg-card p-6 shadow-2xl max-h-[92vh] overflow-y-auto animate-in zoom-in-95">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <div>
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Armchair className="text-emerald-600" size={20} />
+                  Sơ Đồ Ghế & Tình Trạng Đặt Chỗ Realtime
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <strong>[{viewingSeatMapTrip.route?.routeCode || 'TUYẾN'}]</strong> {viewingSeatMapTrip.route?.name} • 
+                  Xe: <span className="font-mono font-semibold text-foreground">{viewingSeatMapTrip.vehicle?.licensePlate || 'Chưa gán xe'}</span> • 
+                  Xuất bến: <span className="font-mono font-semibold text-emerald-600">
+                    {viewingSeatMapTrip.departureTime
+                      ? new Date(viewingSeatMapTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                      : '---'}
+                  </span> ({viewingSeatMapTrip.departureTime ? new Date(viewingSeatMapTrip.departureTime).toLocaleDateString('vi-VN') : ''})
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingSeatMapTrip(null)}
+                className="rounded-xl p-2 text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Thống kê 3 chỉ số nhanh */}
+            <div className="grid grid-cols-4 gap-2.5 my-4">
+              <div className="rounded-2xl border border-border bg-muted/30 p-3 text-center">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Tổng ghế</span>
+                <p className="text-lg font-mono font-black text-foreground mt-0.5">
+                  {seatMapData?.totalSeats || viewingSeatMapTrip.totalSeats || 28}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">Còn trống</span>
+                <p className="text-lg font-mono font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {seatMapData?.availableCount ?? viewingSeatMapTrip.availableSeats ?? 28}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-center">
+                <span className="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase">Đã mua / Đặt vé</span>
+                <p className="text-lg font-mono font-black text-red-600 dark:text-red-400 mt-0.5">
+                  {seatMapData?.bookedCount ?? 0}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">Đang giữ chỗ</span>
+                <p className="text-lg font-mono font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                  {seatMapData?.holdingCount ?? 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Chú thích màu sắc */}
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs py-2 px-3 rounded-2xl bg-muted/40 border border-border mb-4">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="size-3 rounded-md bg-emerald-600" /> Còn trống
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="size-3 rounded-md bg-slate-700 text-white flex items-center justify-center text-[9px]">✕</span> Đã mua (Booked)
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="size-3 rounded-md bg-amber-500" /> Đang giữ chỗ (Holding)
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="size-3 rounded-md border-2 border-amber-500 bg-emerald-600" /> Ghế ưu tiên (Hàng 1)
+              </span>
+            </div>
+
+            {/* Khung sơ đồ xe buýt điện 28 chỗ */}
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="mx-auto max-w-[340px] rounded-3xl border-2 border-border bg-card p-5 shadow-inner">
+                <div className="text-center font-bold text-[11px] uppercase tracking-wider text-muted-foreground pb-2 border-b border-border mb-4 flex items-center justify-center gap-1.5">
+                  <Bus size={14} className="text-emerald-600" />
+                  <span>Khu vực Tài xế & Cửa lên xuống</span>
+                </div>
+
+                {isLoadingSeatMap ? (
+                  <div className="py-16 text-center text-xs text-muted-foreground">
+                    <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto mb-2" />
+                    Đang nạp sơ đồ ghế realtime từ Supabase Cloud...
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {Array.from({ length: 7 }, (_, rIdx) => {
+                      const rowNum = rIdx + 1
+                      const allSeats = seatMapData?.seats || []
+                      const rowSeats = allSeats.filter((s) => s.rowNumber === rowNum)
+
+                      const seatA = rowSeats.find((s) => s.columnLabel === 'A') || {
+                        seatNumber: `${rowNum}A`,
+                        isBooked: false,
+                        bookingStatus: 'available',
+                        seatType: rowNum === 1 ? 'priority' : 'regular',
+                      }
+                      const seatB = rowSeats.find((s) => s.columnLabel === 'B') || {
+                        seatNumber: `${rowNum}B`,
+                        isBooked: false,
+                        bookingStatus: 'available',
+                        seatType: rowNum === 1 ? 'priority' : 'regular',
+                      }
+                      const seatC = rowSeats.find((s) => s.columnLabel === 'C') || {
+                        seatNumber: `${rowNum}C`,
+                        isBooked: false,
+                        bookingStatus: 'available',
+                        seatType: rowNum === 1 ? 'priority' : 'regular',
+                      }
+                      const seatD = rowSeats.find((s) => s.columnLabel === 'D') || {
+                        seatNumber: `${rowNum}D`,
+                        isBooked: false,
+                        bookingStatus: 'available',
+                        seatType: rowNum === 1 ? 'priority' : 'regular',
+                      }
+
+                      const renderSeatBadge = (s: any) => {
+                        const isBooked = s.isBooked || s.bookingStatus === 'booked' || s.bookingStatus === 'paid'
+                        const isHolding = s.bookingStatus === 'holding'
+                        const isPriority = s.seatType === 'priority' || rowNum === 1
+
+                        let bgClass = 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        if (isBooked) {
+                          bgClass = 'bg-slate-700 text-slate-200 cursor-not-allowed shadow-none'
+                        } else if (isHolding) {
+                          bgClass = 'bg-amber-500 text-white'
+                        }
+
+                        const borderClass = isPriority && !isBooked ? 'border-2 border-amber-400' : ''
+
+                        return (
+                          <div
+                            key={s.seatNumber}
+                            className={`relative h-10 w-10 rounded-xl flex flex-col items-center justify-center font-mono text-xs font-bold shadow-sm transition-all select-none ${bgClass} ${borderClass}`}
+                            title={`Ghế ${s.seatNumber}${isBooked ? ' - ĐÃ BÁN' : isHolding ? ' - Đang giữ chỗ' : ' - Còn trống'}`}
+                          >
+                            <span>{s.seatNumber}</span>
+                            {isBooked && (
+                              <span className="text-[8px] font-sans text-slate-300 -mt-0.5">Đã mua</span>
+                            )}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div key={rowNum} className="flex items-center justify-between gap-1.5">
+                          {/* Dãy Trái: A, B */}
+                          <div className="flex items-center gap-1.5">
+                            {renderSeatBadge(seatA)}
+                            {renderSeatBadge(seatB)}
+                          </div>
+
+                          {/* Lối đi giữa */}
+                          <div className="text-[10px] font-mono font-bold text-muted-foreground px-2">
+                            H{rowNum}
+                          </div>
+
+                          {/* Dãy Phải: C, D */}
+                          <div className="flex items-center gap-1.5">
+                            {renderSeatBadge(seatC)}
+                            {renderSeatBadge(seatD)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground pt-3 border-t border-border mt-4">
+                  Đuôi xe buýt
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => handleViewSeatMap(viewingSeatMapTrip)}
+                disabled={isLoadingSeatMap}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isLoadingSeatMap ? 'animate-spin' : ''} />
+                <span>Làm mới tình trạng ghế realtime</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewingSeatMapTrip(null)}
+                className="rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                Đóng
               </button>
             </div>
           </div>

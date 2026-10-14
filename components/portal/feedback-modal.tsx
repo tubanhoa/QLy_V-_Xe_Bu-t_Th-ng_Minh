@@ -102,7 +102,13 @@ export function FeedbackModal({ tripId, tripName, onClose }: FeedbackModalProps)
         setSuccess(true)
         setTimeout(() => onClose(), 2000)
       } else {
-        setError(resJson?.message || 'Không thể gửi đánh giá. Vui lòng thử lại.')
+        if (res.status === 401) {
+          setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để gửi đánh giá chuyến đi.')
+        } else if (resJson?.message && (resJson.message.includes('foreign key') || resJson.message.includes('violates'))) {
+          setError('Thông tin chuyến xe hoặc tài khoản chưa đồng bộ. Vui lòng thử lại sau.')
+        } else {
+          setError(resJson?.message || 'Không thể gửi đánh giá. Vui lòng thử lại.')
+        }
       }
     } catch (err: any) {
       setSubmitting(false)

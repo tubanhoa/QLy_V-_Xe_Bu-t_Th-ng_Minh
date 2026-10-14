@@ -608,15 +608,15 @@ export function AdminStaff() {
       {/* Staff Table */}
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[1150px] text-left text-sm">
             <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
               <tr>
-                <th className="p-4 pl-6">Mã định danh</th>
+                <th className="p-4 pl-6 w-32 whitespace-nowrap">Mã định danh</th>
 
                 {/* Sắp xếp theo Tên */}
                 <th
                   onClick={() => handleSort('fullName')}
-                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-4 min-w-[220px] whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
                     <span>Họ và tên</span>
@@ -632,13 +632,13 @@ export function AdminStaff() {
                   </div>
                 </th>
 
-                <th className="p-4">Email / SĐT</th>
-                <th className="p-4">Phân loại</th>
+                <th className="p-4 min-w-[240px] whitespace-nowrap">Email / SĐT</th>
+                <th className="p-4 w-36 whitespace-nowrap">Phân loại</th>
 
                 {/* Sắp xếp theo Vai trò (Role) */}
                 <th
                   onClick={() => handleSort('role')}
-                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-4 w-44 whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
                     <span>Vai trò (Role)</span>
@@ -654,12 +654,12 @@ export function AdminStaff() {
                   </div>
                 </th>
 
-                <th className="p-4">Trạng thái</th>
+                <th className="p-4 w-32 whitespace-nowrap">Trạng thái</th>
 
                 {/* Sắp xếp theo Ngày tạo */}
                 <th
                   onClick={() => handleSort('createdAt')}
-                  className="p-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-4 w-28 whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
                     <span>Ngày tạo</span>
@@ -675,7 +675,7 @@ export function AdminStaff() {
                   </div>
                 </th>
 
-                <th className="p-4 pr-6 text-right">Thao tác</th>
+                <th className="p-4 pr-6 min-w-[250px] text-right whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -711,49 +711,52 @@ export function AdminStaff() {
                         isTest ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''
                       }`}
                     >
-                      <td className="p-4 pl-6 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <td className="p-4 pl-6 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {userCode}
                       </td>
-                      <td className="p-4">
-                        <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          {roleName === 'admin' && <ShieldAlert size={14} className="text-purple-600 shrink-0" />}
-                          {roleName === 'manager' && <UserCheck size={14} className="text-blue-600 shrink-0" />}
-                          {roleName === 'driver' && <Bus size={14} className="text-emerald-600 shrink-0" />}
-                          {roleName === 'passenger' && <GraduationCap size={14} className="text-slate-400 shrink-0" />}
-                          <span>{u.fullName}</span>
+                      <td className="p-4 min-w-[220px] whitespace-nowrap">
+                        <p className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          {roleName === 'admin' && <ShieldAlert size={15} className="text-purple-600 shrink-0" />}
+                          {roleName === 'manager' && <UserCheck size={15} className="text-blue-600 shrink-0" />}
+                          {roleName === 'driver' && <Bus size={15} className="text-emerald-600 shrink-0" />}
+                          {roleName === 'conductor' && <Users size={15} className="text-teal-600 shrink-0" />}
+                          {roleName === 'passenger' && <GraduationCap size={15} className="text-slate-400 shrink-0" />}
+                          <span className="truncate max-w-[260px]">{u.fullName}</span>
                         </p>
                         {u.faculty && (
-                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
                             Khoa: {u.faculty}
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-xs text-slate-500">
-                        <p className="flex items-center gap-1">
-                          <Mail size={12} /> {u.email}
+                      <td className="p-4 min-w-[240px] text-xs text-slate-500 whitespace-nowrap">
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <Mail size={13} className="text-slate-400 shrink-0" />
+                          <span>{u.email}</span>
                         </p>
                         {u.phoneNumber && (
-                          <p className="flex items-center gap-1 mt-0.5 font-mono">
-                            <Phone size={12} /> {u.phoneNumber}
+                          <p className="flex items-center gap-1.5 mt-1 font-mono text-slate-600 dark:text-slate-400">
+                            <Phone size={13} className="text-slate-400 shrink-0" />
+                            <span>{u.phoneNumber}</span>
                           </p>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 w-36 whitespace-nowrap">
                         {isTest ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/40">
-                            <AlertTriangle size={11} />
-                            Dữ liệu Test
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/40">
+                            <AlertTriangle size={12} className="text-amber-600 shrink-0" />
+                            <span>Dữ liệu Test</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
-                            <ShieldCheck size={11} className="text-emerald-600" />
-                            Chính thức
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
+                            <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
+                            <span>Chính thức</span>
                           </span>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 w-44 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
                             roleName === 'admin'
                               ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40'
                               : roleName === 'manager'
@@ -776,22 +779,22 @@ export function AdminStaff() {
                             : 'Hành khách / HSSV'}
                         </span>
                       </td>
-                      <td className="p-4 text-xs">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]">
-                          <span className="size-1.5 rounded-full bg-emerald-500" />
-                          Hoạt động
+                      <td className="p-4 w-32 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] border border-emerald-200/50 dark:border-emerald-800/40">
+                          <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>Hoạt động</span>
                         </span>
                       </td>
-                      <td className="p-4 text-xs text-slate-400 font-mono">
+                      <td className="p-4 w-28 text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '---'}
                       </td>
-                      <td className="p-4 pr-6 text-right">
-                        <div className="inline-flex items-center gap-2">
+                      <td className="p-4 pr-6 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-2">
                           <select
                             disabled={isUpdating}
                             value={roleName}
                             onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs disabled:opacity-50"
+                            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs disabled:opacity-50"
                           >
                             <option value="admin">Super Admin</option>
                             <option value="manager">Điều hành</option>
@@ -805,10 +808,10 @@ export function AdminStaff() {
                             <button
                               type="button"
                               onClick={() => handleOpenDriverActivity(u)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
                               title="Xem ca chạy & lịch sử soát vé của tài xế"
                             >
-                              <Activity size={13} />
+                              <Activity size={14} />
                               <span>Ca chạy & Soát vé</span>
                             </button>
                           )}
@@ -818,10 +821,10 @@ export function AdminStaff() {
                             <button
                               type="button"
                               onClick={() => setDeletingUser(u)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer shrink-0"
                               title="Xóa tài khoản này"
                             >
-                              <Trash2 size={15} />
+                              <Trash2 size={16} />
                             </button>
                           )}
                         </div>

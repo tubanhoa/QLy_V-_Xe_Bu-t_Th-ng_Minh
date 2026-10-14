@@ -36,6 +36,7 @@ import { verifyQrData } from '../../common/utils/qr-code.util.js';
 import { SeatLockService } from '../booking/seat-lock.service.js';
 import { NotificationCenterService } from '../notification/notification-center.service.js';
 import { FcmService } from '../notification/fcm.service.js';
+import { AuditService } from '../audit/audit.service.js';
 
 // Map DTO field names to actual DB column names
 const SORT_COLUMN_MAP: Record<string, string> = {
@@ -77,6 +78,8 @@ export class TripsService {
     private readonly notificationCenterService?: NotificationCenterService,
     @Optional()
     private readonly fcmService?: FcmService,
+    @Optional()
+    private readonly auditService?: AuditService,
   ) {}
 
   /**
@@ -171,8 +174,56 @@ export class TripsService {
     // Execute query
     const [items, totalItems] = await qb.getManyAndCount();
 
+    // Đồng bộ số ghế thực tế theo số vé đã bán trong CSDL
+    let enrichedItems = items as any[];
+    if (items.length > 0) {
+      const tripIds = items.map((t) => t.id);
+      const now = new Date();
+
+      try {
+        const rawBookedCounts = await this.ticketRepository
+          .createQueryBuilder('ticket')
+          .innerJoin('ticket.booking', 'booking')
+          .where('booking.tripId IN (:...tripIds)', { tripIds })
+          .andWhere('ticket.status NOT IN (:...excluded)', {
+            excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
+          })
+          .andWhere('(booking.status != :pendingStatus OR booking.expiresAt > :now)', {
+            pendingStatus: BookingStatus.PENDING,
+            now,
+          })
+          .select('booking.tripId', 'tripId')
+          .addSelect('COUNT(ticket.id)', 'bookedCount')
+          .groupBy('booking.tripId')
+          .getRawMany();
+
+        const bookedMap = new Map<string, number>();
+        rawBookedCounts.forEach((r) => bookedMap.set(r.tripId, parseInt(r.bookedCount, 10) || 0));
+
+        enrichedItems = items.map((trip) => {
+          const capacity = trip.vehicle?.seatCapacity || 28;
+          const bookedCount = bookedMap.get(trip.id) || 0;
+          const availableSeats = Math.max(0, capacity - bookedCount);
+          return {
+            ...trip,
+            totalSeats: capacity,
+            bookedSeats: bookedCount,
+            availableSeats,
+          };
+        });
+      } catch (err: any) {
+        // Fallback an toàn nếu có lỗi query vé
+        enrichedItems = items.map((trip) => ({
+          ...trip,
+          totalSeats: trip.vehicle?.seatCapacity || 28,
+          bookedSeats: 0,
+          availableSeats: trip.vehicle?.seatCapacity || 28,
+        }));
+      }
+    }
+
     return {
-      items,
+      items: enrichedItems,
       meta: {
         page,
         limit,
@@ -238,6 +289,15 @@ export class TripsService {
     }
 
     const savedTrips = await this.tripRepository.save(tripsToSave);
+
+    if (this.auditService) {
+      this.auditService.log({
+        action: 'GENERATE_SCHEDULE',
+        resourceName: 'trips',
+        changes: { routeCode: route.routeCode, routeName: route.name, date: dto.date, count: savedTrips.length },
+      }).catch(() => {});
+    }
+
     return {
       message: `Đã tự động sinh ${savedTrips.length} chuyến xe định kỳ (chờ phân công) cho ngày ${dto.date}`,
       count: savedTrips.length,
@@ -752,6 +812,22 @@ export class TripsService {
       } catch (err: any) {
         this.logger.warn(`Lỗi gửi thông báo phân công chuyến xe: ${err.message}`);
       }
+    }
+
+    if (this.auditService) {
+      this.auditService.log({
+        action: 'DISPATCH_TRIP',
+        resourceName: 'trips',
+        resourceId: updatedTrip.id,
+        changes: {
+          routeCode: updatedTrip.route?.routeCode,
+          routeName: updatedTrip.route?.name,
+          licensePlate: updatedTrip.vehicle?.licensePlate || 'Chưa gán xe',
+          driverName: updatedTrip.driver?.fullName || 'Chưa gán tài xế',
+          conductorName: updatedTrip.conductor?.fullName || 'Chưa gán phụ xe',
+          departureTime: updatedTrip.departureTime,
+        },
+      }).catch(() => {});
     }
 
     return updatedTrip;
