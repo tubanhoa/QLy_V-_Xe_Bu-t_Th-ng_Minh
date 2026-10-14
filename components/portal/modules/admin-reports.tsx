@@ -33,6 +33,7 @@ import {
   FileText,
   CheckCheck,
   Flag,
+  Flame,
 } from 'lucide-react'
 import {
   analyticsService,
@@ -44,9 +45,11 @@ import {
   type RevenueTripItem,
   type OccupancyTripItem,
   type ActivityLogItem,
+  type OccupancyReportResponse,
 } from '@/lib/services/analytics.service'
 import { transitService } from '@/lib/services/transit.service'
 import type { TransitRoute } from '@/lib/types/transit'
+import { AdminOccupancyDashboard } from './admin-occupancy-dashboard'
 
 // Định dạng tiền tệ VNĐ chuẩn xác
 function formatVnd(num?: number | null): string {
@@ -67,8 +70,12 @@ const ROUTE_PALETTE = [
 ]
 
 export function AdminReports() {
+  // Tab điều hướng chính cấp cao
+  const [activeMainTab, setActiveMainTab] = useState<'revenue' | 'occupancy' | 'audit'>('revenue')
+
   // Dữ liệu API
   const [revenueData, setRevenueData] = useState<RevenueStatsResponse | null>(null)
+  const [occupancyReport, setOccupancyReport] = useState<OccupancyReportResponse | null>(null)
   const [occupancyData, setOccupancyData] = useState<{
     trips: OccupancyTripItem[]
     overallRate: number
@@ -175,9 +182,15 @@ export function AdminReports() {
         paymentMethod: selectedPaymentMethod || undefined,
       }
 
+      const occParams = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        routeId: selectedRouteId || undefined,
+      }
+
       const [revRes, occRes, auditRes] = await Promise.all([
         analyticsService.getRevenueStats(queryParams),
-        analyticsService.getOccupancyStats(),
+        analyticsService.getOccupancyStats(occParams),
         analyticsService.getAuditLogs(),
       ])
 
@@ -188,9 +201,10 @@ export function AdminReports() {
       }
 
       if (occRes.success && occRes.data) {
+        setOccupancyReport(occRes.data)
         setOccupancyData({
-          trips: occRes.data,
-          overallRate: occRes.overallRate || 0,
+          trips: occRes.data.trips || occRes.trips || [],
+          overallRate: occRes.data.overallOccupancyPercentage || occRes.overallRate || 0,
         })
       }
 
@@ -404,6 +418,42 @@ export function AdminReports() {
     }
   }
 
+  // Xuất file CSV cho Báo Cáo Tỷ Lệ Lấp Đầy & Tối Ưu Xe
+  const handleExportOccupancyCSV = () => {
+    try {
+      const trips = occupancyReport?.trips || occupancyData.trips || []
+      let csv = '\uFEFF' // UTF-8 BOM
+      csv += `BÁO CÁO PHÂN TÍCH TỶ LỆ LẤP ĐẦY & ĐỀ XUẤT ĐIỀU PHỐI ĐỘI XE ICTU\n`
+      csv += `Thời điểm xuất báo cáo,${new Date().toLocaleString('vi-VN')}\n`
+      csv += `Kỳ thống kê,${startDate} đến ${endDate}\n`
+      csv += `Hệ số lấp đầy bình quân toàn mạng,${occupancyReport?.overallOccupancyPercentage ?? occupancyData.overallRate}%\n`
+      csv += `Tổng số chuyến khai thác,${trips.length}\n`
+      csv += `Chuyến xe quá tải (>85%),${occupancyReport?.summary?.overloadedTripsCount || 0}\n`
+      csv += `Chuyến xe rỗng khách (<30%),${occupancyReport?.summary?.underutilizedTripsCount || 0}\n\n`
+
+      csv += `--- DANH SÁCH CHI TIẾT TỪNG CHUYẾN XE ---\n`
+      csv += `Mã chuyến,Thời gian khởi hành,Tuyến đường,Biển số xe,Sức chứa,Vé đã bán,Tỷ lệ lấp đầy (%),Đánh giá phụ tải\n`
+      trips.forEach((tr) => {
+        csv += `"${tr.tripId}","${new Date(tr.departureTime).toLocaleString('vi-VN')}","${tr.routeCode || ''} ${tr.routeName}","${tr.vehiclePlate || 'Xe ICTU'}",${tr.capacity},${tr.booked},${tr.rate ?? tr.occupancyPercentage ?? 0}%,"${tr.statusText || ''}"\n`
+      })
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `BaoCao_TyLeLapDay_ICTU_${startDate}_den_${endDate}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      setDownloadSuccess('Đã xuất thành công báo cáo Tỷ lệ lấp đầy & Tối ưu xe Excel / CSV (UTF-8 BOM)!')
+      setTimeout(() => setDownloadSuccess(null), 4000)
+    } catch (err: any) {
+      alert(`Lỗi xuất tệp phụ tải: ${err.message}`)
+    }
+  }
+
   // Kích hoạt In ấn trang chuẩn
   const handleTriggerPrint = () => {
     window.print()
@@ -412,24 +462,111 @@ export function AdminReports() {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       {/* =========================================================================
+          TOP LEVEL REPORT MODULE TABS (DOANH THU vs PHỤ TẢI vs KIỂM TOÁN)
+      ========================================================================= */}
+      <div className="flex border-b border-border/70 pb-3 gap-2 overflow-x-auto print:hidden">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('revenue')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer ${
+            activeMainTab === 'revenue'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+              : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <BarChart3 className="size-4" />
+          <span>Doanh Thu & Tài Chính</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('occupancy')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer ${
+            activeMainTab === 'occupancy'
+              ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/20'
+              : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <Flame className="size-4" />
+          <span>Tỷ Lệ Lấp Đầy & Tối Ưu Xe</span>
+          {occupancyReport?.summary?.overloadedTripsCount ? (
+            <span className="rounded-full bg-rose-500 text-white px-2 py-0.2 text-[10px] font-mono font-bold animate-pulse">
+              {occupancyReport.summary.overloadedTripsCount} quá tải
+            </span>
+          ) : (
+            <span className="rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.2 text-[10px] font-mono font-bold">
+              {occupancyReport?.overallOccupancyPercentage ?? occupancyData.overallRate}%
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('audit')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer ${
+            activeMainTab === 'audit'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <ShieldCheck className="size-4" />
+          <span>Nhật Ký Kiểm Toán (Audit Trail)</span>
+          <span className="rounded-full bg-muted px-1.5 py-0.2 text-[10px] font-mono font-bold">
+            {auditLogs.length}
+          </span>
+        </button>
+      </div>
+
+      {/* =========================================================================
           1. HEADER & BỘ LỌC TỔNG THỂ
       ========================================================================= */}
       <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <FileBarChart2 className="size-5" />
+              <div
+                className={`flex size-10 items-center justify-center rounded-2xl ${
+                  activeMainTab === 'revenue'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : activeMainTab === 'occupancy'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                }`}
+              >
+                {activeMainTab === 'revenue' ? (
+                  <FileBarChart2 className="size-5" />
+                ) : activeMainTab === 'occupancy' ? (
+                  <Flame className="size-5" />
+                ) : (
+                  <ShieldCheck className="size-5" />
+                )}
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                  Báo Cáo Doanh Thu & Hiệu Quả Tài Chính
-                  <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    SQL Aggregation v2
+                  {activeMainTab === 'revenue' && 'Báo Cáo Doanh Thu & Hiệu Quả Tài Chính'}
+                  {activeMainTab === 'occupancy' && 'Báo Cáo Tỷ Lệ Lấp Đầy & Điều Phối Xe'}
+                  {activeMainTab === 'audit' && 'Nhật Ký Lưu Vết & Kiểm Toán Hệ Thống'}
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${
+                      activeMainTab === 'revenue'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : activeMainTab === 'occupancy'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+                    }`}
+                  >
+                    {activeMainTab === 'revenue' && 'SQL Aggregation v2'}
+                    {activeMainTab === 'occupancy' && 'Heatmap & Fleet Optimization'}
+                    {activeMainTab === 'audit' && 'Audit Trail Realtime'}
                   </span>
                 </h1>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                  Phân tích dòng tiền bán vé, hiệu suất khai thác tuyến và theo dõi tài chính thời gian thực
+                  {activeMainTab === 'revenue' &&
+                    'Phân tích dòng tiền bán vé, hiệu suất khai thác tuyến và theo dõi tài chính thời gian thực'}
+                  {activeMainTab === 'occupancy' &&
+                    'Phân tích mật độ hành khách cao điểm/thấp điểm, ma trận nhiệt và đề xuất điều chỉnh quy mô xe'}
+                  {activeMainTab === 'audit' &&
+                    'Toàn bộ thao tác phê duyệt, phân lịch điều hành xe, hoàn tiền vé và lưu vết tài chính'}
                 </p>
               </div>
             </div>
@@ -443,7 +580,7 @@ export function AdminReports() {
               className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors disabled:opacity-60 cursor-pointer"
               title="Làm mới dữ liệu từ CSDL"
             >
-              <RefreshCw className={`size-3.5 text-emerald-600 dark:text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`size-3.5 ${activeMainTab === 'occupancy' ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'} ${loading ? 'animate-spin' : ''}`} />
               <span>{loading ? 'Đang tải...' : 'Làm mới'}</span>
             </button>
 
@@ -477,11 +614,15 @@ export function AdminReports() {
             {/* NÚT XUẤT CSV / EXCEL */}
             <button
               type="button"
-              onClick={handleExportCSV}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer"
+              onClick={activeMainTab === 'occupancy' ? handleExportOccupancyCSV : handleExportCSV}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md active:scale-95 transition-all cursor-pointer ${
+                activeMainTab === 'occupancy'
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 shadow-amber-500/20 hover:from-amber-700 hover:to-orange-700'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700'
+              }`}
             >
               <Download className="size-4" />
-              <span>Xuất Excel / CSV</span>
+              <span>{activeMainTab === 'occupancy' ? 'Xuất CSV Phụ Tải' : 'Xuất Excel / CSV'}</span>
             </button>
           </div>
         </div>
@@ -652,9 +793,14 @@ export function AdminReports() {
       )}
 
       {/* =========================================================================
-          2. CARDS KPI TỔNG QUAN (4 CARDS CAO CẤP)
+          MODULE BÁO CÁO DOANH THU & HIỆU QUẢ TÀI CHÍNH
       ========================================================================= */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {activeMainTab === 'revenue' && (
+        <>
+          {/* =====================================================================
+              2. CARDS KPI TỔNG QUAN (4 CARDS CAO CẤP)
+          ===================================================================== */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Tổng doanh thu */}
         <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-card to-emerald-500/5 p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
@@ -1507,108 +1653,129 @@ export function AdminReports() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* =========================================================================
+          MODULE PHÂN TÍCH TỶ LỆ LẤP ĐẦY & ĐỀ XUẤT ĐIỀU PHỐI ĐỘI XE (OCCUPANCY DASHBOARD)
+      ========================================================================= */}
+      {activeMainTab === 'occupancy' && (
+        <AdminOccupancyDashboard
+          data={occupancyReport}
+          loading={loading}
+          onRefresh={loadReportsData}
+          startDate={startDate}
+          endDate={endDate}
+          routesList={routesList}
+          selectedRouteId={selectedRouteId}
+          onSelectRouteId={setSelectedRouteId}
+          onExportCSV={handleExportOccupancyCSV}
+        />
+      )}
 
       {/* =========================================================================
           5. NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT TRAIL)
       ========================================================================= */}
-      <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm print:hidden">
-        <div className="border-b border-border bg-muted/40 p-5 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-              <ShieldCheck className="size-5 text-emerald-500" />
-              Nhật ký Lưu vết Thao tác & Kiểm toán Hệ thống (Audit Trail)
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Toàn bộ thao tác phê duyệt, phân lịch điều hành xe, hoàn tiền vé và lưu vết tài chính
-            </p>
-          </div>
-
-          {/* Bộ lọc cho bảng Audit Table */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search className="size-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchLog}
-                onChange={(e) => setSearchLog(e.target.value)}
-                placeholder="Tìm mã log, thao tác, IP..."
-                className="h-9 w-48 sm:w-60 rounded-xl border border-border bg-card pl-8 pr-3 text-xs text-foreground focus:outline-none focus:border-emerald-500"
-              />
+      {activeMainTab === 'audit' && (
+        <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm print:hidden">
+          <div className="border-b border-border bg-muted/40 p-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                <ShieldCheck className="size-5 text-emerald-500" />
+                Nhật ký Lưu vết Thao tác & Kiểm toán Hệ thống (Audit Trail)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Toàn bộ thao tác phê duyệt, phân lịch điều hành xe, hoàn tiền vé và lưu vết tài chính
+              </p>
             </div>
 
-            <select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              className="h-9 rounded-xl border border-border bg-card px-3 text-xs text-foreground focus:outline-none focus:border-emerald-500 cursor-pointer"
-            >
-              <option value="all">Tất cả hành động ({auditLogs.length})</option>
-              {uniqueActions.map((act) => (
-                <option key={act} value={act}>
-                  {act}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+            {/* Bộ lọc cho bảng Audit Table */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Search className="size-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchLog}
+                  onChange={(e) => setSearchLog(e.target.value)}
+                  placeholder="Tìm mã log, thao tác, IP..."
+                  className="h-9 w-48 sm:w-60 rounded-xl border border-border bg-card pl-8 pr-3 text-xs text-foreground focus:outline-none focus:border-emerald-500"
+                />
+              </div>
 
-        {/* Bảng Audit Log */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-muted/30 text-muted-foreground border-b border-border">
-              <tr>
-                <th className="p-3.5 font-semibold">Thời điểm</th>
-                <th className="p-3.5 font-semibold">Hành động</th>
-                <th className="p-3.5 font-semibold">Người thực hiện</th>
-                <th className="p-3.5 font-semibold">Tài nguyên tác động</th>
-                <th className="p-3.5 font-semibold">Địa chỉ IP</th>
-                <th className="p-3.5 font-semibold text-center">Chi tiết</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredLogs.length === 0 ? (
+              <select
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                className="h-9 rounded-xl border border-border bg-card px-3 text-xs text-foreground focus:outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="all">Tất cả hành động ({auditLogs.length})</option>
+                {uniqueActions.map((act) => (
+                  <option key={act} value={act}>
+                    {act}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Bảng Audit Log */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-muted/30 text-muted-foreground border-b border-border">
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                    Không tìm thấy nhật ký kiểm toán phù hợp với bộ lọc.
-                  </td>
+                  <th className="p-3.5 font-semibold">Thời điểm</th>
+                  <th className="p-3.5 font-semibold">Hành động</th>
+                  <th className="p-3.5 font-semibold">Người thực hiện</th>
+                  <th className="p-3.5 font-semibold">Tài nguyên tác động</th>
+                  <th className="p-3.5 font-semibold">Địa chỉ IP</th>
+                  <th className="p-3.5 font-semibold text-center">Chi tiết</th>
                 </tr>
-              ) : (
-                filteredLogs.slice(0, 15).map((log) => (
-                  <tr key={log.id} className="hover:bg-accent/40 transition-colors">
-                    <td className="p-3.5 font-mono text-muted-foreground whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="p-3.5 font-semibold text-foreground whitespace-nowrap">
-                      <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <div className="font-semibold text-foreground">{log.user?.fullName || 'Hệ thống'}</div>
-                      <div className="text-[11px] text-muted-foreground">{log.user?.email || 'System daemon'}</div>
-                    </td>
-                    <td className="p-3.5 text-foreground max-w-[200px] truncate" title={log.resourceName}>
-                      {log.resourceName}
-                    </td>
-                    <td className="p-3.5 font-mono text-muted-foreground">
-                      {log.ipAddress || '127.0.0.1'}
-                    </td>
-                    <td className="p-3.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setInspectingLog(log)}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
-                        title="Xem chi tiết payload"
-                      >
-                        <Eye className="size-4 text-emerald-600 dark:text-emerald-400" />
-                      </button>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                      Không tìm thấy nhật ký kiểm toán phù hợp với bộ lọc.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredLogs.slice(0, 15).map((log) => (
+                    <tr key={log.id} className="hover:bg-accent/40 transition-colors">
+                      <td className="p-3.5 font-mono text-muted-foreground whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="p-3.5 font-semibold text-foreground whitespace-nowrap">
+                        <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="font-semibold text-foreground">{log.user?.fullName || 'Hệ thống'}</div>
+                        <div className="text-[11px] text-muted-foreground">{log.user?.email || 'System daemon'}</div>
+                      </td>
+                      <td className="p-3.5 text-foreground max-w-[200px] truncate" title={log.resourceName}>
+                        {log.resourceName}
+                      </td>
+                      <td className="p-3.5 font-mono text-muted-foreground">
+                        {log.ipAddress || '127.0.0.1'}
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setInspectingLog(log)}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                          title="Xem chi tiết payload"
+                        >
+                          <Eye className="size-4 text-emerald-600 dark:text-emerald-400" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* =========================================================================
           6. MODAL XEM TRƯỚC VÀ IN BÁO CÁO KHỔ A4 (PRINT PREVIEW MODAL)
