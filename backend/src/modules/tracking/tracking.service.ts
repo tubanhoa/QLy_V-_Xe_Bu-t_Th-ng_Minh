@@ -49,7 +49,9 @@ interface SimulatorState {
   totalSteps: number;
   waypoints: Array<{ latitude: number; longitude: number; heading: number }>;
   isRunning: boolean;
+  speedMultiplier: number;
   speedKmh: number;
+  tickIntervalMs: number;
   currentLat: number;
   currentLng: number;
 }
@@ -637,11 +639,53 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   async startSimulator(tripId: string, speedMultiplier = 1) {
     if (this.simulatorMap.has(tripId)) {
       const existing = this.simulatorMap.get(tripId)!;
+      // Cập nhật tốc độ tức thời cho simulator đang chạy, giữ nguyên vị trí hiện tại
+      const speedKmh = 35 * Math.min(10, Math.max(0.5, speedMultiplier));
+      const tickIntervalMs = Math.max(200, Math.round(2000 / Math.max(0.5, speedMultiplier)));
+
+      existing.speedMultiplier = speedMultiplier;
+      existing.speedKmh = speedKmh;
+      existing.tickIntervalMs = tickIntervalMs;
+
+      if (existing.interval) {
+        clearInterval(existing.interval);
+      }
+
+      existing.interval = setInterval(async () => {
+        existing.currentStep++;
+        if (existing.currentStep >= existing.totalSteps) {
+          // Đến trạm cuối -> lặp lại từ đầu
+          existing.currentStep = 0;
+          await this.cacheDel(`tracking:trip:${tripId}:stations_passed`);
+        }
+
+        const wp = existing.waypoints[existing.currentStep];
+        existing.currentLat = wp.latitude;
+        existing.currentLng = wp.longitude;
+
+        try {
+          await this.recordLocation({
+            tripId,
+            latitude: wp.latitude,
+            longitude: wp.longitude,
+            speedKmh: existing.speedKmh,
+            headingDegrees: wp.heading,
+            batteryPercent: Math.max(20, 95 - Math.round((existing.currentStep / existing.totalSteps) * 20)),
+            isSimulated: true,
+          });
+        } catch (err: any) {
+          this.logger.error(`Error in simulation step for trip ${tripId}: ${err.message}`);
+        }
+      }, tickIntervalMs);
+
       return {
         success: true,
-        message: 'Mô phỏng xe buýt đã đang chạy cho chuyến này',
+        message: `Đã cập nhật tốc độ mô phỏng xe buýt lên ${speedMultiplier}x cho chuyến xe ${tripId}`,
         tripId,
         isRunning: true,
+        speedMultiplier,
+        speedKmh,
+        intervalMs: tickIntervalMs,
         progressPercent: Math.round((existing.currentStep / existing.totalSteps) * 100),
       };
     }
@@ -708,8 +752,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       heading: waypoints[waypoints.length - 1]?.heading || 0,
     });
 
-    const speedKmh = 35 * Math.min(3, Math.max(0.5, speedMultiplier));
-    const tickIntervalMs = Math.max(500, Math.round(2000 / Math.max(0.5, speedMultiplier)));
+    const speedKmh = 35 * Math.min(10, Math.max(0.5, speedMultiplier));
+    const tickIntervalMs = Math.max(200, Math.round(2000 / Math.max(0.5, speedMultiplier)));
 
     const state: SimulatorState = {
       interval: null as any,
@@ -717,7 +761,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       totalSteps: waypoints.length,
       waypoints,
       isRunning: true,
+      speedMultiplier,
       speedKmh,
+      tickIntervalMs,
       currentLat: waypoints[0].latitude,
       currentLng: waypoints[0].longitude,
     };
@@ -767,6 +813,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       message: `Đã khởi chạy mô phỏng di chuyển xe buýt cho chuyến xe ${tripId}`,
       tripId,
       totalWaypoints: waypoints.length,
+      speedMultiplier,
       speedKmh,
       intervalMs: tickIntervalMs,
     };
@@ -812,6 +859,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       currentLat: sim.currentLat,
       currentLng: sim.currentLng,
       speedKmh: sim.speedKmh,
+      speedMultiplier: sim.speedMultiplier || 1,
+      tickIntervalMs: sim.tickIntervalMs || 2000,
     };
   }
 

@@ -4,6 +4,7 @@ import {
   UpdateDriverProfilePayload,
   ReviewDriverProfilePayload,
 } from '@/lib/types/driver-profile'
+import { authService } from './auth.service'
 
 export interface UnifiedApiResponse<T = any> {
   success: boolean
@@ -20,11 +21,9 @@ class DriverProfileService {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
+    const token = authService.getToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
     }
     return headers
   }

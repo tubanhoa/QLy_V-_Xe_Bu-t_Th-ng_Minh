@@ -99,6 +99,14 @@ class TrackingService {
     }
   }
 
+  /** Cập nhật tức thời tốc độ mô phỏng GPS (1x, 2x, 5x, 10x) giữ nguyên tiến độ xe */
+  async updateSimulatorSpeed(
+    tripId: string,
+    speedMultiplier: number,
+  ): Promise<UnifiedApiResponse<SimulatorStatus>> {
+    return this.startSimulator(tripId, speedMultiplier)
+  }
+
   /** Dừng mô phỏng GPS xe buýt */
   async stopSimulator(
     tripId: string,

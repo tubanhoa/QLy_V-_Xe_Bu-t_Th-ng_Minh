@@ -80,9 +80,18 @@ export class TrackingController {
   @Public()
   @Post('tracking/simulator/start')
   @ApiOperation({
-    summary: 'Khởi động bộ giả lập GPS di chuyển xe buýt dọc theo lộ trình chuyến',
+    summary: 'Khởi động bộ giả lập GPS di chuyển xe buýt dọc theo lộ trình chuyến (hoặc đổi tốc độ tức thời nếu đang chạy)',
   })
   async startSimulator(@Body() dto: SimulatorControlDto) {
+    return this.trackingService.startSimulator(dto.tripId, dto.speedMultiplier || 1);
+  }
+
+  @Public()
+  @Post('tracking/simulator/speed')
+  @ApiOperation({
+    summary: 'Cập nhật tức thời tốc độ mô phỏng GPS (1x, 2x, 5x, 10x) giữ nguyên tiến độ xe',
+  })
+  async updateSimulatorSpeed(@Body() dto: SimulatorControlDto) {
     return this.trackingService.startSimulator(dto.tripId, dto.speedMultiplier || 1);
   }
 

@@ -413,15 +413,25 @@ class AuthService {
 
   /**
    * Lưu thông tin token và profile vào Storage
+   * Đồng bộ lưu cả ictu_bus_access_token và alias access_token, sbts_access_token để tương thích 100%
    */
   saveSession(data: LoginResponseData, remember: boolean = true) {
     if (typeof window === 'undefined') return
-    // Luôn lưu vào localStorage để phiên đăng nhập được duy trì khi người dùng tắt/mở lại tab
-    localStorage.setItem(TOKEN_KEY, data.accessToken)
-    if (data.refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken)
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user))
 
+    // 1. Lưu các key chính
+    localStorage.setItem(TOKEN_KEY, data.accessToken)
+    localStorage.setItem('access_token', data.accessToken)
+    localStorage.setItem('sbts_access_token', data.accessToken)
+    if (data.refreshToken) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken)
+      localStorage.setItem('refresh_token', data.refreshToken)
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+    localStorage.setItem('user', JSON.stringify(data.user))
+
+    // 2. Lưu vào sessionStorage
     sessionStorage.setItem(TOKEN_KEY, data.accessToken)
+    sessionStorage.setItem('access_token', data.accessToken)
     sessionStorage.setItem(USER_KEY, JSON.stringify(data.user))
 
     try {
@@ -436,15 +446,26 @@ class AuthService {
 
   /**
    * Xóa thông tin đăng nhập khi logout
+   * Quét sạch toàn bộ các key chính và alias liên quan để không bị kẹt token cũ
    */
   clearSession() {
     if (typeof window === 'undefined') return
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
-    sessionStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(REFRESH_TOKEN_KEY)
-    sessionStorage.removeItem(USER_KEY)
+    const keysToRemove = [
+      TOKEN_KEY,
+      'access_token',
+      'sbts_access_token',
+      'token',
+      REFRESH_TOKEN_KEY,
+      'refresh_token',
+      USER_KEY,
+      'user',
+      'auth_user',
+    ]
+
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k)
+      sessionStorage.removeItem(k)
+    }
 
     try {
       document.cookie = 'auth_token=; path=/; max-age=0'
@@ -456,12 +477,30 @@ class AuthService {
 
   /**
    * Lấy Access Token hiện tại
+   * Kiểm tra đa nguồn: TOKEN_KEY -> access_token -> sbts_access_token -> Cookie
    */
   getToken(): string | null {
     if (typeof window === 'undefined') return null
-    const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)
-    if (token) return token
-    return 'demo_session_token_ictu_admin'
+    const token =
+      localStorage.getItem(TOKEN_KEY) ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('sbts_access_token') ||
+      sessionStorage.getItem(TOKEN_KEY) ||
+      sessionStorage.getItem('access_token')
+
+    if (token && token.trim()) return token.trim()
+
+    // Kiểm tra trong Cookie nếu có
+    try {
+      const match = document.cookie.match(new RegExp('(^| )auth_token=([^;]+)'))
+      if (match && match[2]) {
+        return decodeURIComponent(match[2])
+      }
+    } catch {
+      // Ignore
+    }
+
+    return null
   }
 
   /**
