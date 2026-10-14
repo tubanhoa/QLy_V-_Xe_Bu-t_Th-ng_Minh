@@ -16,6 +16,7 @@ import {
   Receipt,
   Route,
   ShieldAlert,
+  ShieldCheck,
   Siren,
   SlidersHorizontal,
   Tag,
@@ -173,9 +174,15 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     },
     {
       key: 'reports',
-      label: 'Báo cáo & Nhật ký',
-      description: 'Audit logs, báo cáo tài chính & viễn thông',
+      label: 'Báo cáo & Phân tích',
+      description: 'Báo cáo doanh thu, tài chính & tỷ lệ lấp đầy',
       icon: FileBarChart2,
+    },
+    {
+      key: 'audit-logs',
+      label: 'Nhật Ký & Kiểm Toán',
+      description: 'Audit logs, giám sát an ninh & truy vết thay đổi',
+      icon: ShieldCheck,
     },
     {
       key: 'settings',

@@ -13,6 +13,8 @@ import { UserEntity } from './user.entity.js';
 @Index(['userId'])
 @Index(['action'])
 @Index(['resourceName'])
+@Index(['status'])
+@Index(['endpoint'])
 @Index(['timestamp'])
 export class ActivityLogEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -33,6 +35,18 @@ export class ActivityLogEntity {
 
   @Column({ name: 'resource_id', type: 'varchar', length: 50, nullable: true })
   resourceId: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  endpoint: string;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  method: string;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  status: string;
+
+  @Column({ name: 'execution_time_ms', type: 'int', nullable: true })
+  executionTimeMs: number;
 
   @Column({ type: 'jsonb', nullable: true })
   changes: Record<string, any>;

@@ -97,6 +97,10 @@ const AdminDriverLicenses = dynamic(
   () => import('./modules/admin-driver-licenses').then((m) => m.AdminDriverLicenses),
   { loading: () => <ContentSkeleton /> }
 )
+const AdminAuditLogs = dynamic(
+  () => import('./modules/admin-audit-logs').then((m) => m.AdminAuditLogs),
+  { loading: () => <ContentSkeleton /> }
+)
 
 const SKELETON_MS = 550
 
@@ -261,6 +265,7 @@ export function AppShell() {
       if (activeItem.key === 'staff') return <AdminStaff />
       if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses />
       if (activeItem.key === 'reports') return <AdminReports />
+      if (activeItem.key === 'audit-logs') return <AdminAuditLogs />
       if (activeItem.key === 'settings') return <AdminSettings />
     }
 

@@ -23,6 +23,9 @@ import { SeedModule } from './database/seeds/seed.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor.js';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -51,6 +54,12 @@ import { AppService } from './app.service.js';
     SeedModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
 })
 export class AppModule { }
