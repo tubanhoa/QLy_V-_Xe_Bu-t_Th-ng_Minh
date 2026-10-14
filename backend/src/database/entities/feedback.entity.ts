@@ -14,6 +14,9 @@ import { TripEntity } from './trip.entity.js';
 @Index(['userId'])
 @Index(['tripId'])
 @Index(['status'])
+@Index(['type'])
+@Index(['ratingScore'])
+@Index(['createdAt'])
 export class FeedbackEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -32,14 +35,26 @@ export class FeedbackEntity {
   @JoinColumn({ name: 'trip_id' })
   trip: TripEntity;
 
+  @Column({ type: 'varchar', length: 20, default: 'rating' })
+  type: 'rating' | 'complaint' | 'suggestion';
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  title: string;
+
   @Column({ name: 'rating_score', type: 'integer' })
   ratingScore: number;
 
   @Column({ type: 'text', nullable: true })
   content: string;
 
-  @Column({ type: 'varchar', length: 30, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   category: string;
+
+  @Column({ name: 'ticket_code', type: 'varchar', length: 50, nullable: true })
+  ticketCode: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  attachments: string[];
 
   @Column({ type: 'varchar', length: 20, default: 'new' })
   status: 'new' | 'in_review' | 'resolved';

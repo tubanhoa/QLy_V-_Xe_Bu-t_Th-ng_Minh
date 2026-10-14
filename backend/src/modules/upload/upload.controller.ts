@@ -31,7 +31,7 @@ interface UploadedMulterFile {
 @Controller()
 export class UploadController {
   @Public()
-  @Post(['upload/student-card', 'users/upload-student-card', 'monthly-passes/upload-proof', 'priority-verifications/upload-proof'])
+  @Post(['upload/student-card', 'users/upload-student-card', 'monthly-passes/upload-proof', 'priority-verifications/upload-proof', 'upload/feedback-proof', 'feedback/upload-proof'])
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
     summary: 'Tải ảnh minh chứng Thẻ Sinh Viên / CCCD (Kiểm định Magic Bytes, max 3MB, chặn SVG)',
