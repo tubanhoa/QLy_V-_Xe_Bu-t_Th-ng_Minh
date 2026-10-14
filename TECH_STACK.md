@@ -1,6 +1,9 @@
 # 🚀 TỔNG HỢP CÔNG NGHỆ HỆ THỐNG SMART BUS - ICTU
 *(Tài liệu tóm tắt ngắn gọn – dễ đọc – dễ nhớ dành cho báo cáo & bảo vệ đồ án)*
 
+> [!NOTE]
+> Hệ thống được tổ chức chuẩn **Monorepo**: phân chia độc lập thư mục `frontend/` (Next.js 16 + React 19) và `backend/` (NestJS 12 + PostgreSQL), phân chia codebase theo từng tính năng (Feature-Driven). Chi tiết cấu trúc xem tại [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md).
+
 ---
 
 ## 📌 1. FRONTEND (Giao Diện & Trải Nghiệm Người Dùng)
