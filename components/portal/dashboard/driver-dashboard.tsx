@@ -31,6 +31,7 @@ import { driverService, DriverTripItem } from '@/lib/services/driver.service'
 import { notificationService } from '@/lib/services/notification.service'
 import { authService } from '@/lib/services/auth.service'
 import { driverHardware } from '@/lib/utils/driver-hardware'
+import { DriverLiveMap } from '@/components/portal/dashboard/driver-live-map'
 import type { NotificationItem } from '@/lib/types/notification'
 
 interface DriverDashboardProps {
@@ -617,6 +618,9 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 </button>
               </div>
             </article>
+
+            {/* BẢN ĐỒ GPS MAP THẬT THỜI GIAN THỰC (LIVE INTERACTIVE MINI-MAP) */}
+            <DriverLiveMap activeTrip={activeTrip} onOpenCockpit={onOpenCockpit} />
 
             {/* Lộ Trình Trạm Đón Thực Tế (Live Station Progression Stepper) */}
             <section className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-6 shadow-xs">

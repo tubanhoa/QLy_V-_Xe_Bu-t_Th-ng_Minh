@@ -20,12 +20,13 @@ import {
   Layers,
   ChevronRight,
   Maximize2,
+  Siren,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { transitService } from '@/lib/services/transit.service'
 import { trackingService } from '@/lib/services/tracking.service'
 import type { TransitRoute } from '@/lib/types/transit'
-import type { LiveTrackingResponse, SimulatorStatus, StationEtaItem } from '@/lib/types/tracking'
+import type { LiveTrackingResponse, SimulatorStatus, StationEtaItem, TripIncident } from '@/lib/types/tracking'
 
 interface StationCoord {
   id: string
@@ -210,12 +211,15 @@ export function DispatcherGpsMap() {
     return stationsList.find((s) => !s.isPassed) || stationsList[stationsList.length - 1]
   }, [stationsList])
 
-  // 2. Kiểm tra trạng thái Simulator và dữ liệu Live Tracking ban đầu
+  const [activeIncidents, setActiveIncidents] = useState<TripIncident[]>([])
+
+  // 2. Kiểm tra trạng thái Simulator, Telemetry và Sự cố SOS từ tài xế
   const checkTelemetry = useCallback(async (tripId: string) => {
     try {
-      const [simRes, liveRes] = await Promise.all([
+      const [simRes, liveRes, incRes] = await Promise.all([
         trackingService.getSimulatorStatus(tripId),
         trackingService.getLiveTrackingWithEta(tripId),
+        trackingService.getTripIncidents(tripId),
       ])
 
       if (simRes.success && simRes.data) {
@@ -230,10 +234,25 @@ export function DispatcherGpsMap() {
       if (liveRes.success && liveRes.data) {
         setTelemetry(liveRes.data)
       }
+      if (incRes.success && Array.isArray(incRes.data)) {
+        setActiveIncidents(incRes.data.filter((i) => i.resolutionStatus !== 'resolved'))
+      }
     } catch {
       // ignore
     }
   }, [])
+
+  // Xử lý xác nhận/giải tỏa sự cố khẩn cấp
+  const handleResolveIncident = async (incidentId: string) => {
+    try {
+      const res = await trackingService.resolveIncident(incidentId)
+      if (res.success) {
+        setActiveIncidents((prev) => prev.filter((i) => i.id !== incidentId))
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   // 3. Kết nối SSE để nhận tọa độ xe buýt thời gian thực
   useEffect(() => {
@@ -681,47 +700,80 @@ export function DispatcherGpsMap() {
             <div ref={mapContainerRef} className="absolute inset-0 z-0 w-full h-full" />
 
             {/* Top Status Bar Overlay */}
-            <div className="absolute top-4 left-4 right-4 z-[400] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-900/85 px-3.5 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-md border border-white/10 pointer-events-auto">
-                <span
-                  className={`size-2 rounded-full ${
-                    sseActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-                  }`}
-                />
-                <span>
-                  {sseActive ? 'SSE Trực Tuyến • GPS Latency: 16ms' : 'Polling Sync Mode'}
-                </span>
-                {simStatus?.isRunning && (
-                  <span className="ml-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
-                    Simulator {speedMultiplier}x
+            <div className="absolute top-4 left-4 right-4 z-[400] flex flex-col gap-2.5 pointer-events-none">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 rounded-2xl bg-slate-900/85 px-3.5 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-md border border-white/10 pointer-events-auto">
+                  <span
+                    className={`size-2 rounded-full ${
+                      sseActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                    }`}
+                  />
+                  <span>
+                    {sseActive ? 'SSE Trực Tuyến • GPS Latency: 16ms' : 'Polling Sync Mode'}
                   </span>
-                )}
+                  {simStatus?.isRunning && (
+                    <span className="ml-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                      Simulator {speedMultiplier}x
+                    </span>
+                  )}
+                </div>
+
+                {/* Action Buttons: Follow Bus & Fit Bounds */}
+                <div className="flex items-center gap-2 pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={() => setFollowBus((prev) => !prev)}
+                    className={`flex items-center gap-1.5 rounded-2xl px-3 py-1.5 text-xs font-semibold backdrop-blur-md shadow-lg transition-all border ${
+                      followBus
+                        ? 'bg-[#00A86B] text-white border-emerald-400'
+                        : 'bg-slate-900/85 text-white/80 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    <Crosshair className={`size-3.5 ${followBus ? 'animate-spin' : ''}`} />
+                    {followBus ? 'Đang bám xe' : 'Bám theo xe'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFitRouteBounds}
+                    className="flex items-center gap-1.5 rounded-2xl bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur-md border border-white/10 shadow-lg hover:text-white transition-colors"
+                  >
+                    <Maximize2 className="size-3.5" />
+                    Xem toàn tuyến
+                  </button>
+                </div>
               </div>
 
-              {/* Action Buttons: Follow Bus & Fit Bounds */}
-              <div className="flex items-center gap-2 pointer-events-auto">
-                <button
-                  type="button"
-                  onClick={() => setFollowBus((prev) => !prev)}
-                  className={`flex items-center gap-1.5 rounded-2xl px-3 py-1.5 text-xs font-semibold backdrop-blur-md shadow-lg transition-all border ${
-                    followBus
-                      ? 'bg-[#00A86B] text-white border-emerald-400'
-                      : 'bg-slate-900/85 text-white/80 border-white/10 hover:text-white'
-                  }`}
-                >
-                  <Crosshair className={`size-3.5 ${followBus ? 'animate-spin' : ''}`} />
-                  {followBus ? 'Đang bám xe' : 'Bám theo xe'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleFitRouteBounds}
-                  className="flex items-center gap-1.5 rounded-2xl bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur-md border border-white/10 shadow-lg hover:text-white transition-colors"
-                >
-                  <Maximize2 className="size-3.5" />
-                  Xem toàn tuyến
-                </button>
-              </div>
+              {/* Banner Cảnh Báo Khẩn Cấp SOS Do Tài Xế Gửi Lên Hệ Thống */}
+              {activeIncidents.length > 0 && (
+                <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-red-500/80 bg-red-950/90 p-3 text-white shadow-2xl backdrop-blur-md animate-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-xl bg-red-600 flex items-center justify-center animate-bounce shrink-0">
+                      <Siren className="size-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-red-300">
+                          TÍN HIỆU SOS TỪ TÀI XẾ XE {selectedTrip?.vehicle?.licensePlate || '20B'}
+                        </span>
+                        <span className="rounded-md bg-red-500 px-1.5 py-0.2 text-[10px] font-black uppercase text-white">
+                          Khẩn cấp
+                        </span>
+                      </div>
+                      <p className="text-xs text-red-100 font-medium mt-0.5">
+                        {activeIncidents[0].description || 'Có sự cố khẩn cấp trên tuyến xe chạy'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveIncident(activeIncidents[0].id)}
+                    className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    Xác nhận giải tỏa sự cố
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Bottom Floating Control Bar (Grab / Be Control Dock) */}

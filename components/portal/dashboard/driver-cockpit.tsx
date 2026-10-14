@@ -56,104 +56,25 @@ import {
   ShieldAlert,
   User,
   Users,
+  Crosshair,
+  Square,
+  Power,
 } from 'lucide-react'
 import { driverHardware } from '@/lib/utils/driver-hardware'
 import { driverService, DriverTripItem, ManifestPassenger } from '@/lib/services/driver.service'
 import { trackingService } from '@/lib/services/tracking.service'
-import type { IncidentType } from '@/lib/types/tracking'
+import {
+  fetchRoadGeometry,
+  DEFAULT_THAI_NGUYEN_STOPS,
+  calculateDistanceMeters,
+  calculateBearing,
+  StationLocation,
+} from '@/lib/utils/map-routing'
+import type { IncidentType, LiveTrackingResponse, StationEtaItem, SimulatorStatus } from '@/lib/types/tracking'
 
 interface DriverCockpitProps {
   onSwitchToOfficeView?: () => void
 }
-
-// Tọa độ các trạm dừng chuẩn dọc tuyến 01 TP. Thái Nguyên
-interface StationStop {
-  order: number
-  id: string
-  name: string
-  shortName: string
-  latitude: number
-  longitude: number
-  svgX: number // Tọa độ X trên bản đồ phẳng
-  svgY: number // Tọa độ Y trên bản đồ phẳng
-  forecastPickup: number
-  forecastDropoff: number
-}
-
-const THAI_NGUYEN_STOPS: StationStop[] = [
-  {
-    order: 1,
-    id: 'st-01',
-    name: 'ĐH CNTT & TT Thái Nguyên (ICTU)',
-    shortName: 'Cổng chính ICTU',
-    latitude: 21.585284,
-    longitude: 105.807361,
-    svgX: 120,
-    svgY: 520,
-    forecastPickup: 14,
-    forecastDropoff: 0,
-  },
-  {
-    order: 2,
-    id: 'st-02',
-    name: 'Ký túc xá Sinh viên ICTU',
-    shortName: 'KTX Sinh viên',
-    latitude: 21.587123,
-    longitude: 105.803521,
-    svgX: 250,
-    svgY: 410,
-    forecastPickup: 8,
-    forecastDropoff: 1,
-  },
-  {
-    order: 3,
-    id: 'st-03',
-    name: 'Đại học Sư Phạm Thái Nguyên',
-    shortName: 'ĐH Sư Phạm',
-    latitude: 21.583210,
-    longitude: 105.828450,
-    svgX: 450,
-    svgY: 480,
-    forecastPickup: 6,
-    forecastDropoff: 3,
-  },
-  {
-    order: 4,
-    id: 'st-04',
-    name: 'Ngã tư Mỏ Bạch / Bến xe Đồng Quang',
-    shortName: 'BX Đồng Quang',
-    latitude: 21.586450,
-    longitude: 105.836120,
-    svgX: 620,
-    svgY: 340,
-    forecastPickup: 4,
-    forecastDropoff: 4,
-  },
-  {
-    order: 5,
-    id: 'st-05',
-    name: 'Quảng trường Võ Nguyên Giáp',
-    shortName: 'Quảng Trường',
-    latitude: 21.593250,
-    longitude: 105.845100,
-    svgX: 780,
-    svgY: 260,
-    forecastPickup: 3,
-    forecastDropoff: 6,
-  },
-  {
-    order: 6,
-    id: 'st-06',
-    name: 'Bến xe Trung tâm TP. Thái Nguyên',
-    shortName: 'Bến xe TT',
-    latitude: 21.579620,
-    longitude: 105.844350,
-    svgX: 920,
-    svgY: 180,
-    forecastPickup: 0,
-    forecastDropoff: 12,
-  },
-]
 
 /** Sơ đồ cấu trúc 28 ghế tiêu chuẩn xe buýt điện thông minh ICTU (7 hàng x 4 ghế) */
 const SEAT_ROWS_28 = [
@@ -391,61 +312,419 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     setTimeout(() => setManifestNotice(null), 3500)
   }, [activeTrip?.id, loadManifest])
 
-  // Mô phỏng di chuyển xe buýt thời gian thực giữa các trạm dừng
-  useEffect(() => {
-    if (!isGpsActive) return
+  // Leaflet refs
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+  const mapInstanceRef = useRef<any>(null)
+  const tileLayerRef = useRef<any>(null)
+  const leafletModuleRef = useRef<typeof import('leaflet') | null>(null)
+  const busMarkerRef = useRef<any>(null)
+  const routePolylineRef = useRef<any>(null)
+  const glowPolylineRef = useRef<any>(null)
+  const stationMarkersRef = useRef<any[]>([])
+  const sseRef = useRef<EventSource | null>(null)
+  const geoWatchRef = useRef<number | null>(null)
 
-    const moveTimer = setInterval(() => {
-      setBusProgress((prev) => {
-        // Tỷ lệ dừng mục tiêu ứng với trạm hiện tại
-        const targetRatio = (currentStopIndex + 0.3) / THAI_NGUYEN_STOPS.length
-        if (prev < targetRatio) {
-          return Math.min(targetRatio, prev + 0.006)
+  // Real-time Telemetry states
+  const [telemetry, setTelemetry] = useState<LiveTrackingResponse | null>(null)
+  const [simStatus, setSimStatus] = useState<SimulatorStatus | null>(null)
+  const [isDeviceGpsActive, setIsDeviceGpsActive] = useState<boolean>(false)
+  const [followBus, setFollowBus] = useState<boolean>(true)
+  const [tickIntervalMs, setTickIntervalMs] = useState<number>(1000)
+  const [currentHeading, setCurrentHeading] = useState<number>(0)
+  const [sseActive, setSseActive] = useState<boolean>(false)
+
+  // Trích xuất trạm dừng thực tế từ chuyến xe phân công
+  const stops = useMemo<StationLocation[]>(() => {
+    const rawStations =
+      (activeTrip?.route as any)?.routeStations ||
+      activeTrip?.route?.stations ||
+      []
+
+    if (Array.isArray(rawStations) && rawStations.length > 0) {
+      const sorted = [...rawStations].sort(
+        (a: any, b: any) => (a.stopOrder || 0) - (b.stopOrder || 0),
+      )
+      const list: StationLocation[] = []
+      sorted.forEach((rs: any, idx: number) => {
+        const st = rs.station || rs
+        const lat = Number(st.latitude || st.lat)
+        const lng = Number(st.longitude || st.lng)
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
+          const etaItem = telemetry?.stationEtas?.find(
+            (e: StationEtaItem) => e.stationId === st.id || e.stationName === st.name,
+          )
+          list.push({
+            id: st.id || `st-${idx + 1}`,
+            name: st.name || `Trạm ${idx + 1}`,
+            shortName: st.shortName || st.name?.slice(0, 18),
+            order: rs.stopOrder || idx + 1,
+            lat,
+            lng,
+            etaMinutes: etaItem?.etaMinutes,
+            isPassed: etaItem ? etaItem.status === 'passed' : idx < currentStopIndex,
+            isNext: etaItem ? etaItem.isNextStop : idx === currentStopIndex,
+          })
         }
-        return prev
+      })
+      if (list.length > 0) return list
+    }
+
+    return DEFAULT_THAI_NGUYEN_STOPS.map((st, idx) => ({
+      ...st,
+      isPassed: idx < currentStopIndex,
+      isNext: idx === currentStopIndex,
+    }))
+  }, [activeTrip, telemetry, currentStopIndex])
+
+  // 1. Lắng nghe luồng SSE Real-time từ chuyến xe
+  useEffect(() => {
+    if (!activeTrip?.id) return
+
+    if (sseRef.current) {
+      sseRef.current.close()
+      sseRef.current = null
+      setSseActive(false)
+    }
+
+    // Nạp telemetry và simulator status ban đầu
+    trackingService.getLiveTrackingWithEta(activeTrip.id).then((res) => {
+      if (res.success && res.data) {
+        setTelemetry(res.data)
+        if (res.data.speedKmh != null) setSpeedKmh(res.data.speedKmh)
+        if (res.data.headingDegrees != null) setCurrentHeading(res.data.headingDegrees)
+      }
+    })
+    trackingService.getSimulatorStatus(activeTrip.id).then((res) => {
+      if (res.success && res.data) {
+        setSimStatus(res.data)
+      }
+    })
+
+    try {
+      const es = trackingService.createTrackingEventSource(activeTrip.id)
+      sseRef.current = es
+      es.onopen = () => setSseActive(true)
+      es.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data)
+          if (parsed?.data) {
+            const update = parsed.data
+            setTelemetry((prev) => {
+              const base: LiveTrackingResponse = prev || {
+                tripId: activeTrip.id,
+                latitude: Number(update.latitude ?? stops[0]?.lat ?? 21.585284),
+                longitude: Number(update.longitude ?? stops[0]?.lng ?? 105.807361),
+                speedKmh: Number(update.speedKmh ?? 30),
+                headingDegrees: Number(update.headingDegrees ?? 0),
+                batteryPercent: 95,
+                lastUpdated: new Date().toISOString(),
+                stationEtas: [],
+              }
+              return {
+                ...base,
+                ...update,
+                tripId: update.tripId || activeTrip.id,
+                latitude: Number(update.latitude ?? base.latitude),
+                longitude: Number(update.longitude ?? base.longitude),
+                speedKmh: Number(update.speedKmh ?? base.speedKmh),
+                headingDegrees: Number(update.headingDegrees ?? base.headingDegrees),
+                batteryPercent: Number(update.batteryPercent ?? base.batteryPercent),
+                lastUpdated: update.lastUpdated || new Date().toISOString(),
+                stationEtas: update.stationEtas ?? base.stationEtas,
+              }
+            })
+            if (update.speedKmh != null) setSpeedKmh(update.speedKmh)
+            if (update.headingDegrees != null) setCurrentHeading(update.headingDegrees)
+            if (update.tickIntervalMs != null) setTickIntervalMs(update.tickIntervalMs)
+          }
+        } catch {
+          // ignore
+        }
+      }
+      es.onerror = () => setSseActive(false)
+    } catch {
+      setSseActive(false)
+    }
+
+    return () => {
+      if (sseRef.current) {
+        sseRef.current.close()
+        sseRef.current = null
+      }
+      setSseActive(false)
+    }
+  }, [activeTrip?.id, stops])
+
+  // 2. Định vị GPS Thiết Bị (Device Geolocation Watcher)
+  useEffect(() => {
+    if (!isDeviceGpsActive || !activeTrip?.id) {
+      if (geoWatchRef.current != null && typeof window !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(geoWatchRef.current)
+        geoWatchRef.current = null
+      }
+      return
+    }
+
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      geoWatchRef.current = navigator.geolocation.watchPosition(
+        (position) => {
+          const lat = position.coords.latitude
+          const lng = position.coords.longitude
+          const speed = position.coords.speed ? Math.round(position.coords.speed * 3.6) : 32
+          const heading = position.coords.heading ?? 0
+
+          setSpeedKmh(speed)
+          setCurrentHeading(heading)
+          setTelemetry((prev) => {
+            const base: LiveTrackingResponse = prev || {
+              tripId: activeTrip.id,
+              latitude: lat,
+              longitude: lng,
+              speedKmh: speed,
+              headingDegrees: heading,
+              batteryPercent: 95,
+              lastUpdated: new Date().toISOString(),
+              stationEtas: [],
+            }
+            return {
+              ...base,
+              tripId: activeTrip.id,
+              latitude: lat,
+              longitude: lng,
+              speedKmh: speed,
+              headingDegrees: heading,
+              lastUpdated: new Date().toISOString(),
+            }
+          })
+
+          driverService.broadcastLocation({
+            tripId: activeTrip.id,
+            latitude: lat,
+            longitude: lng,
+            speedKmh: speed,
+            headingDegrees: heading,
+          })
+        },
+        (error) => {
+          console.warn('[DriverCockpit] Geolocation error:', error)
+          setIsDeviceGpsActive(false)
+          setAudioNotice('Không thể truy cập GPS thiết bị')
+          setTimeout(() => setAudioNotice(null), 3000)
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 },
+      )
+    }
+
+    return () => {
+      if (geoWatchRef.current != null && typeof window !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(geoWatchRef.current)
+        geoWatchRef.current = null
+      }
+    }
+  }, [isDeviceGpsActive, activeTrip?.id])
+
+  // 3. Khởi tạo Bản đồ Leaflet (SSR-Safe)
+  useEffect(() => {
+    let isMounted = true
+
+    async function initLeaflet() {
+      if (!mapContainerRef.current || mapInstanceRef.current) return
+      const L = await import('leaflet')
+      if (!isMounted || !mapContainerRef.current) return
+      leafletModuleRef.current = L
+
+      const centerLat = stops[0]?.lat || 21.585284
+      const centerLng = stops[0]?.lng || 105.807361
+
+      const map = L.map(mapContainerRef.current, {
+        center: [centerLat, centerLng],
+        zoom: 15,
+        zoomControl: false,
       })
 
-      // Biến thiên tốc độ xe ngẫu nhiên 28 - 42 km/h cho chân thực
-      setSpeedKmh(Math.floor(28 + Math.random() * 12))
-    }, 1500)
+      const tileUrl = isDayMode
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
 
-    return () => clearInterval(moveTimer)
-  }, [isGpsActive, currentStopIndex])
+      const tileLayer = L.tileLayer(tileUrl, {
+        attribution: '&copy; CARTO &copy; OpenStreetMap',
+        maxZoom: 19,
+        subdomains: 'abcd',
+      }).addTo(map)
+      tileLayerRef.current = tileLayer
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map)
+      mapInstanceRef.current = map
+    }
+
+    initLeaflet()
+
+    return () => {
+      isMounted = false
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+    }
+  }, [])
+
+  // Đổi Tile Layer khi chuyển Day / Night Mode
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    const L = leafletModuleRef.current
+    if (!map || !L) return
+
+    if (tileLayerRef.current) {
+      tileLayerRef.current.remove()
+    }
+
+    const tileUrl = isDayMode
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
+
+    tileLayerRef.current = L.tileLayer(tileUrl, {
+      attribution: '&copy; CARTO &copy; OpenStreetMap',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map)
+  }, [isDayMode])
+
+  // 4. Vẽ Lộ trình OSRM Road Geometry & Trạm dừng trên Leaflet
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    const L = leafletModuleRef.current
+    if (!map || !L || stops.length === 0) return
+
+    stationMarkersRef.current.forEach((m) => m.remove())
+    stationMarkersRef.current = []
+
+    if (routePolylineRef.current) routePolylineRef.current.remove()
+    if (glowPolylineRef.current) glowPolylineRef.current.remove()
+
+    let isSubscribed = true
+
+    async function drawRouteAndStations() {
+      if (!map || !L) return
+      const roadCoords = await fetchRoadGeometry(stops)
+      if (!isSubscribed) return
+
+      const glow = L.polyline(roadCoords, {
+        color: '#00A86B',
+        weight: 9,
+        opacity: 0.25,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map)
+      glowPolylineRef.current = glow
+
+      const poly = L.polyline(roadCoords, {
+        color: '#00A86B',
+        weight: 5,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map)
+      routePolylineRef.current = poly
+
+      // Marker trạm dừng
+      stops.forEach((st, idx) => {
+        const isCurrent = idx === currentStopIndex
+        const isPassed = idx < currentStopIndex
+        const bg = isCurrent ? '#00A86B' : isPassed ? '#64748b' : '#0284c7'
+        const border = isCurrent ? '#10b981' : '#ffffff'
+        const shadow = isCurrent ? '0 0 16px rgba(0, 168, 107, 0.8)' : '0 2px 6px rgba(0,0,0,0.3)'
+
+        const icon = L.divIcon({
+          className: 'cockpit-station-pin',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          html: `
+            <div style="position: relative; width: 30px; height: 30px; border-radius: 9999px; background: ${bg}; border: 2.5px solid ${border}; display: flex; align-items: center; justify-content: center; box-shadow: ${shadow}; color: white; font-size: 12px; font-weight: 800; font-family: monospace; cursor: pointer;">
+              ${st.order}
+              ${
+                isCurrent
+                  ? '<div style="position: absolute; inset: -5px; border-radius: 9999px; border: 2.5px solid #00A86B; animation: ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>'
+                  : ''
+              }
+            </div>
+          `,
+        })
+
+        const marker = L.marker([st.lat, st.lng], { icon }).addTo(map)
+        marker.on('click', () => setCurrentStopIndex(idx))
+        stationMarkersRef.current.push(marker)
+      })
+    }
+
+    drawRouteAndStations()
+
+    return () => {
+      isSubscribed = false
+    }
+  }, [stops, currentStopIndex])
+
+  // 5. Marker Xe Buýt 360 Lướt Mượt Trên Mặt Đường
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    const L = leafletModuleRef.current
+    if (!map || !L) return
+
+    const lat = telemetry?.latitude || stops[0]?.lat || 21.585284
+    const lng = telemetry?.longitude || stops[0]?.lng || 105.807361
+    const heading = currentHeading
+    const speed = speedKmh
+    const plate = activeTrip?.vehicle?.plateNumber || '20B-009.77'
+
+    const busIcon = L.divIcon({
+      className: 'cockpit-bus-glide-marker',
+      iconSize: [56, 56],
+      iconAnchor: [28, 28],
+      html: `
+        <div style="position: relative; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; transition: all ${tickIntervalMs}ms linear;">
+          <!-- Radar Pulse Ring -->
+          <div style="position: absolute; inset: -4px; border-radius: 9999px; background-color: rgba(0, 168, 107, 0.3); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <!-- Heading Arrow -->
+          <div style="position: absolute; width: 48px; height: 48px; transform: rotate(${heading}deg); transition: transform ${tickIntervalMs}ms linear; pointer-events: none;">
+            <div style="position: absolute; top: -7px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 12px solid #00A86B; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></div>
+          </div>
+          <!-- 3D Bus Badge -->
+          <div style="position: relative; width: 44px; height: 44px; border-radius: 9999px; background: linear-gradient(135deg, #00A86B 0%, #047857 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0, 168, 107, 0.55); border: 3px solid #ffffff;">
+            <svg style="width: 24px; height: 24px; fill: white;" viewBox="0 0 24 24">
+              <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+            </svg>
+          </div>
+          <!-- Floating Plate & Speed Tag -->
+          <div style="position: absolute; top: -22px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; white-space: nowrap; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 3px 8px rgba(0,0,0,0.35); font-family: monospace;">
+            ${plate} • ${speed} km/h
+          </div>
+        </div>
+      `,
+    })
+
+    if (!busMarkerRef.current) {
+      const marker = L.marker([lat, lng], { icon: busIcon, zIndexOffset: 1000 }).addTo(map)
+      busMarkerRef.current = marker
+    } else {
+      busMarkerRef.current.setIcon(busIcon)
+      busMarkerRef.current.setLatLng([lat, lng])
+    }
+
+    if (followBus) {
+      map.panTo([lat, lng], { animate: true, duration: tickIntervalMs / 1000 })
+    }
+  }, [telemetry, stops, activeTrip, followBus, tickIntervalMs, speedKmh, currentHeading])
 
   // Trạm hiện tại và trạm kế tiếp
-  const stops = THAI_NGUYEN_STOPS
   const currentStop = stops[currentStopIndex] || stops[0]
   const isFinalStop = currentStopIndex >= stops.length - 1
 
-  // Tính tọa độ pixel của xe buýt trên bản đồ nội suy
-  const busPosition = useMemo(() => {
-    const totalSegments = stops.length - 1
-    const t = Math.min(0.999, Math.max(0.001, busProgress))
-    const scaledT = t * totalSegments
-    const segIdx = Math.min(totalSegments - 1, Math.floor(scaledT))
-    const segT = scaledT - segIdx
-
-    const p0 = stops[segIdx]
-    const p1 = stops[segIdx + 1]
-
-    const x = p0.svgX + (p1.svgX - p0.svgX) * segT
-    const y = p0.svgY + (p1.svgY - p0.svgY) * segT
-
-    // Tính góc nghiêng của xe buýt
-    const dx = p1.svgX - p0.svgX
-    const dy = p1.svgY - p0.svgY
-    const angle = Math.round((Math.atan2(dy, dx) * 180) / Math.PI)
-
-    return { x, y, angle }
-  }, [busProgress, stops])
-
-  // Khoảng cách ước lượng đến trạm kế tiếp
+  // Tính khoảng cách mét thực tế từ vị trí xe đến trạm tiếp theo
   const distanceToNextStop = useMemo(() => {
-    const nextStop = stops[Math.min(stops.length - 1, currentStopIndex + 1)]
-    if (!nextStop) return 120
-    const raw = Math.round(350 - (busProgress * 1000) % 300)
-    return Math.max(50, raw)
-  }, [busProgress, currentStopIndex, stops])
+    if (!currentStop) return 150
+    const busLat = telemetry?.latitude || stops[0]?.lat || 21.585284
+    const busLng = telemetry?.longitude || stops[0]?.lng || 105.807361
+    return calculateDistanceMeters(busLat, busLng, currentStop.lat, currentStop.lng)
+  }, [telemetry, currentStop, stops])
 
   // XỬ LÝ CẬP TRẠM (DING-DONG TRANSIT AUDIO)
   const handleArriveStation = () => {
@@ -453,9 +732,82 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     setAudioNotice(`Đã cập bến: ${currentStop.name}`)
     setTimeout(() => setAudioNotice(null), 3500)
 
+    if (activeTrip?.id) {
+      driverService.broadcastLocation({
+        tripId: activeTrip.id,
+        latitude: currentStop.lat,
+        longitude: currentStop.lng,
+        speedKmh: 0,
+      })
+    }
+
     if (!isFinalStop) {
       setCurrentStopIndex((prev) => prev + 1)
     }
+  }
+
+  // Điều khiển Bật/Tắt Simulator trực tiếp từ Buồng lái
+  const handleToggleSimulator = async () => {
+    if (!activeTrip?.id) return
+    try {
+      if (simStatus?.isRunning) {
+        await trackingService.stopSimulator(activeTrip.id)
+        setSimStatus((prev) => (prev ? { ...prev, isRunning: false } : null))
+        setAudioNotice('Đã dừng bộ giả lập tuyến')
+      } else {
+        await trackingService.startSimulator(activeTrip.id, 2)
+        setSimStatus({
+          tripId: activeTrip.id,
+          isRunning: true,
+          speedMultiplier: 2,
+          currentStep: 0,
+          totalSteps: 100,
+          progressPercent: 0,
+          tickIntervalMs: 1000,
+        })
+        setAudioNotice('Đã kích hoạt bộ giả lập GPS OSRM (2x)')
+      }
+      setTimeout(() => setAudioNotice(null), 3000)
+    } catch (err: any) {
+      setAudioNotice(err.message || 'Lỗi điều khiển bộ giả lập')
+      setTimeout(() => setAudioNotice(null), 3000)
+    }
+  }
+
+  // Điều khiển Bật/Tắt GPS Thiết Bị
+  const handleToggleDeviceGps = () => {
+    if (isDeviceGpsActive) {
+      setIsDeviceGpsActive(false)
+      setAudioNotice('Đã tắt định vị GPS thiết bị')
+    } else {
+      setIsDeviceGpsActive(true)
+      setAudioNotice('Đã bật định vị GPS thời gian thực từ thiết bị')
+    }
+    setTimeout(() => setAudioNotice(null), 3000)
+  }
+
+  // Căn khung toàn tuyến
+  const handleFitRoute = () => {
+    const map = mapInstanceRef.current
+    if (!map || !routePolylineRef.current) return
+    try {
+      const bounds = routePolylineRef.current.getBounds()
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Bám theo xe
+  const handleCenterBus = () => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    const lat = telemetry?.latitude || stops[0]?.lat || 21.585284
+    const lng = telemetry?.longitude || stops[0]?.lng || 105.807361
+    map.setView([lat, lng], 16, { animate: true })
+    setFollowBus(true)
   }
 
   // XỬ LÝ SOÁT VÉ QR TRỰC TIẾP
@@ -623,9 +975,6 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     )
   })
 
-  // URL nhúng Google Maps tập trung tại TP. Thái Nguyên
-  const googleMapsUrl = `https://www.google.com/maps?q=${currentStop.latitude},${currentStop.longitude}&z=15&output=embed`
-
   return (
     <div
       className={`fixed inset-0 h-dvh w-full overflow-hidden select-none font-sans transition-colors duration-300 ${
@@ -635,197 +984,10 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       }`}
     >
       {/* ========================================================================= */}
-      {/* 1. BẢN ĐỒ TOÀN MÀN HÌNH (FULLSCREEN THAI NGUYEN TRANSIT MAP CANVAS)        */}
+      {/* 1. BẢN ĐỒ TOÀN MÀN HÌNH (LEAFLET GPS REAL-TIME TRANSIT MAP)                */}
       {/* ========================================================================= */}
       <div className="absolute inset-0 z-0 overflow-hidden">
-        {mapType === 'google' ? (
-          // Chế độ Bản đồ Vệ tinh / Google Maps nhúng trực tiếp
-          <iframe
-            title="Bản đồ Google Maps Thành phố Thái Nguyên"
-            src={googleMapsUrl}
-            className="w-full h-full border-0 pointer-events-auto"
-            loading="lazy"
-          />
-        ) : (
-          // Chế độ Bản đồ Đô thị Thái Nguyên (Vector Transit Map) màu sáng cực nét
-          <div className="relative w-full h-full bg-[#f1f5f9] overflow-hidden">
-            {/* Họa tiết đường phố mạng lưới đô thị Thái Nguyên */}
-            <svg
-              className="absolute inset-0 w-full h-full"
-              viewBox="0 0 1000 600"
-              preserveAspectRatio="xMidYMid slice"
-            >
-              <defs>
-                {/* Lưới phân khối đô thị nhẹ nhàng */}
-                <pattern id="city-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="0.8" />
-                </pattern>
-                {/* Gradient tuyến xe buýt xanh ICTU */}
-                <linearGradient id="bus-route-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#005A36" />
-                  <stop offset="50%" stopColor="#059669" />
-                  <stop offset="100%" stopColor="#10b981" />
-                </linearGradient>
-              </defs>
-
-              {/* Lớp nền đô thị */}
-              <rect width="100%" height="100%" fill="#f8fafc" />
-              <rect width="100%" height="100%" fill="url(#city-grid)" />
-
-              {/* Sông Cầu uốn lượn qua TP. Thái Nguyên */}
-              <path
-                d="M 0 380 C 200 350, 350 280, 500 290 C 650 300, 800 210, 1000 180"
-                fill="none"
-                stroke="#bae6fd"
-                strokeWidth="28"
-                strokeLinecap="round"
-                opacity="0.6"
-              />
-              <text x="360" y="270" fill="#0284c7" fontSize="11" fontWeight="bold" opacity="0.6">
-                Sông Cầu · TP. Thái Nguyên
-              </text>
-
-              {/* Các trục đại lộ chính TP. Thái Nguyên */}
-              <path d="M 50 560 L 950 140" stroke="#e2e8f0" strokeWidth="18" strokeLinecap="round" />
-              <path d="M 100 80 L 900 550" stroke="#e2e8f0" strokeWidth="14" strokeLinecap="round" />
-              <path d="M 300 580 L 350 20" stroke="#e2e8f0" strokeWidth="12" strokeLinecap="round" />
-              <path d="M 700 580 L 720 20" stroke="#e2e8f0" strokeWidth="12" strokeLinecap="round" />
-
-              {/* Tuyến Xe Buýt Tuyến 01 (Lộ trình phát sáng) */}
-              <path
-                d="M 120 520 L 250 410 L 450 480 L 620 340 L 780 260 L 920 180"
-                fill="none"
-                stroke="#d1fae5"
-                strokeWidth="14"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M 120 520 L 250 410 L 450 480 L 620 340 L 780 260 L 920 180"
-                fill="none"
-                stroke="url(#bus-route-gradient)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-
-              {/* Điểm mốc các trạm đón sinh viên */}
-              {stops.map((stop, idx) => {
-                const isPassed = idx < currentStopIndex
-                const isCurrent = idx === currentStopIndex
-                return (
-                  <g
-                    key={stop.id}
-                    className="cursor-pointer transition-all"
-                    onClick={() => setCurrentStopIndex(idx)}
-                  >
-                    {/* Sóng radar cho trạm hiện tại */}
-                    {isCurrent && (
-                      <circle
-                        cx={stop.svgX}
-                        cy={stop.svgY}
-                        r="24"
-                        fill="#10b981"
-                        fillOpacity="0.25"
-                        className="animate-ping"
-                      />
-                    )}
-
-                    {/* Vòng tròn trạm */}
-                    <circle
-                      cx={stop.svgX}
-                      cy={stop.svgY}
-                      r={isCurrent ? 14 : 9}
-                      fill={isCurrent ? '#005A36' : isPassed ? '#10b981' : '#ffffff'}
-                      stroke={isCurrent ? '#ffffff' : '#059669'}
-                      strokeWidth={isCurrent ? 3 : 2}
-                      className="shadow-md"
-                    />
-
-                    {/* Số thứ tự trạm */}
-                    <text
-                      x={stop.svgX}
-                      y={stop.svgY + (isCurrent ? 4 : 3)}
-                      textAnchor="middle"
-                      fill={isCurrent || isPassed ? '#ffffff' : '#005A36'}
-                      fontSize={isCurrent ? '11' : '8'}
-                      fontWeight="900"
-                    >
-                      {stop.order}
-                    </text>
-
-                    {/* Tên trạm nổi trên bản đồ - Xen kẽ trên dưới để không đè lên nhau */}
-                    <rect
-                      x={stop.svgX - 55}
-                      y={idx % 2 === 1 ? stop.svgY + 18 : stop.svgY - 34}
-                      width="110"
-                      height="20"
-                      rx="6"
-                      fill="#ffffff"
-                      stroke={isCurrent ? '#005A36' : '#cbd5e1'}
-                      strokeWidth={isCurrent ? 1.5 : 1}
-                      filter="drop-shadow(0 2px 4px rgba(0,0,0,0.08))"
-                    />
-                    <text
-                      x={stop.svgX}
-                      y={idx % 2 === 1 ? stop.svgY + 32 : stop.svgY - 20}
-                      textAnchor="middle"
-                      fill={isCurrent ? '#005A36' : '#334155'}
-                      fontSize="9"
-                      fontWeight="800"
-                    >
-                      {stop.shortName}
-                    </text>
-                  </g>
-                )
-              })}
-
-              {/* Marker Xe Buýt Di Chuyển Thời Gian Thực */}
-              <g
-                transform={`translate(${busPosition.x}, ${busPosition.y}) rotate(${busPosition.angle})`}
-                className="transition-transform duration-1000 ease-linear"
-              >
-                {/* Vùng phát đèn pha phía trước xe */}
-                <polygon
-                  points="0,0 80,-35 80,35"
-                  fill="#fef08a"
-                  fillOpacity="0.4"
-                  className="pointer-events-none"
-                />
-
-                {/* Thân xe buýt biểu tượng */}
-                <rect
-                  x="-20"
-                  y="-12"
-                  width="40"
-                  height="24"
-                  rx="6"
-                  fill="#005A36"
-                  stroke="#ffffff"
-                  strokeWidth="2.5"
-                  filter="drop-shadow(0 4px 6px rgba(0,0,0,0.25))"
-                />
-
-                {/* Đèn trước xe */}
-                <circle cx="18" cy="-8" r="2.5" fill="#fef08a" />
-                <circle cx="18" cy="8" r="2.5" fill="#fef08a" />
-
-                {/* Biển số trên nóc xe - Luôn đọc xuôi mắt nằm ngang */}
-                <text
-                  x="0"
-                  y="3"
-                  textAnchor="middle"
-                  fill="#ffffff"
-                  fontSize="7"
-                  fontWeight="900"
-                  transform={`rotate(${-busPosition.angle})`}
-                >
-                  20B
-                </text>
-              </g>
-            </svg>
-          </div>
-        )}
+        <div ref={mapContainerRef} className="w-full h-full z-0" />
       </div>
 
       {/* ========================================================================= */}
@@ -848,7 +1010,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
               </span>
             </div>
             <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
-              Tuyến 01: ICTU ↔ Bến xe TT Thái Nguyên
+              {activeTrip?.route?.name || 'Tuyến 01: ICTU ↔ Bến xe TT Thái Nguyên'}
             </p>
           </div>
         </div>
@@ -865,25 +1027,69 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             <span className="font-mono text-lg font-black text-emerald-700 dark:text-emerald-400">
               {speedKmh} <span className="text-xs font-bold">km/h</span>
             </span>
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" title="GPS Trực tuyến" />
+            <span
+              className={`size-2 rounded-full ${sseActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}
+              title={sseActive ? 'GPS Trực tuyến SSE' : 'Đang đồng bộ'}
+            />
           </div>
         </div>
 
-        {/* Right: Bộ công cụ bản đồ & phần cứng */}
+        {/* Right: Bộ công cụ Telemetry, Bản đồ & Phần cứng */}
         <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1.5 shadow-lg border border-slate-200/90 dark:border-slate-800">
-          {/* Nút Chuyển Đổi Bản Đồ Google Maps / Đô Thị */}
+          {/* Nút Bật / Tắt Định vị Thiết Bị Thực */}
           <button
             type="button"
-            onClick={() => setMapType(mapType === 'vector' ? 'google' : 'vector')}
+            onClick={handleToggleDeviceGps}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-              mapType === 'google'
-                ? 'bg-blue-600 text-white shadow-sm'
+              isDeviceGpsActive
+                ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Chuyển chế độ xem bản đồ Google Maps / Đô thị Thái Nguyên"
+            title="Bật/Tắt truyền vị trí GPS thật từ thiết bị di động / máy tính bảng"
           >
-            <Layers size={15} />
-            <span>{mapType === 'google' ? 'Google Maps' : 'Bản Đồ Đô Thị'}</span>
+            <Radio size={14} className={isDeviceGpsActive ? 'animate-pulse' : ''} />
+            <span className="hidden sm:inline">GPS Thiết Bị</span>
+          </button>
+
+          {/* Nút Bật / Tắt Simulator Mô Phỏng */}
+          <button
+            type="button"
+            onClick={handleToggleSimulator}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              simStatus?.isRunning
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Bật/Tắt bộ giả lập lộ trình OSRM chạy tự động"
+          >
+            {simStatus?.isRunning ? <Square size={13} /> : <Play size={13} />}
+            <span className="hidden sm:inline">
+              {simStatus?.isRunning ? 'Dừng Sim' : 'Chạy Sim'}
+            </span>
+          </button>
+
+          {/* Nút Bám Theo Xe (Follow Bus) */}
+          <button
+            type="button"
+            onClick={handleCenterBus}
+            className={`p-2 rounded-xl transition-all cursor-pointer ${
+              followBus
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Định vị tâm xe buýt"
+          >
+            <Crosshair size={16} />
+          </button>
+
+          {/* Nút Căn Toàn Tuyến (Fit Route) */}
+          <button
+            type="button"
+            onClick={handleFitRoute}
+            className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+            title="Xem toàn bộ tuyến đường"
+          >
+            <Compass size={16} />
           </button>
 
           {/* Nút Đổi Ban Ngày / Ban Đêm */}
@@ -990,7 +1196,11 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
               </div>
               <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1">
                 <CheckCircle2 size={14} />
-                <span>Đón: {currentStop.forecastPickup} SV · Xuống: {currentStop.forecastDropoff} SV</span>
+                <span>
+                  {currentStop.etaMinutes != null
+                    ? `Dự kiến: ~${currentStop.etaMinutes} phút`
+                    : `Trạm số ${currentStop.order} trên lộ trình`}
+                </span>
               </div>
             </div>
 
