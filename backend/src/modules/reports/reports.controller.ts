@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiProduces } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { ReportsService } from './reports.service.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.constant.js';
@@ -26,6 +27,20 @@ export class ReportsController {
     return this.reportsService.getRevenueStats(query);
   }
 
+  @Get('revenue/export/excel')
+  @ApiOperation({ summary: 'Xuất Báo cáo Doanh thu ra file Excel (.xlsx) với stream response' })
+  @ApiProduces('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportRevenueExcel(@Query() query: RevenueReportQueryDto, @Res() res: Response) {
+    return this.reportsService.exportRevenueExcel(query, res);
+  }
+
+  @Get('revenue/export/pdf')
+  @ApiOperation({ summary: 'Xuất Báo cáo Doanh thu ra file PDF (.pdf) với stream response' })
+  @ApiProduces('application/pdf')
+  async exportRevenuePdf(@Query() query: RevenueReportQueryDto, @Res() res: Response) {
+    return this.reportsService.exportRevenuePdf(query, res);
+  }
+
   @Get('occupancy-rate')
   @ApiOperation({
     summary: 'Thống kê tỷ lệ lấp đầy chỗ & phân tích tối ưu chuyến xe (SQL Aggregation)',
@@ -34,5 +49,19 @@ export class ReportsController {
   })
   async getOccupancyRate(@Query() query: OccupancyReportQueryDto) {
     return this.reportsService.getOccupancyRate(query);
+  }
+
+  @Get('occupancy-rate/export/excel')
+  @ApiOperation({ summary: 'Xuất Báo cáo Tỷ lệ lấp đầy ra file Excel (.xlsx) với stream response' })
+  @ApiProduces('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportOccupancyExcel(@Query() query: OccupancyReportQueryDto, @Res() res: Response) {
+    return this.reportsService.exportOccupancyExcel(query, res);
+  }
+
+  @Get('occupancy-rate/export/pdf')
+  @ApiOperation({ summary: 'Xuất Báo cáo Tỷ lệ lấp đầy ra file PDF (.pdf) với stream response' })
+  @ApiProduces('application/pdf')
+  async exportOccupancyPdf(@Query() query: OccupancyReportQueryDto, @Res() res: Response) {
+    return this.reportsService.exportOccupancyPdf(query, res);
   }
 }

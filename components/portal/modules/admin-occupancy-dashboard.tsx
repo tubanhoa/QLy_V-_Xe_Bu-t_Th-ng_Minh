@@ -21,8 +21,10 @@ import {
   RefreshCw,
   Coins,
   ChevronRight,
-  HelpCircle,
   Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
 } from 'lucide-react'
 import type {
   OccupancyReportResponse,
@@ -44,6 +46,10 @@ interface AdminOccupancyDashboardProps {
   selectedRouteId: string
   onSelectRouteId: (id: string) => void
   onExportCSV: () => void
+  onExportExcel?: () => void
+  onExportPDF?: () => void
+  isExportingExcel?: boolean
+  isExportingPdf?: boolean
 }
 
 export function AdminOccupancyDashboard({
@@ -56,6 +62,10 @@ export function AdminOccupancyDashboard({
   selectedRouteId,
   onSelectRouteId,
   onExportCSV,
+  onExportExcel,
+  onExportPDF,
+  isExportingExcel = false,
+  isExportingPdf = false,
 }: AdminOccupancyDashboardProps) {
   // Bộ lọc cấp độ phụ tải cho bảng chi tiết
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OVERLOADED' | 'OPTIMAL' | 'LOW' | 'UNDERUTILIZED'>('ALL')
@@ -159,13 +169,50 @@ export function AdminOccupancyDashboard({
             <span>{loading ? 'Đang cập nhật...' : 'Cập nhật phụ tải'}</span>
           </button>
 
+          {/* Nút Xuất Excel (.xlsx) */}
+          {onExportExcel && (
+            <button
+              type="button"
+              onClick={onExportExcel}
+              disabled={isExportingExcel}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-emerald-500/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+              title="Xuất bảng tính Excel (.xlsx) Báo cáo Phụ Tải"
+            >
+              {isExportingExcel ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="size-4" />
+              )}
+              <span>{isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}</span>
+            </button>
+          )}
+
+          {/* Nút Xuất PDF (.pdf) */}
+          {onExportPDF && (
+            <button
+              type="button"
+              onClick={onExportPDF}
+              disabled={isExportingPdf}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-rose-500/20 hover:from-rose-700 hover:to-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+              title="Xuất tài liệu PDF (.pdf) Báo cáo Phụ Tải trình Ban Giám Đốc"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+              <span>{isExportingPdf ? 'Đang xuất...' : 'Xuất PDF'}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onExportCSV}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-amber-500/20 hover:from-amber-700 hover:to-orange-700 active:scale-95 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all cursor-pointer"
+            title="Xuất file CSV dữ liệu thô"
           >
-            <Download className="size-4" />
-            <span>Xuất Báo Cáo Phụ Tải (CSV)</span>
+            <Download className="size-3.5" />
+            <span className="hidden sm:inline">CSV</span>
           </button>
         </div>
       </div>
