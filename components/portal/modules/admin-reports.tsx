@@ -51,6 +51,7 @@ import {
 import { transitService } from '@/lib/services/transit.service'
 import type { TransitRoute } from '@/lib/types/transit'
 import { AdminOccupancyDashboard } from './admin-occupancy-dashboard'
+import { AdminAuditLogs } from './admin-audit-logs'
 
 // Định dạng tiền tệ VNĐ chuẩn xác
 function formatVnd(num?: number | null): string {
@@ -118,10 +119,7 @@ export function AdminReports() {
   // Tab bảng kê chi tiết (Timeline hay Trips)
   const [detailTab, setDetailTab] = useState<'timeline' | 'trips'>('timeline')
 
-  // Bộ lọc Audit Log
-  const [searchLog, setSearchLog] = useState('')
-  const [actionFilter, setActionFilter] = useState('all')
-  const [inspectingLog, setInspectingLog] = useState<ActivityLogItem | null>(null)
+
 
   // Khởi tạo ngày mặc định theo Preset
   const applyPreset = useCallback((preset: '7d' | '30d' | 'month' | 'quarter' | 'custom') => {
@@ -233,29 +231,6 @@ export function AdminReports() {
     setSelectedPaymentMethod('')
     applyPreset('30d')
   }
-
-  // Lọc Audit Logs
-  const filteredLogs = useMemo(() => {
-    return auditLogs.filter((log) => {
-      const matchSearch =
-        searchLog === '' ||
-        log.action?.toLowerCase().includes(searchLog.toLowerCase()) ||
-        log.resourceName?.toLowerCase().includes(searchLog.toLowerCase()) ||
-        log.user?.fullName?.toLowerCase().includes(searchLog.toLowerCase()) ||
-        log.ipAddress?.includes(searchLog)
-      const matchAction = actionFilter === 'all' || log.action === actionFilter
-      return matchSearch && matchAction
-    })
-  }, [auditLogs, searchLog, actionFilter])
-
-  // Danh sách actions cho bộ lọc audit
-  const uniqueActions = useMemo(() => {
-    const set = new Set<string>()
-    auditLogs.forEach((l) => {
-      if (l.action) set.add(l.action)
-    })
-    return Array.from(set)
-  }, [auditLogs])
 
   // Tính toán KPIs tổng quan
   const kpiStats = useMemo(() => {
@@ -1793,104 +1768,7 @@ export function AdminReports() {
           5. NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT TRAIL)
       ========================================================================= */}
       {activeMainTab === 'audit' && (
-        <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm print:hidden">
-          <div className="border-b border-border bg-muted/40 p-5 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                <ShieldCheck className="size-5 text-emerald-500" />
-                Nhật ký Lưu vết Thao tác & Kiểm toán Hệ thống (Audit Trail)
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Toàn bộ thao tác phê duyệt, phân lịch điều hành xe, hoàn tiền vé và lưu vết tài chính
-              </p>
-            </div>
-
-            {/* Bộ lọc cho bảng Audit Table */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
-                <Search className="size-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchLog}
-                  onChange={(e) => setSearchLog(e.target.value)}
-                  placeholder="Tìm mã log, thao tác, IP..."
-                  className="h-9 w-48 sm:w-60 rounded-xl border border-border bg-card pl-8 pr-3 text-xs text-foreground focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <select
-                value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
-                className="h-9 rounded-xl border border-border bg-card px-3 text-xs text-foreground focus:outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="all">Tất cả hành động ({auditLogs.length})</option>
-                {uniqueActions.map((act) => (
-                  <option key={act} value={act}>
-                    {act}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Bảng Audit Log */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/30 text-muted-foreground border-b border-border">
-                <tr>
-                  <th className="p-3.5 font-semibold">Thời điểm</th>
-                  <th className="p-3.5 font-semibold">Hành động</th>
-                  <th className="p-3.5 font-semibold">Người thực hiện</th>
-                  <th className="p-3.5 font-semibold">Tài nguyên tác động</th>
-                  <th className="p-3.5 font-semibold">Địa chỉ IP</th>
-                  <th className="p-3.5 font-semibold text-center">Chi tiết</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      Không tìm thấy nhật ký kiểm toán phù hợp với bộ lọc.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLogs.slice(0, 15).map((log) => (
-                    <tr key={log.id} className="hover:bg-accent/40 transition-colors">
-                      <td className="p-3.5 font-mono text-muted-foreground whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="p-3.5 font-semibold text-foreground whitespace-nowrap">
-                        <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-semibold text-foreground">{log.user?.fullName || 'Hệ thống'}</div>
-                        <div className="text-[11px] text-muted-foreground">{log.user?.email || 'System daemon'}</div>
-                      </td>
-                      <td className="p-3.5 text-foreground max-w-[200px] truncate" title={log.resourceName}>
-                        {log.resourceName}
-                      </td>
-                      <td className="p-3.5 font-mono text-muted-foreground">
-                        {log.ipAddress || '127.0.0.1'}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setInspectingLog(log)}
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
-                          title="Xem chi tiết payload"
-                        >
-                          <Eye className="size-4 text-emerald-600 dark:text-emerald-400" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <AdminAuditLogs />
       )}
 
       {/* =========================================================================
@@ -2103,70 +1981,6 @@ export function AdminReports() {
         </div>
       )}
 
-      {/* Modal Xem Chi Tiết Audit Log */}
-      {inspectingLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-xl rounded-3xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <h4 className="font-bold text-base text-foreground flex items-center gap-2">
-                <ShieldCheck className="size-5 text-emerald-500" />
-                Chi Tiết Bản Ghi Kiểm Toán
-              </h4>
-              <button
-                type="button"
-                onClick={() => setInspectingLog(null)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent transition-colors cursor-pointer"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3 text-xs">
-              <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Mã Log:</span>
-                <span className="font-mono font-bold text-foreground">{inspectingLog.id}</span>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Hành động:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">{inspectingLog.action}</span>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Người thực hiện:</span>
-                <span className="font-semibold text-foreground">
-                  {inspectingLog.user?.fullName || 'Hệ thống'} ({inspectingLog.user?.email || 'N/A'})
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Tài nguyên:</span>
-                <span className="font-medium text-foreground">{inspectingLog.resourceName}</span>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Thời điểm:</span>
-                <span className="font-mono text-foreground">{new Date(inspectingLog.timestamp).toLocaleString('vi-VN')}</span>
-              </div>
-
-              {inspectingLog.changes && (
-                <div className="mt-3">
-                  <span className="text-muted-foreground font-semibold block mb-1">Dữ liệu thay đổi (Changes Payload):</span>
-                  <pre className="rounded-xl bg-muted/60 p-3 font-mono text-[11px] text-foreground max-h-48 overflow-y-auto">
-                    {JSON.stringify(inspectingLog.changes, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setInspectingLog(null)}
-                className="rounded-xl bg-muted px-4 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors cursor-pointer"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
