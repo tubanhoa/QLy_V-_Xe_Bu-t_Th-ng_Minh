@@ -31,6 +31,7 @@ export interface SimulatorStatus {
   totalSteps?: number
   progressPercent?: number
   speedMultiplier?: number
+  tickIntervalMs?: number
   currentLat?: number
   currentLng?: number
   speedKmh?: number

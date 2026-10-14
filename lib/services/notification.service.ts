@@ -156,9 +156,7 @@ class NotificationService {
         cache: 'no-store',
       })
 
-      if (res.status === 401 && typeof window !== 'undefined') {
-        authService.clearSession()
-      }
+
 
       if (res.ok) {
         const json = await res.json()
@@ -215,9 +213,7 @@ class NotificationService {
         headers: this.getAuthHeaders(),
         cache: 'no-store',
       })
-      if (res.status === 401 && typeof window !== 'undefined') {
-        authService.clearSession()
-      }
+
       if (res.ok) {
         const json = await res.json()
         const count = json?.data?.unreadCount ?? json?.unreadCount
@@ -336,9 +332,7 @@ class NotificationService {
         headers: this.getAuthHeaders(),
         cache: 'no-store',
       })
-      if (res.status === 401 && typeof window !== 'undefined') {
-        authService.clearSession()
-      }
+
       if (res.ok) {
         const json = await res.json()
         return json?.data || json || defaultPrefs

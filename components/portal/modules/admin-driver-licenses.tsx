@@ -29,6 +29,7 @@ import {
 import {
   driverProfileService,
 } from '@/lib/services/driver-profile.service'
+import { authService } from '@/lib/services/auth.service'
 import {
   DriverWithProfileItem,
   DriverProfileKPIs,
@@ -217,7 +218,7 @@ export function AdminDriverLicenses() {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+      const token = authService.getToken()
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001/api/v1'}/monthly-passes/upload-proof`, {
         method: 'POST',

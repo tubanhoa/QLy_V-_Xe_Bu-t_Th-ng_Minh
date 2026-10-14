@@ -64,10 +64,6 @@ class UserService {
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     const headers = this.getAuthHeaders()
     const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } })
-
-    if (res.status === 401 && typeof window !== 'undefined') {
-      authService.clearSession()
-    }
     return res
   }
 
