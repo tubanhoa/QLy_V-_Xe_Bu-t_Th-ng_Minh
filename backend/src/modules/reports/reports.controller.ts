@@ -6,6 +6,7 @@ import { Role } from '../../common/constants/roles.constant.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { RevenueReportQueryDto } from './dto/revenue-query.dto.js';
+import { OccupancyReportQueryDto } from './dto/occupancy-query.dto.js';
 
 @ApiTags('Reports & Analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,9 +27,12 @@ export class ReportsController {
   }
 
   @Get('occupancy-rate')
-  @ApiOperation({ summary: 'Thống kê tỷ lệ lấp đầy ghế theo chuyến xe' })
-  @ApiQuery({ name: 'date', required: false, example: '2026-09-26' })
-  async getOccupancyRate(@Query('date') date?: string) {
-    return this.reportsService.getOccupancyRate(date);
+  @ApiOperation({
+    summary: 'Thống kê tỷ lệ lấp đầy chỗ & phân tích tối ưu chuyến xe (SQL Aggregation)',
+    description:
+      'Hỗ trợ lọc linh hoạt theo startDate, endDate, date, routeId, tripId, timeSlot. Trả về KPIs phụ tải, phân tích mật độ giờ cao điểm/thấp điểm, ma trận Heatmap khung giờ x thứ trong tuần, và các đề xuất điều chỉnh quy mô/tần suất xe.',
+  })
+  async getOccupancyRate(@Query() query: OccupancyReportQueryDto) {
+    return this.reportsService.getOccupancyRate(query);
   }
 }

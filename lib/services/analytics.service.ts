@@ -90,14 +90,96 @@ export interface RevenueStatsResponse {
   dailyBreakdown?: Array<DailyBreakdownItem | any>
 }
 
+export interface OccupancyReportQueryParams {
+  startDate?: string
+  endDate?: string
+  date?: string
+  routeId?: string
+  tripId?: string
+  timeSlot?: string
+}
+
 export interface OccupancyTripItem {
   tripId: string
   routeName: string
+  routeCode?: string
+  routeId?: string
   departureTime: string
+  arrivalTime?: string
+  vehiclePlate?: string
+  vehicleId?: string
   capacity: number
   booked: number
   occupancyPercentage?: number
   rate?: number
+  statusLevel?: 'OVERLOADED' | 'OPTIMAL' | 'LOW' | 'UNDERUTILIZED'
+  statusText?: string
+}
+
+export interface OccupancyHourlyDensityItem {
+  hour: number
+  label: string
+  booked: number
+  capacity: number
+  rate: number
+  tripCount: number
+  isPeak: boolean
+}
+
+export interface HeatmapHourCell {
+  hour: number
+  booked: number
+  capacity: number
+  rate: number
+  tripCount: number
+}
+
+export interface HeatmapDayRow {
+  dayOfWeek: number
+  dayName: string
+  hours: HeatmapHourCell[]
+}
+
+export interface OccupancyRouteItem {
+  routeId: string
+  routeCode: string
+  routeName: string
+  booked: number
+  capacity: number
+  tripCount: number
+  occupancyRate: number
+}
+
+export interface FleetRecommendation {
+  type: 'INCREASE_FREQUENCY' | 'DECREASE_FREQUENCY' | 'LARGER_VEHICLE' | 'SMALLER_VEHICLE' | 'NETWORK_HEALTH'
+  title: string
+  message: string
+  priority: 'HIGH' | 'MEDIUM' | 'LOW'
+  targetRoute?: string
+  targetTime?: string
+}
+
+export interface OccupancySummary {
+  overallOccupancyPercentage: number
+  totalTrips: number
+  totalCapacity: number
+  totalBooked: number
+  overloadedTripsCount: number
+  optimalTripsCount: number
+  lowTripsCount: number
+  underutilizedTripsCount: number
+}
+
+export interface OccupancyReportResponse {
+  date: string
+  overallOccupancyPercentage: number
+  totalTrips: number
+  summary: OccupancySummary
+  hourlyDensity: OccupancyHourlyDensityItem[]
+  heatmapMatrix: HeatmapDayRow[]
+  occupancyByRoute: OccupancyRouteItem[]
+  recommendations: FleetRecommendation[]
+  trips: OccupancyTripItem[]
 }
 
 export interface ActivityLogItem {
@@ -265,13 +347,28 @@ class AnalyticsService {
     }
   }
 
-  /** Lấy thống kê tỷ lệ lấp đầy ghế thực tế từ Supabase */
+  /** Lấy thống kê tỷ lệ lấp đầy ghế & phân tích tối ưu quy mô xe từ backend */
   async getOccupancyStats(
-    date?: string,
-  ): Promise<{ success: boolean; data?: OccupancyTripItem[]; overallRate?: number; message?: string }> {
+    queryOrDate?: OccupancyReportQueryParams | string,
+  ): Promise<{
+    success: boolean
+    data?: OccupancyReportResponse
+    trips?: OccupancyTripItem[]
+    overallRate?: number
+    message?: string
+  }> {
     try {
       const params = new URLSearchParams()
-      if (date) params.append('date', date)
+      if (typeof queryOrDate === 'string') {
+        if (queryOrDate) params.append('date', queryOrDate)
+      } else if (queryOrDate) {
+        if (queryOrDate.startDate) params.append('startDate', queryOrDate.startDate)
+        if (queryOrDate.endDate) params.append('endDate', queryOrDate.endDate)
+        if (queryOrDate.date) params.append('date', queryOrDate.date)
+        if (queryOrDate.routeId) params.append('routeId', queryOrDate.routeId)
+        if (queryOrDate.tripId) params.append('tripId', queryOrDate.tripId)
+        if (queryOrDate.timeSlot) params.append('timeSlot', queryOrDate.timeSlot)
+      }
 
       const res = await this.fetchWithAuth(
         `${this.baseUrl}/reports/occupancy-rate${params.toString() ? `?${params.toString()}` : ''}`,
@@ -282,18 +379,51 @@ class AnalyticsService {
         return { success: false, message: json?.message || 'Không thể tải thống kê phụ tải' }
       }
       const rawData = json?.data || json || {}
-      const trips = rawData.trips || []
+      const rawTrips = rawData.trips || []
+      const trips: OccupancyTripItem[] = rawTrips.map((t: any) => ({
+        tripId: t.tripId,
+        routeName: t.routeName,
+        routeCode: t.routeCode,
+        routeId: t.routeId,
+        departureTime: t.departureTime,
+        arrivalTime: t.arrivalTime,
+        vehiclePlate: t.vehiclePlate,
+        vehicleId: t.vehicleId,
+        capacity: Number(t.capacity) || 28,
+        booked: Number(t.booked) || 0,
+        occupancyPercentage:
+          t.occupancyPercentage ?? (t.capacity > 0 ? Math.round((t.booked / t.capacity) * 100) : 0),
+        rate: t.rate ?? (t.capacity > 0 ? Math.round((t.booked / t.capacity) * 100) : 0),
+        statusLevel: t.statusLevel,
+        statusText: t.statusText,
+      }))
+
+      const responseData: OccupancyReportResponse = {
+        date: rawData.date || '',
+        overallOccupancyPercentage: rawData.overallOccupancyPercentage || 0,
+        totalTrips: rawData.totalTrips || trips.length,
+        summary: rawData.summary || {
+          overallOccupancyPercentage: rawData.overallOccupancyPercentage || 0,
+          totalTrips: trips.length,
+          totalCapacity: trips.reduce((acc, t) => acc + (t.capacity || 0), 0),
+          totalBooked: trips.reduce((acc, t) => acc + (t.booked || 0), 0),
+          overloadedTripsCount: trips.filter((t) => (t.rate || 0) >= 85).length,
+          optimalTripsCount: trips.filter((t) => (t.rate || 0) >= 50 && (t.rate || 0) < 85).length,
+          lowTripsCount: trips.filter((t) => (t.rate || 0) >= 30 && (t.rate || 0) < 50).length,
+          underutilizedTripsCount: trips.filter((t) => (t.rate || 0) < 30).length,
+        },
+        hourlyDensity: rawData.hourlyDensity || [],
+        heatmapMatrix: rawData.heatmapMatrix || [],
+        occupancyByRoute: rawData.occupancyByRoute || [],
+        recommendations: rawData.recommendations || [],
+        trips,
+      }
+
       return {
         success: true,
-        data: trips.map((t: any) => ({
-          tripId: t.tripId,
-          routeName: t.routeName,
-          departureTime: t.departureTime,
-          capacity: t.capacity,
-          booked: t.booked,
-          rate: t.occupancyPercentage ?? (t.capacity > 0 ? Math.round((t.booked / t.capacity) * 100) : 0),
-        })),
-        overallRate: rawData.overallOccupancyPercentage || 0,
+        data: responseData,
+        trips,
+        overallRate: responseData.overallOccupancyPercentage,
       }
     } catch (e: any) {
       return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
@@ -387,9 +517,9 @@ class AnalyticsService {
             dailyBreakdown: [],
           }
 
-    const occupancyTrips =
-      occRes.status === 'fulfilled' && occRes.value.success && occRes.value.data
-        ? occRes.value.data
+    const occupancyTrips: OccupancyTripItem[] =
+      occRes.status === 'fulfilled' && occRes.value.success
+        ? occRes.value.trips || occRes.value.data?.trips || []
         : []
 
     const liveTrips =

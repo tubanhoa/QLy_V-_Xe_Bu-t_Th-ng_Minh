@@ -6,6 +6,7 @@ import { TripEntity } from '../../database/entities/trip.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { TicketStatus } from '../../common/constants/status.constant.js';
 import { RevenueReportQueryDto, ReportGroupBy } from './dto/revenue-query.dto.js';
+import { OccupancyReportQueryDto } from './dto/occupancy-query.dto.js';
 
 @Injectable()
 export class ReportsService {
@@ -309,52 +310,329 @@ export class ReportsService {
     };
   }
 
-  async getOccupancyRate(date?: string) {
-    const targetDate = date || new Date().toISOString().slice(0, 10);
-    const start = new Date(`${targetDate}T00:00:00`);
-    const end = new Date(`${targetDate}T23:59:59.999`);
+  /**
+   * Thống kê tỷ lệ lấp đầy chỗ & phân tích tối ưu tần suất/quy mô xe (SQL Aggregation)
+   * Thay thế hoàn toàn cơ chế N+1 query lặp qua getMany() và getCount(),
+   * tính toán trực tiếp trên PostgreSQL engine với thời gian thực thi cực nhanh.
+   */
+  async getOccupancyRate(queryOrDate?: OccupancyReportQueryDto | string) {
+    let query: OccupancyReportQueryDto = {};
+    if (typeof queryOrDate === 'string') {
+      query = { date: queryOrDate };
+    } else if (queryOrDate) {
+      query = queryOrDate;
+    }
 
-    const trips = await this.tripRepository
-      .createQueryBuilder('trip')
-      .innerJoinAndSelect('trip.route', 'route')
-      .leftJoinAndSelect('trip.vehicle', 'vehicle')
-      .where('trip.departureTime BETWEEN :start AND :end', { start, end })
-      .getMany();
+    // 1. Xác định khoảng thời gian start - end
+    let startStr: string;
+    let endStr: string;
+    let displayDate: string;
 
-    const stats = await Promise.all(
-      trips.map(async (trip) => {
-        const capacity = trip.vehicle?.seatCapacity || 28;
-        const booked = await this.ticketRepository
-          .createQueryBuilder('ticket')
-          .innerJoin('ticket.booking', 'booking')
-          .where('booking.tripId = :tripId', { tripId: trip.id })
-          .andWhere('ticket.status NOT IN (:...excluded)', {
-            excluded: [TicketStatus.CANCELLED, TicketStatus.EXPIRED],
-          })
-          .getCount();
+    if (query.startDate && query.endDate) {
+      startStr = `${query.startDate} 00:00:00`;
+      endStr = `${query.endDate} 23:59:59.999`;
+      displayDate = `${query.startDate} ~ ${query.endDate}`;
+    } else if (query.date) {
+      startStr = `${query.date} 00:00:00`;
+      endStr = `${query.date} 23:59:59.999`;
+      displayDate = query.date;
+    } else {
+      const now = new Date();
+      const past30 = new Date(now.getTime() - 30 * 86400000);
+      const todayStr = now.toISOString().slice(0, 10);
+      const past30Str = past30.toISOString().slice(0, 10);
+      startStr = `${past30Str} 00:00:00`;
+      endStr = `${todayStr} 23:59:59.999`;
+      displayDate = `${past30Str} ~ ${todayStr}`;
+    }
 
-        const rate = capacity > 0 ? Math.round((booked / capacity) * 100) : 0;
+    // 2. Xây dựng SQL Aggregation thuần với Parameterized Query an toàn
+    const conditions: string[] = [`tr.departure_time >= $1`, `tr.departure_time <= $2`];
+    const sqlParams: any[] = [startStr, endStr];
 
-        return {
-          tripId: trip.id,
-          routeName: trip.route?.name,
-          departureTime: trip.departureTime,
-          capacity,
-          booked,
-          occupancyPercentage: rate,
-        };
-      }),
-    );
+    if (query.routeId) {
+      sqlParams.push(query.routeId);
+      conditions.push(`tr.route_id = $${sqlParams.length}`);
+    }
 
-    const totalCapacity = stats.reduce((acc, s) => acc + s.capacity, 0);
-    const totalBooked = stats.reduce((acc, s) => acc + s.booked, 0);
+    if (query.tripId) {
+      sqlParams.push(query.tripId);
+      conditions.push(`tr.id = $${sqlParams.length}`);
+    }
+
+    // Truy vấn tổng hợp tất cả chuyến xe cùng số ghế và số vé đã đặt
+    const querySql = `
+      SELECT 
+        tr.id AS "tripId",
+        tr.departure_time AS "departureTime",
+        tr.arrival_time AS "arrivalTime",
+        tr.status AS "status",
+        r.id AS "routeId",
+        r.route_code AS "routeCode",
+        r.name AS "routeName",
+        v.id AS "vehicleId",
+        COALESCE(v.license_plate, 'Xe dự phòng') AS "vehiclePlate",
+        COALESCE(v.seat_capacity, 28) AS "capacity",
+        COUNT(DISTINCT tk.id) FILTER (
+          WHERE tk.status NOT IN ('cancelled', 'expired', 'refunded')
+        ) AS "bookedCount"
+      FROM trips tr
+      INNER JOIN routes r ON tr.route_id = r.id
+      LEFT JOIN vehicles v ON tr.vehicle_id = v.id
+      LEFT JOIN bookings b ON b.trip_id = tr.id
+      LEFT JOIN tickets tk ON tk.booking_id = b.id
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY tr.id, r.id, v.id
+      ORDER BY tr.departure_time ASC;
+    `;
+
+    const rawRows: any[] = await this.tripRepository.query(querySql, sqlParams);
+
+    const processedTrips = rawRows.map((row) => {
+      const capacity = Number(row.capacity) > 0 ? Number(row.capacity) : 28;
+      const booked = Number(row.bookedCount || 0);
+      const rate = capacity > 0 ? Math.min(100, Math.round((booked / capacity) * 100)) : 0;
+
+      // 4 cấp độ phụ tải theo chuẩn vận tải công cộng
+      let statusLevel: 'OVERLOADED' | 'OPTIMAL' | 'LOW' | 'UNDERUTILIZED' = 'OPTIMAL';
+      let statusText = 'Tối ưu';
+      if (rate >= 85) {
+        statusLevel = 'OVERLOADED';
+        statusText = 'Quá tải (>85%)';
+      } else if (rate >= 50) {
+        statusLevel = 'OPTIMAL';
+        statusText = 'Tối ưu (50-85%)';
+      } else if (rate >= 30) {
+        statusLevel = 'LOW';
+        statusText = 'Thấp (30-50%)';
+      } else {
+        statusLevel = 'UNDERUTILIZED';
+        statusText = 'Rỗng khách (<30%)';
+      }
+
+      return {
+        tripId: row.tripId,
+        routeName: row.routeName,
+        routeCode: row.routeCode,
+        routeId: row.routeId,
+        departureTime: row.departureTime,
+        arrivalTime: row.arrivalTime,
+        vehiclePlate: row.vehiclePlate,
+        vehicleId: row.vehicleId,
+        capacity,
+        booked,
+        occupancyPercentage: rate,
+        rate,
+        statusLevel,
+        statusText,
+      };
+    });
+
+    // 3. Phụ tải theo khung giờ (Hourly Density: 06:00 đến 21:00)
+    const hourMap = new Map<number, { booked: number; capacity: number; tripCount: number }>();
+    for (let h = 6; h <= 21; h++) {
+      hourMap.set(h, { booked: 0, capacity: 0, tripCount: 0 });
+    }
+
+    // 4. Ma trận Heatmap: Ngày trong tuần (Thứ 2..CN) x Giờ (6..21)
+    const heatmapMap = new Map<string, { booked: number; capacity: number; tripCount: number }>();
+
+    // 5. Phân bổ theo Tuyến xe
+    const routeMap = new Map<
+      string,
+      {
+        routeId: string;
+        routeCode: string;
+        routeName: string;
+        booked: number;
+        capacity: number;
+        tripCount: number;
+      }
+    >();
+
+    for (const t of processedTrips) {
+      const depDate = new Date(t.departureTime);
+      const localHour = (depDate.getUTCHours() + 7) % 24;
+      const dayOfWeek = depDate.getUTCDay(); // 0: Sunday, 1: Monday...
+
+      // Cập nhật hourly
+      if (hourMap.has(localHour)) {
+        const hData = hourMap.get(localHour)!;
+        hData.booked += t.booked;
+        hData.capacity += t.capacity;
+        hData.tripCount += 1;
+      }
+
+      // Cập nhật heatmap
+      const heatKey = `${dayOfWeek}_${localHour}`;
+      const heatVal = heatmapMap.get(heatKey) || { booked: 0, capacity: 0, tripCount: 0 };
+      heatVal.booked += t.booked;
+      heatVal.capacity += t.capacity;
+      heatVal.tripCount += 1;
+      heatmapMap.set(heatKey, heatVal);
+
+      // Cập nhật route
+      const rKey = t.routeId || t.routeCode || t.routeName;
+      const rVal = routeMap.get(rKey) || {
+        routeId: t.routeId,
+        routeCode: t.routeCode,
+        routeName: t.routeName,
+        booked: 0,
+        capacity: 0,
+        tripCount: 0,
+      };
+      rVal.booked += t.booked;
+      rVal.capacity += t.capacity;
+      rVal.tripCount += 1;
+      routeMap.set(rKey, rVal);
+    }
+
+    const hourlyDensity = Array.from(hourMap.entries()).map(([hour, val]) => {
+      const rate = val.capacity > 0 ? Math.round((val.booked / val.capacity) * 100) : 0;
+      const isPeak = (hour >= 6 && hour <= 8) || (hour >= 11 && hour <= 12) || (hour >= 16 && hour <= 18);
+      return {
+        hour,
+        label: `${String(hour).padStart(2, '0')}:00 - ${String(hour).padStart(2, '0')}:59`,
+        booked: val.booked,
+        capacity: val.capacity,
+        rate,
+        tripCount: val.tripCount,
+        isPeak,
+      };
+    });
+
+    const dayNames: Record<number, string> = {
+      1: 'Thứ 2',
+      2: 'Thứ 3',
+      3: 'Thứ 4',
+      4: 'Thứ 5',
+      5: 'Thứ 6',
+      6: 'Thứ 7',
+      0: 'Chủ nhật',
+    };
+
+    const heatmapMatrix = [1, 2, 3, 4, 5, 6, 0].map((dayOfWeek) => {
+      const hours = [];
+      for (let h = 6; h <= 21; h++) {
+        const val = heatmapMap.get(`${dayOfWeek}_${h}`) || { booked: 0, capacity: 0, tripCount: 0 };
+        const rate = val.capacity > 0 ? Math.round((val.booked / val.capacity) * 100) : 0;
+        hours.push({
+          hour: h,
+          booked: val.booked,
+          capacity: val.capacity,
+          rate,
+          tripCount: val.tripCount,
+        });
+      }
+      return {
+        dayOfWeek,
+        dayName: dayNames[dayOfWeek],
+        hours,
+      };
+    });
+
+    const occupancyByRoute = Array.from(routeMap.values()).map((r) => {
+      const rate = r.capacity > 0 ? Math.round((r.booked / r.capacity) * 100) : 0;
+      return {
+        routeId: r.routeId,
+        routeCode: r.routeCode,
+        routeName: r.routeName,
+        booked: r.booked,
+        capacity: r.capacity,
+        tripCount: r.tripCount,
+        occupancyRate: rate,
+      };
+    });
+
+    // 6. Đề xuất điều chỉnh tần suất & quy mô xe (Fleet & Frequency Optimization)
+    const totalCapacity = processedTrips.reduce((acc, s) => acc + s.capacity, 0);
+    const totalBooked = processedTrips.reduce((acc, s) => acc + s.booked, 0);
     const overallRate = totalCapacity > 0 ? Math.round((totalBooked / totalCapacity) * 100) : 0;
 
+    const overloadedTrips = processedTrips.filter((t) => t.rate >= 85);
+    const optimalTrips = processedTrips.filter((t) => t.rate >= 50 && t.rate < 85);
+    const lowTrips = processedTrips.filter((t) => t.rate >= 30 && t.rate < 50);
+    const underutilizedTrips = processedTrips.filter((t) => t.rate < 30);
+
+    const recommendations: Array<{
+      type: 'INCREASE_FREQUENCY' | 'DECREASE_FREQUENCY' | 'LARGER_VEHICLE' | 'SMALLER_VEHICLE' | 'NETWORK_HEALTH';
+      title: string;
+      message: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      targetRoute?: string;
+      targetTime?: string;
+    }> = [];
+
+    // Phân tích đề xuất quá tải
+    if (overloadedTrips.length > 0) {
+      const topOverloaded = overloadedTrips[0];
+      const depTime = new Date(topOverloaded.departureTime).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      recommendations.push({
+        type: 'INCREASE_FREQUENCY',
+        title: `Tăng chuyến hoặc nâng quy mô xe tuyến ${topOverloaded.routeCode || topOverloaded.routeName}`,
+        message: `Ghi nhận ${overloadedTrips.length} chuyến xe quá tải (>85%). Điển hình lúc ${depTime} đạt ${topOverloaded.rate}% phụ tải. Đề xuất bổ sung chuyến chạy tăng cường hoặc điều phối xe lớn 35-45 chỗ.`,
+        priority: 'HIGH',
+        targetRoute: topOverloaded.routeCode || topOverloaded.routeName,
+        targetTime: depTime,
+      });
+    }
+
+    // Phân tích đề xuất rỗng khách
+    if (underutilizedTrips.length > 0) {
+      const sampleEmpty = underutilizedTrips[0];
+      const depTime = new Date(sampleEmpty.departureTime).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      recommendations.push({
+        type: 'SMALLER_VEHICLE',
+        title: `Giãn chuyến hoặc dùng xe Minibus cho chuyến vắng khách`,
+        message: `Có ${underutilizedTrips.length} chuyến xe có tỷ lệ lấp đầy dưới 30% (ví dụ chuyến ${sampleEmpty.routeCode || sampleEmpty.routeName} lúc ${depTime} chỉ đạt ${sampleEmpty.rate}%). Đề xuất chuyển sang xe điện nhỏ 16 chỗ hoặc giãn tần suất để tiết kiệm chi phí.`,
+        priority: 'MEDIUM',
+        targetRoute: sampleEmpty.routeCode || sampleEmpty.routeName,
+        targetTime: depTime,
+      });
+    }
+
+    // Đề xuất toàn mạng
+    if (overallRate >= 75) {
+      recommendations.push({
+        type: 'NETWORK_HEALTH',
+        title: 'Mạng lưới đạt ngưỡng phụ tải cao',
+        message: `Tỷ lệ lấp đầy bình quân toàn tuyến đạt ${overallRate}%. Hệ thống vận hành năng suất cao, cần bảo dưỡng định kỳ các xe hoạt động tần suất lớn.`,
+        priority: 'LOW',
+      });
+    } else if (overallRate > 0 && overallRate < 40) {
+      recommendations.push({
+        type: 'NETWORK_HEALTH',
+        title: 'Hiệu suất khai thác toàn mạng còn dư địa',
+        message: `Hệ số lấp đầy trung bình chỉ đạt ${overallRate}%. Đề xuất xem xét lại biểu đồ giờ xuất bến phù hợp hơn với lịch học sinh viên ICTU.`,
+        priority: 'MEDIUM',
+      });
+    }
+
     return {
-      date: targetDate,
+      date: displayDate,
       overallOccupancyPercentage: overallRate,
-      totalTrips: trips.length,
-      trips: stats,
+      totalTrips: processedTrips.length,
+      summary: {
+        overallOccupancyPercentage: overallRate,
+        totalTrips: processedTrips.length,
+        totalCapacity,
+        totalBooked,
+        overloadedTripsCount: overloadedTrips.length,
+        optimalTripsCount: optimalTrips.length,
+        lowTripsCount: lowTrips.length,
+        underutilizedTripsCount: underutilizedTrips.length,
+      },
+      hourlyDensity,
+      heatmapMatrix,
+      occupancyByRoute,
+      recommendations,
+      trips: processedTrips,
     };
   }
 }
