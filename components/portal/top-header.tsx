@@ -12,11 +12,14 @@ import {
   PanelLeftOpen,
   Search,
   Sun,
+  User,
+  KeyRound,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { analyticsService, type IncidentReportItem } from '@/lib/services/analytics.service'
 import { ROLE_META, type NavItem, type Role } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
+import { UserProfileModal } from './modals/user-profile-modal'
 
 interface TopHeaderProps {
   collapsed: boolean
@@ -67,9 +70,12 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
 
   if (!user) return null
 
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [profileModalTab, setProfileModalTab] = useState<'profile' | 'password'>('profile')
+
   const profileItems: MenuProps['items'] = [
     {
-      key: 'profile',
+      key: 'profile-info',
       disabled: true,
       label: (
         <div className="py-1">
@@ -77,6 +83,17 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
       ),
+    },
+    { type: 'divider' },
+    {
+      key: 'user-profile',
+      icon: <User size={16} strokeWidth={1.75} className="text-emerald-600" aria-hidden="true" />,
+      label: 'Hồ sơ cá nhân',
+    },
+    {
+      key: 'change-password',
+      icon: <KeyRound size={16} strokeWidth={1.75} className="text-blue-600" aria-hidden="true" />,
+      label: 'Đổi mật khẩu',
     },
     { type: 'divider' },
     {
@@ -91,7 +108,15 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
     role === 'driver' ? 'driver' : role === 'dispatcher' || role === 'manager' ? 'dispatcher' : 'admin'
 
   const handleProfileClick: MenuProps['onClick'] = ({ key }) => {
-    if (key === 'logout') onLogout()
+    if (key === 'user-profile') {
+      setProfileModalTab('profile')
+      setProfileModalOpen(true)
+    } else if (key === 'change-password') {
+      setProfileModalTab('password')
+      setProfileModalOpen(true)
+    } else if (key === 'logout') {
+      onLogout()
+    }
   }
 
   const pendingIncidents = incidents.filter((i: IncidentReportItem) => i.resolutionStatus === 'pending')
@@ -255,6 +280,12 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
           </Dropdown>
         </div>
       </div>
+
+      <UserProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        initialTab={profileModalTab}
+      />
     </header>
   )
 }

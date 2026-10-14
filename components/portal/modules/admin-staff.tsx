@@ -23,18 +23,22 @@ import {
   ArrowDown,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
-  SlidersHorizontal,
   UserPlus,
   Activity,
   X,
   Eye,
   EyeOff,
   Lock,
+  Unlock,
   IdCard,
-  CreditCard,
-  Calendar,
-  Clock,
+  Building,
+  Save,
+  KeyRound,
+  Shield,
+  Edit3,
   Check,
+  Clock,
+  Radio,
 } from 'lucide-react'
 import {
   userService,
@@ -50,6 +54,39 @@ const ROLE_PRIORITY: Record<string, number> = {
   passenger: 1,
 }
 
+const ROLE_DETAILS = {
+  admin: {
+    label: 'Super Admin',
+    desc: 'Toàn quyền quản trị hệ thống, tài chính, báo cáo, đội xe và phân quyền.',
+    badgeClass: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800/40',
+    icon: ShieldAlert,
+  },
+  manager: {
+    label: 'Điều hành viên / Quản lý',
+    desc: 'Điều hành lịch trình chạy xe, định vị GPS, phê duyệt thẻ sinh viên và xử lý sự cố.',
+    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800/40',
+    icon: UserCheck,
+  },
+  driver: {
+    label: 'Tài xế xe buýt',
+    desc: 'Xem ca chạy hôm nay, buồng lái số HUD, quét vé QR và danh sách hành khách.',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40',
+    icon: Bus,
+  },
+  conductor: {
+    label: 'Phụ xe / Soát vé',
+    desc: 'Kiểm soát vé hành khách trên xe, hỗ trợ sinh viên ICTU và hành khách ưu tiên.',
+    badgeClass: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-200 dark:border-teal-800/40',
+    icon: Users,
+  },
+  passenger: {
+    label: 'Hành khách / HSSV',
+    desc: 'Tra cứu tuyến, mua vé điện tử, đăng ký vé tháng ưu đãi và gửi đánh giá phản ánh.',
+    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    icon: GraduationCap,
+  },
+}
+
 type SortField = 'role' | 'fullName' | 'createdAt'
 type SortOrder = 'asc' | 'desc'
 
@@ -58,6 +95,7 @@ export function AdminStaff() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'locked'>('all')
   const [classificationFilter, setClassificationFilter] = useState<'all' | 'official' | 'test'>('all')
   const [sortField, setSortField] = useState<SortField>('role')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -68,21 +106,35 @@ export function AdminStaff() {
   const [confirmCleanOpen, setConfirmCleanOpen] = useState(false)
   const [deletingUser, setDeletingUser] = useState<BackendUser | null>(null)
 
-  // 1. Cấp tài khoản nhân sự tổ xe (Tài xế / Phụ xe)
-  const [isCreateCrewOpen, setIsCreateCrewOpen] = useState(false)
-  const [crewRole, setCrewRole] = useState<'driver' | 'conductor'>('driver')
-  const [newCrewName, setNewCrewName] = useState('')
-  const [newCrewPhone, setNewCrewPhone] = useState('')
-  const [newCrewIdCard, setNewCrewIdCard] = useState('')
-  const [newCrewBirthYear, setNewCrewBirthYear] = useState('')
-  const [newDriverLicense, setNewDriverLicense] = useState('Hạng D (Xe buýt 29-45 chỗ)')
-  const [newConductorDuty, setNewConductorDuty] = useState('Soát vé & Hỗ trợ hành khách (Tuyến CT-01)')
-  const [newCrewEmail, setNewCrewEmail] = useState('')
-  const [newCrewPassword, setNewCrewPassword] = useState('Driver@123')
+  // 1. Modal Thêm mới tài khoản (Tất cả 5 Roles)
+  const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false)
+  const [createRole, setCreateRole] = useState<'admin' | 'manager' | 'driver' | 'conductor' | 'passenger'>('driver')
+  const [newFullName, setNewFullName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('Password@123')
   const [showPassword, setShowPassword] = useState(false)
-  const [isSubmittingCrew, setIsSubmittingCrew] = useState(false)
+  const [newPhone, setNewPhone] = useState('')
+  const [newIdCard, setNewIdCard] = useState('')
+  const [newStudentId, setNewStudentId] = useState('')
+  const [newFaculty, setNewFaculty] = useState('')
+  const [newDriverLicense, setNewDriverLicense] = useState('Hạng D (Xe buýt 29-45 chỗ)')
+  const [isSubmittingCreate, setIsSubmittingCreate] = useState(false)
 
-  // 2. Theo dõi hồ sơ & hoạt động tài xế
+  // 2. Modal Chỉnh sửa thông tin tài khoản
+  const [editingUser, setEditingUser] = useState<BackendUser | null>(null)
+  const [editFullName, setEditFullName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editIdCard, setEditIdCard] = useState('')
+  const [editStudentId, setEditStudentId] = useState('')
+  const [editFaculty, setEditFaculty] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  // 3. Modal Phân quyền / Đổi vai trò
+  const [roleAssignUser, setRoleAssignUser] = useState<BackendUser | null>(null)
+  const [selectedRoleForAssign, setSelectedRoleForAssign] = useState<string>('passenger')
+  const [isAssigningRole, setIsAssigningRole] = useState(false)
+
+  // 4. Theo dõi hồ sơ & hoạt động tài xế
   const [viewingDriver, setViewingDriver] = useState<BackendUser | null>(null)
   const [driverActivity, setDriverActivity] = useState<DriverActivityResponse | null>(null)
   const [isLoadingActivity, setIsLoadingActivity] = useState(false)
@@ -101,7 +153,7 @@ export function AdminStaff() {
     )
   }, [])
 
-  // Tải danh sách người dùng đầy đủ từ Supabase Cloud
+  // Tải danh sách người dùng từ Database
   const fetchUsers = useCallback(async () => {
     setLoading(true)
     try {
@@ -122,31 +174,195 @@ export function AdminStaff() {
     fetchUsers()
   }, [fetchUsers])
 
-  const handleRoleChange = async (userId: string, newRole: string) => {
-    setUpdatingId(userId)
+  // Cập nhật email gợi ý theo tên và role
+  const handleCreateNameChange = (name: string, role = createRole) => {
+    setNewFullName(name)
+    if (!name.trim()) return
+    const parts = name.trim().toLowerCase().split(/\s+/)
+    const lastName = parts[parts.length - 1]
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]/g, '')
+    if (lastName) {
+      const prefix =
+        role === 'admin'
+          ? 'admin'
+          : role === 'manager'
+          ? 'manager'
+          : role === 'driver'
+          ? 'driver'
+          : role === 'conductor'
+          ? 'conductor'
+          : 'student'
+      setNewEmail(`${prefix}.${lastName}@smartbus.ictu.vn`)
+    }
+  }
+
+  const handleRoleTypeChange = (r: 'admin' | 'manager' | 'driver' | 'conductor' | 'passenger') => {
+    setCreateRole(r)
+    setNewPassword(
+      r === 'admin' ? 'Admin@123' : r === 'driver' ? 'Driver@123' : r === 'conductor' ? 'Staff@123' : 'Password@123'
+    )
+    if (newFullName.trim()) {
+      handleCreateNameChange(newFullName, r)
+    }
+  }
+
+  // Submit tạo tài khoản mới
+  const handleCreateAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newFullName.trim() || !newEmail.trim()) {
+      setErrorFeedback('Vui lòng nhập họ tên và email cho tài khoản mới.')
+      return
+    }
+
+    setIsSubmittingCreate(true)
     try {
-      const res = await userService.changeRole(userId, newRole)
+      const payload: any = {
+        fullName: newFullName.trim(),
+        email: newEmail.trim().toLowerCase(),
+        password: newPassword.trim() || 'Password@123',
+        role: createRole,
+        phoneNumber: newPhone.trim() || undefined,
+        idCardNumber: newIdCard.trim() || undefined,
+      }
+
+      if (createRole === 'passenger') {
+        payload.studentId = newStudentId.trim() ? newStudentId.trim().toUpperCase() : undefined
+        payload.faculty = newFaculty.trim() || undefined
+      } else if (createRole === 'driver') {
+        payload.faculty = newDriverLicense.trim()
+      } else if (createRole === 'conductor') {
+        payload.faculty = newFaculty.trim() || 'Soát vé & Hỗ trợ hành khách'
+      }
+
+      const res = await userService.createUser(payload)
+
       if (res.success) {
-        setFeedback(`Đã cập nhật vai trò tài khoản thành [${newRole.toUpperCase()}] thành công!`)
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  role: {
-                    id: u.role?.id || '',
-                    name: newRole,
-                    description: u.role?.description,
-                  },
-                }
-              : u,
-          ),
+        setFeedback(
+          `Cấp tài khoản [${newEmail}] thành công với vai trò ${ROLE_DETAILS[createRole].label}! Mật khẩu: ${newPassword}`
         )
+        setIsCreateAccountOpen(false)
+        setNewFullName('')
+        setNewEmail('')
+        setNewPhone('')
+        setNewIdCard('')
+        setNewStudentId('')
+        setNewFaculty('')
+        await fetchUsers()
       } else {
-        setErrorFeedback(res.message || 'Không thể cập nhật phân quyền.')
+        setErrorFeedback(res.message || 'Không thể tạo tài khoản người dùng.')
+      }
+    } catch (err: any) {
+      setErrorFeedback(err?.message || 'Lỗi hệ thống khi tạo tài khoản.')
+    } finally {
+      setIsSubmittingCreate(false)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 5000)
+    }
+  }
+
+  // Mở modal sửa thông tin
+  const handleOpenEdit = (user: BackendUser) => {
+    setEditingUser(user)
+    setEditFullName(user.fullName || '')
+    setEditPhone(user.phoneNumber || '')
+    setEditIdCard(user.idCardNumber || '')
+    setEditStudentId(user.studentId || '')
+    setEditFaculty(user.faculty || '')
+  }
+
+  // Submit cập nhật thông tin
+  const handleSaveEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingUser) return
+
+    setIsSavingEdit(true)
+    try {
+      const res = await userService.updateUser(editingUser.id, {
+        fullName: editFullName.trim(),
+        phoneNumber: editPhone.trim() || undefined,
+        idCardNumber: editIdCard.trim() || undefined,
+        studentId: editStudentId.trim() ? editStudentId.trim().toUpperCase() : undefined,
+        faculty: editFaculty.trim() || undefined,
+      })
+
+      if (res.success) {
+        setFeedback(`Đã cập nhật thông tin tài khoản [${editingUser.email}] thành công!`)
+        setEditingUser(null)
+        await fetchUsers()
+      } else {
+        setErrorFeedback(res.message || 'Không thể cập nhật thông tin tài khoản.')
+      }
+    } catch (err: any) {
+      setErrorFeedback(err?.message || 'Lỗi hệ thống khi cập nhật thông tin.')
+    } finally {
+      setIsSavingEdit(false)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 4000)
+    }
+  }
+
+  // Mở modal phân quyền
+  const handleOpenRoleAssign = (user: BackendUser) => {
+    setRoleAssignUser(user)
+    setSelectedRoleForAssign((user.role?.name || 'passenger').toLowerCase())
+  }
+
+  // Submit phân quyền
+  const handleRoleAssignSubmit = async () => {
+    if (!roleAssignUser) return
+
+    setIsAssigningRole(true)
+    try {
+      const res = await userService.changeRole(roleAssignUser.id, selectedRoleForAssign)
+      if (res.success) {
+        setFeedback(
+          `Đã phân quyền tài khoản [${roleAssignUser.email}] thành vai trò [${selectedRoleForAssign.toUpperCase()}] thành công!`
+        )
+        setRoleAssignUser(null)
+        await fetchUsers()
+      } else {
+        setErrorFeedback(res.message || 'Không thể thay đổi vai trò người dùng.')
       }
     } catch {
-      setErrorFeedback('Lỗi kết nối khi cập nhật vai trò người dùng.')
+      setErrorFeedback('Lỗi kết nối khi thay đổi vai trò người dùng.')
+    } finally {
+      setIsAssigningRole(false)
+      setTimeout(() => {
+        setFeedback(null)
+        setErrorFeedback(null)
+      }, 4000)
+    }
+  }
+
+  // Đổi trạng thái Khóa / Mở khóa tài khoản
+  const handleToggleStatus = async (user: BackendUser) => {
+    const isLocked = user.status === 'locked' || user.status === 'inactive'
+    const nextStatus = isLocked ? 'active' : 'locked'
+    setUpdatingId(user.id)
+
+    try {
+      const res = await userService.changeStatus(user.id, nextStatus as any)
+      if (res.success) {
+        setFeedback(
+          nextStatus === 'active'
+            ? `Đã MỞ KHÓA tài khoản [${user.email}] thành công!`
+            : `Đã KHÓA tài khoản [${user.email}] thành công!`
+        )
+        setUsers((prev) =>
+          prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
+        )
+      } else {
+        setErrorFeedback(res.message || 'Không thể thay đổi trạng thái tài khoản.')
+      }
+    } catch {
+      setErrorFeedback('Lỗi hệ thống khi thay đổi trạng thái tài khoản.')
     } finally {
       setUpdatingId(null)
       setTimeout(() => {
@@ -156,6 +372,7 @@ export function AdminStaff() {
     }
   }
 
+  // Xóa tài khoản
   const handleDeleteUser = async (user: BackendUser) => {
     try {
       const res = await userService.deleteUser(user.id)
@@ -176,6 +393,7 @@ export function AdminStaff() {
     }
   }
 
+  // Dọn dẹp dữ liệu kiểm thử 1-click
   const handleCleanupTestData = async () => {
     setIsCleaning(true)
     setConfirmCleanOpen(false)
@@ -185,7 +403,7 @@ export function AdminStaff() {
         setFeedback(
           res.deletedCount && res.deletedCount > 0
             ? `Thành công! Đã dọn dẹp sạch ${res.deletedCount} tài khoản kiểm thử và dữ liệu rác.`
-            : 'Cơ sở dữ liệu hoàn toàn sạch sẽ, không có tài khoản kiểm thử nào.',
+            : 'Cơ sở dữ liệu hoàn toàn sạch sẽ, không có tài khoản kiểm thử nào.'
         )
         await fetchUsers()
       } else {
@@ -202,80 +420,7 @@ export function AdminStaff() {
     }
   }
 
-  const handleCrewNameChange = (name: string, role = crewRole) => {
-    setNewCrewName(name)
-    if (!name.trim()) return
-    const parts = name.trim().toLowerCase().split(/\s+/)
-    const lastName = parts[parts.length - 1]
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/[^a-z0-9]/g, '')
-    if (lastName) {
-      const prefix = role === 'conductor' ? 'conductor' : 'driver'
-      setNewCrewEmail(`${prefix}.${lastName}@smartbus.ictu.vn`)
-    }
-  }
-
-  const handleRoleTabChange = (role: 'driver' | 'conductor') => {
-    setCrewRole(role)
-    setNewCrewPassword(role === 'conductor' ? 'Staff@123' : 'Driver@123')
-    if (newCrewName.trim()) {
-      handleCrewNameChange(newCrewName, role)
-    } else {
-      setNewCrewEmail('')
-    }
-  }
-
-  const handleCreateCrew = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCrewName.trim() || !newCrewEmail.trim()) {
-      setErrorFeedback(`Vui lòng nhập họ tên và email nội bộ cho ${crewRole === 'conductor' ? 'phụ xe' : 'tài xế'}.`)
-      return
-    }
-
-    setIsSubmittingCrew(true)
-    try {
-      const res = await userService.createUser({
-        fullName: newCrewName.trim(),
-        email: newCrewEmail.trim().toLowerCase(),
-        password: newCrewPassword.trim() || (crewRole === 'conductor' ? 'Staff@123' : 'Driver@123'),
-        role: crewRole,
-        phoneNumber: newCrewPhone.trim() || undefined,
-        idCardNumber: newCrewIdCard.trim() || undefined,
-        faculty:
-          crewRole === 'conductor'
-            ? `${newConductorDuty.trim()}${newCrewBirthYear ? ` (Năm sinh: ${newCrewBirthYear.trim()})` : ''}`
-            : newDriverLicense,
-      })
-
-      if (res.success) {
-        const roleLabel = crewRole === 'conductor' ? 'Phụ xe / Soát vé' : 'Tài xế'
-        setFeedback(
-          `Cấp tài khoản ${roleLabel} [${newCrewEmail}] thành công! Mật khẩu khởi tạo: ${newCrewPassword}`,
-        )
-        setIsCreateCrewOpen(false)
-        setNewCrewName('')
-        setNewCrewEmail('')
-        setNewCrewPhone('')
-        setNewCrewIdCard('')
-        setNewCrewBirthYear('')
-        setNewCrewPassword(crewRole === 'conductor' ? 'Staff@123' : 'Driver@123')
-        await fetchUsers()
-      } else {
-        setErrorFeedback(res.message || `Không thể cấp tài khoản ${crewRole === 'conductor' ? 'phụ xe' : 'tài xế'}.`)
-      }
-    } catch (err: any) {
-      setErrorFeedback(err?.message || 'Lỗi hệ thống khi tạo tài khoản nhân sự.')
-    } finally {
-      setIsSubmittingCrew(false)
-      setTimeout(() => {
-        setFeedback(null)
-        setErrorFeedback(null)
-      }, 5000)
-    }
-  }
-
+  // Xem hoạt động tài xế
   const handleOpenDriverActivity = async (driver: BackendUser) => {
     setViewingDriver(driver)
     setIsLoadingActivity(true)
@@ -295,7 +440,7 @@ export function AdminStaff() {
     }
   }
 
-  // Toggle Sắp xếp theo cột
+  // Toggle Sắp xếp
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
@@ -311,7 +456,7 @@ export function AdminStaff() {
 
     return users
       .filter((u) => {
-        // 1. Lọc theo từ khóa tìm kiếm
+        // 1. Tìm kiếm
         const matchSearch =
           !q ||
           u.fullName.toLowerCase().includes(q) ||
@@ -320,17 +465,23 @@ export function AdminStaff() {
           (u.studentId && u.studentId.toLowerCase().includes(q)) ||
           (u.faculty && u.faculty.toLowerCase().includes(q))
 
-        // 2. Lọc theo phân loại (Chính thức / Test)
+        // 2. Phân loại (Chính thức / Test)
         const isTest = isTestAccount(u)
         let matchClassification = true
         if (classificationFilter === 'official') matchClassification = !isTest
         if (classificationFilter === 'test') matchClassification = isTest
 
-        // 3. Lọc theo vai trò được chọn trên button
+        // 3. Trạng thái (active vs locked)
+        const isUserLocked = u.status === 'locked' || u.status === 'inactive'
+        let matchStatus = true
+        if (statusFilter === 'active') matchStatus = !isUserLocked
+        if (statusFilter === 'locked') matchStatus = isUserLocked
+
+        // 4. Vai trò
         const userRole = (u.role?.name || 'passenger').toLowerCase()
         const matchRole = roleFilter === 'all' || userRole === roleFilter.toLowerCase()
 
-        return matchSearch && matchClassification && matchRole
+        return matchSearch && matchClassification && matchStatus && matchRole
       })
       .sort((a, b) => {
         if (sortField === 'role') {
@@ -355,33 +506,40 @@ export function AdminStaff() {
 
         return 0
       })
-  }, [users, search, roleFilter, classificationFilter, sortField, sortOrder, isTestAccount])
+  }, [users, search, roleFilter, statusFilter, classificationFilter, sortField, sortOrder, isTestAccount])
 
-  // Thống kê phân loại dựa trên tổng số tài khoản thực tế trong DB
+  // Thống kê số lượng
   const testCount = useMemo(() => users.filter(isTestAccount).length, [users, isTestAccount])
   const officialCount = useMemo(() => users.length - testCount, [users, testCount])
+  const lockedCount = useMemo(
+    () => users.filter((u) => u.status === 'locked' || u.status === 'inactive').length,
+    [users]
+  )
+  const activeCount = useMemo(() => users.length - lockedCount, [users, lockedCount])
+
   const adminCount = useMemo(
     () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'admin').length,
-    [users],
+    [users]
   )
   const managerCount = useMemo(
     () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'manager').length,
-    [users],
+    [users]
   )
   const driverCount = useMemo(
     () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'driver').length,
-    [users],
+    [users]
   )
   const conductorCount = useMemo(
     () => users.filter((u) => (u.role?.name || '').toLowerCase() === 'conductor').length,
-    [users],
+    [users]
   )
   const passengerCount = useMemo(
-    () => users.filter((u) => {
-      const r = (u.role?.name || 'passenger').toLowerCase()
-      return r === 'passenger' || (!['admin', 'manager', 'driver', 'conductor'].includes(r))
-    }).length,
-    [users],
+    () =>
+      users.filter((u) => {
+        const r = (u.role?.name || 'passenger').toLowerCase()
+        return r === 'passenger' || !['admin', 'manager', 'driver', 'conductor'].includes(r)
+      }).length,
+    [users]
   )
 
   return (
@@ -396,38 +554,43 @@ export function AdminStaff() {
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">
               <ShieldCheck size={11} />
-              {officialCount} Tài khoản chính thức
+              {officialCount} Chính thức
             </span>
-            {testCount > 0 ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+              <CheckCircle2 size={11} />
+              {activeCount} Đang hoạt động
+            </span>
+            {lockedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/40">
+                <Lock size={11} />
+                {lockedCount} Đang bị khóa
+              </span>
+            )}
+            {testCount > 0 && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
                 <AlertTriangle size={11} />
-                {testCount} Tài khoản Test / Rác
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
-                <Sparkles size={11} className="text-emerald-500" />
-                Cơ sở dữ liệu sạch (0 test)
+                {testCount} Tài khoản Test
               </span>
             )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-normal text-slate-900 dark:text-white">
-            Nhân Sự & Phân Quyền Hệ Thống (RBAC)
+            Quản Lý Tài Khoản & Phân Quyền RBAC
           </h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Dữ liệu tài khoản thực tế từ PostgreSQL: Quản trị viên, Điều hành viên, Tài xế, Phụ xe và Sinh viên ICTU.
+            Quản lý tài khoản, gán quyền truy cập (Admin, Quản lý, Tài xế, Phụ xe, Hành khách) và khóa/mở tài khoản an toàn.
           </p>
         </div>
 
         {/* Nút tác vụ */}
-        <div className="flex items-center gap-2">
-          {/* Nút Cấp tài khoản Nhân sự Tổ xe (Tài xế / Phụ xe) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Nút Thêm mới tài khoản */}
           <button
             type="button"
-            onClick={() => setIsCreateCrewOpen(true)}
+            onClick={() => setIsCreateAccountOpen(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all cursor-pointer hover:shadow-emerald-600/20 hover:shadow-md active:scale-95"
           >
             <UserPlus size={14} />
-            <span>+ Cấp Nhân Sự Tổ Xe</span>
+            <span>+ Thêm Tài Khoản Mới</span>
           </button>
 
           {/* Nút Dọn dẹp dữ liệu kiểm thử */}
@@ -460,51 +623,80 @@ export function AdminStaff() {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin text-emerald-600' : ''} />
-            <span>Đồng bộ từ Database</span>
+            <span>Đồng bộ</span>
           </button>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col gap-3">
-        {/* Hàng 1: Phân loại tài khoản (Chính thức vs Test) */}
-        <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs shadow-xs">
-          <div className="flex items-center gap-1 px-2.5 py-1 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
-            <Filter size={13} />
-            <span>Phân loại:</span>
+        {/* Hàng 1: Bộ lọc Phân loại & Trạng thái */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs shadow-xs">
+          {/* Phân loại chính thức vs test */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center gap-1 px-2 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
+              <Filter size={13} />
+              <span>Phân loại:</span>
+            </div>
+            {[
+              { key: 'all', label: `Tất cả (${users.length})` },
+              { key: 'official', label: `Chính thức (${officialCount})`, dot: 'bg-emerald-500' },
+              { key: 'test', label: `Dữ liệu Test (${testCount})`, dot: 'bg-amber-500' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setClassificationFilter(tab.key as any)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  classificationFilter === tab.key
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60'
+                }`}
+              >
+                {tab.dot && <span className={`h-2 w-2 rounded-full ${tab.dot}`} />}
+                <span>{tab.label}</span>
+              </button>
+            ))}
           </div>
-          {[
-            { key: 'all', label: `Tất cả (${users.length})` },
-            { key: 'official', label: `Tài khoản chính thức (${officialCount})`, dot: 'bg-emerald-500' },
-            { key: 'test', label: `Dữ liệu kiểm thử (${testCount})`, dot: 'bg-amber-500' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setClassificationFilter(tab.key as any)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                classificationFilter === tab.key
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60'
-              }`}
-            >
-              {tab.dot && <span className={`h-2 w-2 rounded-full ${tab.dot}`} />}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+
+          {/* Lọc theo trạng thái Khóa / Mở */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center gap-1 px-2 text-slate-400 font-bold text-[11px] uppercase tracking-wider">
+              <Shield size={13} />
+              <span>Trạng thái:</span>
+            </div>
+            {[
+              { key: 'all', label: `Tất cả (${users.length})` },
+              { key: 'active', label: `Hoạt động (${activeCount})`, color: 'text-emerald-600' },
+              { key: 'locked', label: `Bị khóa (${lockedCount})`, color: 'text-red-500' },
+            ].map((st) => (
+              <button
+                key={st.key}
+                type="button"
+                onClick={() => setStatusFilter(st.key as any)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                  statusFilter === st.key
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60'
+                }`}
+              >
+                <span>{st.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Hàng 2: Button Sắp xếp & Lọc Vai Trò + Ô Tìm kiếm */}
+        {/* Hàng 2: Role Filter Tabs + Sắp xếp & Tìm kiếm */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-          {/* Role Filter Tabs (Nút lọc vai trò) */}
+          {/* Lọc vai trò */}
           <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
             {[
-              { key: 'all', label: `Tất cả vai trò (${users.length})` },
-              { key: 'admin', label: `Super Admin (${adminCount})` },
-              { key: 'manager', label: `Điều hành (${managerCount})` },
+              { key: 'all', label: `Tất cả (${users.length})` },
+              { key: 'admin', label: `Admin (${adminCount})` },
+              { key: 'manager', label: `Quản lý (${managerCount})` },
               { key: 'driver', label: `Tài xế (${driverCount})` },
               { key: 'conductor', label: `Phụ xe (${conductorCount})` },
-              { key: 'passenger', label: `Hành khách / HSSV (${passengerCount})` },
+              { key: 'passenger', label: `Hành khách (${passengerCount})` },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -521,67 +713,30 @@ export function AdminStaff() {
             ))}
           </div>
 
-          {/* Quick Sắp xếp vai trò & Tìm kiếm */}
+          {/* Sắp xếp & Tìm kiếm */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Sắp xếp: Dropdown & Toggle */}
-            <div className="flex items-center gap-1.5">
-              <select
-                value={`${sortField}-${sortOrder}`}
-                onChange={(e) => {
-                  const [field, order] = e.target.value.split('-') as [SortField, SortOrder]
-                  setSortField(field)
-                  setSortOrder(order)
-                }}
-                className="h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
-              >
-                <option value="role-desc">Sắp xếp: Vai trò (Cao đến Thấp)</option>
-                <option value="role-asc">Sắp xếp: Vai trò (Thấp đến Cao)</option>
-                <option value="fullName-asc">Sắp xếp: Họ tên (A - Z)</option>
-                <option value="fullName-desc">Sắp xếp: Họ tên (Z - A)</option>
-                <option value="createdAt-desc">Sắp xếp: Ngày tạo (Mới nhất)</option>
-                <option value="createdAt-asc">Sắp xếp: Ngày tạo (Cũ nhất)</option>
-              </select>
+            <select
+              value={`${sortField}-${sortOrder}`}
+              onChange={(e) => {
+                const [field, order] = e.target.value.split('-') as [SortField, SortOrder]
+                setSortField(field)
+                setSortOrder(order)
+              }}
+              className="h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
+            >
+              <option value="role-desc">Sắp xếp: Vai trò (Cao đến Thấp)</option>
+              <option value="role-asc">Sắp xếp: Vai trò (Thấp đến Cao)</option>
+              <option value="fullName-asc">Sắp xếp: Họ tên (A - Z)</option>
+              <option value="fullName-desc">Sắp xếp: Họ tên (Z - A)</option>
+              <option value="createdAt-desc">Sắp xếp: Ngày tạo (Mới nhất)</option>
+              <option value="createdAt-asc">Sắp xếp: Ngày tạo (Cũ nhất)</option>
+            </select>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (sortField !== 'role') {
-                    setSortField('role')
-                    setSortOrder('desc')
-                  } else {
-                    setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
-                  }
-                }}
-                className={`h-10 inline-flex items-center gap-1.5 px-3 text-xs font-bold rounded-2xl border transition-all cursor-pointer ${
-                  sortField === 'role'
-                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
-                }`}
-                title="Bấm để đảo chiều sắp xếp theo cấp bậc vai trò"
-              >
-                {sortField === 'role' && sortOrder === 'desc' ? (
-                  <ArrowDownWideNarrow size={14} className="text-emerald-600" />
-                ) : sortField === 'role' && sortOrder === 'asc' ? (
-                  <ArrowUpNarrowWide size={14} className="text-emerald-600" />
-                ) : (
-                  <ArrowUpDown size={14} className="text-slate-400" />
-                )}
-                <span className="hidden sm:inline">
-                  {sortField === 'role'
-                    ? sortOrder === 'desc'
-                      ? 'Cao đến Thấp'
-                      : 'Thấp đến Cao'
-                    : 'Đảo chiều'}
-                </span>
-              </button>
-            </div>
-
-            {/* Ô tìm kiếm */}
             <div className="relative flex-1 sm:w-72">
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm tên, email, SĐT, mã SV, khoa..."
+                placeholder="Tìm tên, email, SĐT, mã SV..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-10 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-10 pr-3 text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none shadow-xs"
@@ -612,8 +767,6 @@ export function AdminStaff() {
             <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
               <tr>
                 <th className="p-4 pl-6 w-32 whitespace-nowrap">Mã định danh</th>
-
-                {/* Sắp xếp theo Tên */}
                 <th
                   onClick={() => handleSort('fullName')}
                   className="p-4 min-w-[220px] whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -631,17 +784,13 @@ export function AdminStaff() {
                     )}
                   </div>
                 </th>
-
                 <th className="p-4 min-w-[240px] whitespace-nowrap">Email / SĐT</th>
-                <th className="p-4 w-36 whitespace-nowrap">Phân loại</th>
-
-                {/* Sắp xếp theo Vai trò (Role) */}
                 <th
                   onClick={() => handleSort('role')}
                   className="p-4 w-44 whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>Vai trò (Role)</span>
+                    <span>Vai trò / Quyền hạn</span>
                     {sortField === 'role' ? (
                       sortOrder === 'desc' ? (
                         <ArrowDownWideNarrow size={14} className="text-emerald-600 font-bold" />
@@ -653,10 +802,7 @@ export function AdminStaff() {
                     )}
                   </div>
                 </th>
-
-                <th className="p-4 w-32 whitespace-nowrap">Trạng thái</th>
-
-                {/* Sắp xếp theo Ngày tạo */}
+                <th className="p-4 w-36 whitespace-nowrap">Trạng thái</th>
                 <th
                   onClick={() => handleSort('createdAt')}
                   className="p-4 w-28 whitespace-nowrap cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -674,22 +820,21 @@ export function AdminStaff() {
                     )}
                   </div>
                 </th>
-
-                <th className="p-4 pr-6 min-w-[250px] text-right whitespace-nowrap">Thao tác</th>
+                <th className="p-4 pr-6 min-w-[280px] text-right whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-xs text-slate-400">
+                  <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
                     <RefreshCw size={20} className="animate-spin text-emerald-600 mx-auto mb-2" />
                     Đang tải danh sách tài khoản từ Supabase Cloud...
                   </td>
                 </tr>
               ) : filteredAndSortedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-xs text-slate-400">
-                    Không tìm thấy tài khoản phù hợp với điều kiện tìm kiếm và vai trò đã chọn.
+                  <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
+                    Không tìm thấy tài khoản phù hợp với điều kiện tìm kiếm và bộ lọc đã chọn.
                   </td>
                 </tr>
               ) : (
@@ -697,6 +842,7 @@ export function AdminStaff() {
                   const roleName = (u.role?.name || 'passenger').toLowerCase()
                   const isUpdating = updatingId === u.id
                   const isTest = isTestAccount(u)
+                  const isUserLocked = u.status === 'locked' || u.status === 'inactive'
                   const isProtectedSuperAdmin =
                     u.email === 'admin@smartbus.ictu.vn' || u.email === 'narukun2812@gmail.com'
 
@@ -704,28 +850,27 @@ export function AdminStaff() {
                     ? `SV-${u.studentId}`
                     : `USR-${u.id.slice(0, 6).toUpperCase()}`
 
+                  const roleInfo = ROLE_DETAILS[roleName as keyof typeof ROLE_DETAILS] || ROLE_DETAILS.passenger
+                  const RoleIcon = roleInfo.icon
+
                   return (
                     <tr
                       key={u.id}
                       className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors ${
                         isTest ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''
-                      }`}
+                      } ${isUserLocked ? 'opacity-70 bg-red-50/20 dark:bg-red-950/10' : ''}`}
                     >
                       <td className="p-4 pl-6 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {userCode}
                       </td>
                       <td className="p-4 min-w-[220px] whitespace-nowrap">
                         <p className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          {roleName === 'admin' && <ShieldAlert size={15} className="text-purple-600 shrink-0" />}
-                          {roleName === 'manager' && <UserCheck size={15} className="text-blue-600 shrink-0" />}
-                          {roleName === 'driver' && <Bus size={15} className="text-emerald-600 shrink-0" />}
-                          {roleName === 'conductor' && <Users size={15} className="text-teal-600 shrink-0" />}
-                          {roleName === 'passenger' && <GraduationCap size={15} className="text-slate-400 shrink-0" />}
+                          <RoleIcon size={15} className="shrink-0 text-slate-600 dark:text-slate-300" />
                           <span className="truncate max-w-[260px]">{u.fullName}</span>
                         </p>
                         {u.faculty && (
                           <span className="text-[11px] text-slate-400 block mt-0.5">
-                            Khoa: {u.faculty}
+                            {u.faculty}
                           </span>
                         )}
                       </td>
@@ -741,78 +886,84 @@ export function AdminStaff() {
                           </p>
                         )}
                       </td>
+                      <td className="p-4 w-44 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRoleAssign(u)}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-all hover:scale-105 cursor-pointer border ${roleInfo.badgeClass}`}
+                          title="Bấm để mở popup phân quyền vai trò"
+                        >
+                          <RoleIcon size={13} className="shrink-0" />
+                          <span>{roleInfo.label}</span>
+                        </button>
+                      </td>
                       <td className="p-4 w-36 whitespace-nowrap">
-                        {isTest ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/40">
-                            <AlertTriangle size={12} className="text-amber-600 shrink-0" />
-                            <span>Dữ liệu Test</span>
+                        {isUserLocked ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 font-bold text-[11px] border border-red-200/50 dark:border-red-800/40">
+                            <Lock size={12} className="shrink-0 text-red-500" />
+                            <span>Đã khóa</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
-                            <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
-                            <span>Chính thức</span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] border border-emerald-200/50 dark:border-emerald-800/40">
+                            <span className="size-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                            <span>Hoạt động</span>
                           </span>
                         )}
-                      </td>
-                      <td className="p-4 w-44 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-                            roleName === 'admin'
-                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40'
-                              : roleName === 'manager'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40'
-                              : roleName === 'driver'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40'
-                              : roleName === 'conductor'
-                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800/40'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {roleName === 'admin'
-                            ? 'Super Admin'
-                            : roleName === 'manager'
-                            ? 'Điều hành viên'
-                            : roleName === 'driver'
-                            ? 'Tài xế'
-                            : roleName === 'conductor'
-                            ? 'Phụ xe / Soát vé'
-                            : 'Hành khách / HSSV'}
-                        </span>
-                      </td>
-                      <td className="p-4 w-32 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] border border-emerald-200/50 dark:border-emerald-800/40">
-                          <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span>Hoạt động</span>
-                        </span>
                       </td>
                       <td className="p-4 w-28 text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">
                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '---'}
                       </td>
                       <td className="p-4 pr-6 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center justify-end gap-2">
-                          <select
-                            disabled={isUpdating}
-                            value={roleName}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs disabled:opacity-50"
-                          >
-                            <option value="admin">Super Admin</option>
-                            <option value="manager">Điều hành</option>
-                            <option value="driver">Tài xế</option>
-                            <option value="conductor">Phụ xe / Soát vé</option>
-                            <option value="passenger">Hành khách / HSSV</option>
-                          </select>
-
+                        <div className="inline-flex items-center justify-end gap-1.5">
                           {/* Nút Xem hoạt động tài xế */}
                           {roleName === 'driver' && (
                             <button
                               type="button"
                               onClick={() => handleOpenDriverActivity(u)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
                               title="Xem ca chạy & lịch sử soát vé của tài xế"
                             >
-                              <Activity size={14} />
-                              <span>Ca chạy & Soát vé</span>
+                              <Activity size={13} />
+                              <span className="hidden sm:inline">Ca chạy</span>
+                            </button>
+                          )}
+
+                          {/* Nút Phân quyền */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRoleAssign(u)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                            title="Gán vai trò / Phân quyền RBAC"
+                          >
+                            <Shield size={13} />
+                            <span>Gán quyền</span>
+                          </button>
+
+                          {/* Nút Sửa thông tin */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(u)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                            title="Sửa thông tin tài khoản"
+                          >
+                            <Edit3 size={13} />
+                            <span>Sửa</span>
+                          </button>
+
+                          {/* Nút Khóa / Mở khóa tài khoản */}
+                          {!isProtectedSuperAdmin && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleToggleStatus(u)}
+                              className={`p-1.5 rounded-xl border transition-all cursor-pointer shadow-xs ${
+                                isUserLocked
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-600 hover:bg-emerald-100'
+                                  : 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100'
+                              }`}
+                              title={isUserLocked ? 'Mở khóa tài khoản này' : 'Tạm khóa tài khoản này'}
+                            >
+                              {isUserLocked ? <Unlock size={15} /> : <Lock size={15} />}
                             </button>
                           )}
 
@@ -821,10 +972,10 @@ export function AdminStaff() {
                             <button
                               type="button"
                               onClick={() => setDeletingUser(u)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer shrink-0"
+                              className="p-1.5 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                               title="Xóa tài khoản này"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={15} />
                             </button>
                           )}
                         </div>
@@ -838,6 +989,437 @@ export function AdminStaff() {
         </div>
       </div>
 
+      {/* 1. Modal Thêm mới tài khoản (Tất cả 5 Roles) */}
+      {isCreateAccountOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-xl rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl bg-emerald-600/10 text-emerald-600 flex items-center justify-center font-bold">
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Tạo Tài Khoản & Phân Quyền Mới
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Hỗ trợ tạo tài khoản cho 5 nhóm vai trò trong hệ thống Smart Bus ICTU
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateAccountOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccountSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-sidebar-scroll">
+              {/* Chọn vai trò */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  Vai trò / Phân quyền ban đầu <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {(['admin', 'manager', 'driver', 'conductor', 'passenger'] as const).map((r) => {
+                    const info = ROLE_DETAILS[r]
+                    const Icon = info.icon
+                    const isSelected = createRole === r
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => handleRoleTypeChange(r)}
+                        className={`flex items-center gap-2 p-2.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-xs scale-[1.02]'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon size={16} />
+                        <span className="truncate">{info.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  {ROLE_DETAILS[createRole].desc}
+                </p>
+              </div>
+
+              {/* Họ tên */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Họ và tên <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Nguyễn Văn An"
+                  value={newFullName}
+                  onChange={(e) => handleCreateNameChange(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                />
+              </div>
+
+              {/* Email & Mật khẩu */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Email tài khoản <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="name@smartbus.ictu.vn"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mật khẩu khởi tạo <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pl-3 pr-10 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SĐT & CCCD */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="0912345678"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Số CMND / CCCD
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="012345678901"
+                    value={newIdCard}
+                    onChange={(e) => setNewIdCard(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Thông tin mở rộng tùy vai trò */}
+              {createRole === 'passenger' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Mã SV ICTU (nếu là sinh viên)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="DTC2151800001"
+                      value={newStudentId}
+                      onChange={(e) => setNewStudentId(e.target.value.toUpperCase())}
+                      className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-mono font-bold text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Khoa / Viện đào tạo
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Khoa Công nghệ thông tin"
+                      value={newFaculty}
+                      onChange={(e) => setNewFaculty(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {createRole === 'driver' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Hạng giấy phép lái xe (GPLX)
+                  </label>
+                  <select
+                    value={newDriverLicense}
+                    onChange={(e) => setNewDriverLicense(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
+                  >
+                    <option value="Hạng D (Xe buýt 29-45 chỗ)">Hạng D (Xe buýt 29-45 chỗ)</option>
+                    <option value="Hạng E (Xe buýt lớn trên 45 chỗ / Liên tỉnh)">Hạng E (Xe buýt lớn trên 45 chỗ / Liên tỉnh)</option>
+                    <option value="Hạng FC / FD (Xe khách chất lượng cao)">Hạng FC / FD (Xe khách chất lượng cao)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateAccountOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCreate}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Check size={15} />
+                  <span>{isSubmittingCreate ? 'Đang tạo tài khoản...' : 'Tạo Tài Khoản'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal Chỉnh sửa thông tin tài khoản */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold">
+                  <Edit3 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Sửa Thông Tin Tài Khoản
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {editingUser.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-sidebar-scroll">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Họ và tên <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Số CCCD / CMND
+                  </label>
+                  <input
+                    type="text"
+                    value={editIdCard}
+                    onChange={(e) => setEditIdCard(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mã SV (nếu có)
+                  </label>
+                  <input
+                    type="text"
+                    value={editStudentId}
+                    onChange={(e) => setEditStudentId(e.target.value.toUpperCase())}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-mono font-bold text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Khoa / GPLX / Chức danh
+                  </label>
+                  <input
+                    type="text"
+                    value={editFaculty}
+                    onChange={(e) => setEditFaculty(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save size={15} />
+                  <span>{isSavingEdit ? 'Đang lưu...' : 'Lưu Cập Nhật'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal Phân quyền / Đổi vai trò (Role Assignment Modal) */}
+      {roleAssignUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl bg-purple-600/10 text-purple-600 flex items-center justify-center font-bold">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Gán Quyền & Vai Trò Hệ Thống (RBAC)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {roleAssignUser.fullName} ({roleAssignUser.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRoleAssignUser(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Chọn vai trò mới cho tài khoản này. Quyền truy cập API và giao diện Portal sẽ được cập nhật tức thì theo chuẩn RBAC:
+              </p>
+
+              <div className="space-y-2">
+                {(['admin', 'manager', 'driver', 'conductor', 'passenger'] as const).map((r) => {
+                  const info = ROLE_DETAILS[r]
+                  const Icon = info.icon
+                  const isSelected = selectedRoleForAssign === r
+
+                  return (
+                    <label
+                      key={r}
+                      onClick={() => setSelectedRoleForAssign(r)}
+                      className={`flex items-start gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="assign_role"
+                        checked={isSelected}
+                        onChange={() => setSelectedRoleForAssign(r)}
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Icon size={16} className={isSelected ? 'text-emerald-600' : 'text-slate-500'} />
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            {info.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500 leading-normal">
+                          {info.desc}
+                        </p>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+
+              {selectedRoleForAssign === 'admin' && (
+                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                  <span>
+                    Cảnh báo: Vai trò Super Admin có toàn quyền can thiệp vào cơ sở dữ liệu và cấu hình hệ thống.
+                  </span>
+                </div>
+              )}
+
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setRoleAssignUser(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRoleAssignSubmit}
+                  disabled={isAssigningRole}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <ShieldCheck size={15} />
+                  <span>{isAssigningRole ? 'Đang cập nhật quyền...' : 'Xác Nhận Phân Quyền'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal - Dọn dẹp dữ liệu kiểm thử */}
       {confirmCleanOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
@@ -849,562 +1431,242 @@ export function AdminStaff() {
               Xác nhận dọn dẹp data kiểm thử?
             </h3>
             <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-              Hệ thống sẽ quét và loại bỏ toàn bộ các tài khoản kiểm thử tự động (tiền tố test, integration-test, trips-test, alias-test, v.v.) cùng các dữ liệu rác liên quan trong Supabase. Các tài khoản chính thức (Admin, Điều hành, Tài xế, Sinh viên ICTU thực tế) sẽ được giữ nguyên 100%.
+              Hệ thống sẽ quét và xóa vĩnh viễn toàn bộ các tài khoản kiểm thử tự động (tiền tố integration-test, alias-test, trips-test, test.cloud...). Dữ liệu chính thức sẽ được bảo toàn tuyệt đối.
             </p>
-            <div className="mt-6 flex items-center justify-end gap-3">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmCleanOpen(false)}
-                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={handleCleanupTestData}
-                disabled={isCleaning}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-xs transition-all cursor-pointer"
               >
-                <Trash2 size={14} />
-                <span>Tiến hành dọn dẹp ngay</span>
+                Dọn Dẹp Ngay
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmation Modal - Xóa 1 tài khoản đơn lẻ */}
+      {/* Confirmation Modal - Xóa tài khoản */}
       {deletingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
           <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl">
             <div className="size-12 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 flex items-center justify-center mb-4">
-              <Trash2 size={24} />
+              <AlertTriangle size={24} />
             </div>
             <h3 className="text-lg font-black text-slate-900 dark:text-white">
               Xác nhận xóa tài khoản?
             </h3>
             <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-              Bạn có chắc chắn muốn xóa tài khoản{' '}
-              <strong className="text-slate-900 dark:text-white font-mono">
-                {deletingUser.email}
-              </strong>{' '}
-              ({deletingUser.fullName})? Hành động này sẽ loại bỏ vĩnh viễn tài khoản khỏi Supabase Database.
+              Bạn có chắc chắn muốn xóa tài khoản <strong>{deletingUser.fullName}</strong> ({deletingUser.email})? Thao tác này sẽ loại bỏ toàn bộ dữ liệu phụ trợ liên quan và không thể hoàn tác.
             </p>
-            <div className="mt-6 flex items-center justify-end gap-3">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setDeletingUser(null)}
-                className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteUser(deletingUser)}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-xl shadow-xs transition-all cursor-pointer"
               >
-                <Trash2 size={14} />
-                <span>Xác nhận xóa</span>
+                Xác Nhận Xóa
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 1: CẤP TÀI KHOẢN NHÂN SỰ TỔ XE (TÀI XẾ / PHỤ XE) */}
-      {isCreateCrewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl my-8">
-            <div className="flex items-start justify-between gap-3 mb-5">
+      {/* Drawer / Modal Chi tiết Hoạt động Tài xế */}
+      {viewingDriver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-3xl rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
               <div className="flex items-center gap-3">
-                <div
-                  className={`size-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                    crewRole === 'conductor'
-                      ? 'bg-teal-100 dark:bg-teal-950/60 text-teal-600'
-                      : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600'
-                  }`}
-                >
-                  {crewRole === 'conductor' ? <UserCheck size={22} /> : <Bus size={22} />}
+                <div className="size-10 rounded-2xl bg-emerald-600/10 text-emerald-600 flex items-center justify-center font-bold">
+                  <Bus size={20} />
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Cấp Tài Khoản Nhân Sự Tổ Xe
+                    Hồ Sơ Hoạt Động Tài Xế: {viewingDriver.fullName}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Khởi tạo hồ sơ ứng tuyển Tài xế hoặc Phụ xe & lưu trữ CSDL Supabase
+                  <p className="text-xs text-slate-500">
+                    {viewingDriver.email} · {viewingDriver.phoneNumber || 'Chưa cập nhật SĐT'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsCreateCrewOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => setViewingDriver(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Segmented Control: Chọn vị trí ứng tuyển */}
-            <div className="mb-5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => handleRoleTabChange('driver')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  crewRole === 'driver'
-                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Bus size={14} />
-                <span>Tài xế Cầm lái</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRoleTabChange('conductor')}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  crewRole === 'conductor'
-                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <UserCheck size={14} />
-                <span>Phụ xe / Soát vé</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCrew} className="space-y-4">
-              {/* Họ và tên */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Họ và tên {crewRole === 'conductor' ? 'phụ xe' : 'tài xế'} <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={crewRole === 'conductor' ? 'Ví dụ: Lê Thị Mai' : 'Ví dụ: Nguyễn Văn Tuấn'}
-                  value={newCrewName}
-                  onChange={(e) => handleCrewNameChange(e.target.value)}
-                  className={`w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 ${
-                    crewRole === 'conductor'
-                      ? 'focus:border-teal-500 focus:ring-teal-500'
-                      : 'focus:border-emerald-500 focus:ring-emerald-500'
-                  }`}
-                />
-              </div>
-
-              {/* SĐT & CCCD */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Số điện thoại liên hệ
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="0912 345 678"
-                    value={newCrewPhone}
-                    onChange={(e) => setNewCrewPhone(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Số CCCD / CMND
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="019203001234"
-                    value={newCrewIdCard}
-                    onChange={(e) => setNewCrewIdCard(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* Ràng buộc riêng theo vị trí */}
-              {crewRole === 'driver' ? (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Hạng giấy phép lái xe (GPLX) <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={newDriverLicense}
-                    onChange={(e) => setNewDriverLicense(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="Hạng D (Xe buýt 29-45 chỗ)">Hạng D (Xe buýt 29-45 chỗ)</option>
-                    <option value="Hạng E (Xe buýt trên 45 chỗ / nối toa)">Hạng E (Xe buýt trên 45 chỗ / nối toa)</option>
-                    <option value="Hạng C (Xe tải / trung chuyển)">Hạng C (Xe tải / trung chuyển)</option>
-                    <option value="Hạng B2 (Xe điều hành nội bộ)">Hạng B2 (Xe điều hành nội bộ)</option>
-                  </select>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Bắt buộc có bằng D/E hợp lệ để hệ thống cho phép phân công điều phối xe buýt.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                        Năm sinh ứng viên
-                      </label>
-                      <input
-                        type="number"
-                        min="1950"
-                        max="2010"
-                        placeholder="Ví dụ: 1998"
-                        value={newCrewBirthYear}
-                        onChange={(e) => setNewCrewBirthYear(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                        Tuyến / Vị trí dự kiến
-                      </label>
-                      <select
-                        value={newConductorDuty}
-                        onChange={(e) => setNewConductorDuty(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:border-teal-500 focus:outline-none cursor-pointer"
-                      >
-                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-01)">Tuyến CT-01 (ĐH CNTT - Trung Tâm)</option>
-                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-02)">Tuyến CT-02 (Tuyến Cố Định - Bến Xe)</option>
-                        <option value="Soát vé & Hỗ trợ hành khách (Tuyến CT-03)">Tuyến CT-03 (Nội thành Thái Nguyên)</option>
-                        <option value="Đội hỗ trợ soát vé lưu động">Đội hỗ trợ soát vé lưu động</option>
-                      </select>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-teal-600 dark:text-teal-400">
-                    Phụ xe không bắt buộc GPLX Hạng D/E. Hồ sơ sẽ xuất hiện trực tiếp trong danh sách chọn Phụ xe của bảng Điều phối.
-                  </p>
-                </div>
-              )}
-
-              {/* Email nội bộ */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Email nội bộ đăng nhập <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] text-emerald-600 font-semibold">Tự động gợi ý theo họ tên</span>
-                </div>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    placeholder={crewRole === 'conductor' ? 'conductor.mai@smartbus.ictu.vn' : 'driver.tuan@smartbus.ictu.vn'}
-                    value={newCrewEmail}
-                    onChange={(e) => setNewCrewEmail(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-                  />
-                  <Mail size={14} className="absolute right-3.5 top-3 text-slate-400" />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {crewRole === 'conductor'
-                    ? 'Nhân viên phụ xe sẽ dùng email này để nhận thông báo phân công và kiểm tra ca trực.'
-                    : 'Tài xế sẽ dùng email này đăng nhập vào Dashboard Buồng lái & Máy quét vé.'}
-                </p>
-              </div>
-
-              {/* Mật khẩu khởi tạo */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Mật khẩu khởi tạo ban đầu
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={newCrewPassword}
-                    onChange={(e) => setNewCrewPassword(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Mặc định: <code className="font-bold text-emerald-600">{crewRole === 'conductor' ? 'Staff@123' : 'Driver@123'}</code> (Người dùng có thể đổi sau khi đăng nhập).
-                </p>
-              </div>
-
-              {/* Nút tác vụ */}
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateCrewOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingCrew}
-                  className={`inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50 ${
-                    crewRole === 'conductor'
-                      ? 'bg-teal-600 hover:bg-teal-500 shadow-teal-600/20'
-                      : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
-                  }`}
-                >
-                  {isSubmittingCrew ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>Đang tạo tài khoản...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} />
-                      <span>Xác nhận cấp tài khoản</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: HỒ SƠ & GIÁM SÁT HOẠT ĐỘNG TÀI XẾ */}
-      {viewingDriver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in overflow-y-auto">
-          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl my-6 overflow-hidden">
-            {/* Header thông tin tài xế */}
-            <div className="p-5 sm:p-6 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="size-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-600/20 shrink-0">
-                  {viewingDriver.fullName ? viewingDriver.fullName.slice(0, 1).toUpperCase() : 'T'}
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                      {viewingDriver.fullName}
-                    </h3>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
-                      <Bus size={11} />
-                      TÀI XẾ NỘI BỘ
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300/40">
-                      {driverActivity?.driver.licenseClass || viewingDriver.faculty || 'Hạng D (Xe 29-45 chỗ)'}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
-                    <span className="flex items-center gap-1">
-                      <Mail size={12} /> {viewingDriver.email}
-                    </span>
-                    {viewingDriver.phoneNumber && (
-                      <span className="flex items-center gap-1 font-mono">
-                        <Phone size={12} /> {viewingDriver.phoneNumber}
-                      </span>
-                    )}
-                    {viewingDriver.idCardNumber && (
-                      <span className="flex items-center gap-1 font-mono">
-                        <IdCard size={12} /> CCCD: {viewingDriver.idCardNumber}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewingDriver(null)
-                  setDriverActivity(null)
-                }}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* 4 Thẻ KPI Hoạt động */}
-            <div className="p-5 sm:p-6 pb-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-xs">
-                  <p className="text-[11px] font-bold text-slate-500">Tổng chuyến phụ trách</p>
-                  <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                    {driverActivity?.stats.totalTrips ?? '...'}
-                  </p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 shadow-xs">
-                  <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">Chuyến hoàn thành</p>
-                  <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                    {driverActivity?.stats.completedTrips ?? '...'}
-                  </p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 shadow-xs">
-                  <p className="text-[11px] font-bold text-blue-800 dark:text-blue-300">Đang / Sắp chạy</p>
-                  <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                    {driverActivity?.stats.inProgressTrips ?? '...'}
-                  </p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/40 shadow-xs">
-                  <p className="text-[11px] font-bold text-purple-800 dark:text-purple-300">Vé đã soát lên xe</p>
-                  <p className="text-xl font-black text-purple-600 dark:text-purple-400 mt-1">
-                    {driverActivity?.stats.totalTicketsCheckedIn ?? '...'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Tabs Switcher */}
-              <div className="mt-5 flex border-b border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setActivityTab('trips')}
-                  className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                    activityTab === 'trips'
-                      ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  Danh sách chuyến phụ trách ({driverActivity?.trips.length || 0})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivityTab('checkins')}
-                  className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                    activityTab === 'checkins'
-                      ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  Nhật ký soát vé gần nhất ({driverActivity?.recentCheckIns.length || 0})
-                </button>
-              </div>
-            </div>
-
-            {/* Content Body */}
-            <div className="flex-1 overflow-y-auto px-5 sm:px-6 pb-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-sidebar-scroll">
               {isLoadingActivity ? (
-                <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-xs">
-                  <RefreshCw size={24} className="animate-spin text-emerald-600 mb-2" />
-                  <span>Đang tải dữ liệu hoạt động tài xế...</span>
+                <div className="py-12 text-center text-xs text-slate-400">
+                  <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto mb-2" />
+                  Đang tải nhật ký ca chạy và soát vé...
                 </div>
-              ) : activityTab === 'trips' ? (
-                <div>
-                  {!driverActivity?.trips || driverActivity.trips.length === 0 ? (
-                    <div className="py-10 text-center text-xs text-slate-400">
-                      Chưa có chuyến xe nào được phân công cho tài xế này.
+              ) : driverActivity ? (
+                <>
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase">Tổng ca chạy</span>
+                      <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                        {driverActivity.stats.totalTrips}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30">
+                      <span className="text-[11px] font-bold text-emerald-600 uppercase">Đã hoàn thành</span>
+                      <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
+                        {driverActivity.stats.completedTrips}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30">
+                      <span className="text-[11px] font-bold text-blue-600 uppercase">Đang chạy</span>
+                      <p className="text-xl font-black text-blue-700 dark:text-blue-400 mt-1">
+                        {driverActivity.stats.inProgressTrips}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30">
+                      <span className="text-[11px] font-bold text-purple-600 uppercase">Vé đã soát</span>
+                      <p className="text-xl font-black text-purple-700 dark:text-purple-400 mt-1">
+                        {driverActivity.stats.totalTicketsCheckedIn}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tabs: Trips vs Check-ins */}
+                  <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setActivityTab('trips')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activityTab === 'trips'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Lịch sử ca chạy gần nhất ({driverActivity.trips.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivityTab('checkins')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activityTab === 'checkins'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Lịch sử soát vé QR ({driverActivity.recentCheckIns.length})
+                    </button>
+                  </div>
+
+                  {/* Tab 1: Trips Table */}
+                  {activityTab === 'trips' && (
+                    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <thead className="bg-slate-50 dark:bg-slate-800/60 font-bold text-slate-400 uppercase text-[10px]">
                           <tr>
-                            <th className="p-3 pl-4">Tuyến xe buýt</th>
-                            <th className="p-3">Xe phụ trách</th>
-                            <th className="p-3">Giờ khởi hành</th>
+                            <th className="p-3 pl-4">Giờ chạy</th>
+                            <th className="p-3">Tuyến</th>
+                            <th className="p-3">Biển số xe</th>
                             <th className="p-3 pr-4 text-right">Trạng thái</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {driverActivity.trips.map((t) => (
-                            <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                              <td className="p-3 pl-4 font-bold text-slate-900 dark:text-white">
-                                {t.routeName}
-                                {t.routeCode && (
-                                  <span className="block text-[10px] text-slate-400 font-normal">
-                                    Mã: {t.routeCode}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="p-3 font-mono text-slate-700 dark:text-slate-300 font-semibold">
-                                {t.vehiclePlate}
-                              </td>
-                              <td className="p-3 text-slate-500 font-mono">
-                                {new Date(t.departureTime).toLocaleString('vi-VN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                })}
-                              </td>
-                              <td className="p-3 pr-4 text-right">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    t.status === 'completed'
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                      : t.status === 'in_progress' || t.status === 'departed'
-                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                  }`}
-                                >
-                                  {t.status === 'completed'
-                                    ? 'Đã hoàn thành'
-                                    : t.status === 'in_progress' || t.status === 'departed'
-                                    ? 'Đang chạy'
-                                    : 'Sắp chạy'}
-                                </span>
+                          {driverActivity.trips.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="p-4 text-center text-slate-400">
+                                Chưa có ca chạy nào được phân công
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            driverActivity.trips.map((t) => (
+                              <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
+                                <td className="p-3 pl-4 font-mono">
+                                  {new Date(t.departureTime).toLocaleDateString('vi-VN')}{' '}
+                                  {new Date(t.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                                  {t.routeName}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                                  {t.vehiclePlate}
+                                </td>
+                                <td className="p-3 pr-4 text-right">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                    {t.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
                   )}
-                </div>
-              ) : (
-                <div>
-                  {!driverActivity?.recentCheckIns || driverActivity.recentCheckIns.length === 0 ? (
-                    <div className="py-10 text-center text-xs text-slate-400">
-                      Chưa ghi nhận lượt soát vé nào từ tài xế này.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+
+                  {/* Tab 2: Check-ins Table */}
+                  {activityTab === 'checkins' && (
+                    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <thead className="bg-slate-50 dark:bg-slate-800/60 font-bold text-slate-400 uppercase text-[10px]">
                           <tr>
-                            <th className="p-3 pl-4">Mã vé</th>
-                            <th className="p-3">Hành khách / Sinh viên</th>
-                            <th className="p-3">Ghế ngồi</th>
-                            <th className="p-3 pr-4 text-right">Thời gian soát</th>
+                            <th className="p-3 pl-4">Thời gian</th>
+                            <th className="p-3">Mã vé</th>
+                            <th className="p-3">Hành khách</th>
+                            <th className="p-3 pr-4 text-right">Ghế / Tuyến</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {driverActivity.recentCheckIns.map((ci, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                              <td className="p-3 pl-4 font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                                {ci.ticketCode}
-                              </td>
-                              <td className="p-3 font-semibold text-slate-900 dark:text-white">
-                                {ci.passengerName}
-                              </td>
-                              <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
-                                {ci.seatNumber}
-                              </td>
-                              <td className="p-3 pr-4 text-right text-slate-500 font-mono">
-                                {new Date(ci.checkedInAt).toLocaleString('vi-VN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  second: '2-digit',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                })}
+                          {driverActivity.recentCheckIns.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="p-4 text-center text-slate-400">
+                                Chưa có lượt quét vé nào được ghi nhận
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            driverActivity.recentCheckIns.map((c, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
+                                <td className="p-3 pl-4 font-mono text-slate-500">
+                                  {new Date(c.checkedInAt).toLocaleTimeString('vi-VN')}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-emerald-600">
+                                  {c.ticketCode}
+                                </td>
+                                <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                                  {c.passengerName}
+                                </td>
+                                <td className="p-3 pr-4 text-right">
+                                  Ghế {c.seatNumber} · {c.routeName}
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
                   )}
+                </>
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  Không tìm thấy dữ liệu hoạt động của tài xế này
                 </div>
               )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewingDriver(null)
-                  setDriverActivity(null)
-                }}
-                className="px-5 py-2 text-xs font-bold rounded-xl bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Đóng cửa sổ
-              </button>
             </div>
           </div>
         </div>

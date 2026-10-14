@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { RoleEntity } from '../../database/entities/role.entity.js';
-import { RegisterDto, LoginDto } from './dto/index.js';
+import { RegisterDto, LoginDto, ChangePasswordDto, UpdateProfileDto } from './dto/index.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { UserStatus } from '../../common/constants/status.constant.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -209,6 +209,93 @@ export class AuthService {
       .where('id = :id', { id: userId })
       .execute();
     return { message: 'Đăng xuất thành công' };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản người dùng');
+    }
+
+    const isMatch = await bcrypt.compare(dto.oldPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+    }
+
+    if (dto.oldPassword === dto.newPassword) {
+      throw new BadRequestException('Mật khẩu mới không được trùng với mật khẩu cũ');
+    }
+
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, saltRounds);
+
+    await this.userRepository.update(userId, {
+      passwordHash: newPasswordHash,
+      refreshTokenHash: undefined, // Hủy phiên refresh token cũ để bảo mật
+    });
+
+    this.auditService.log({
+      action: 'CHANGE_PASSWORD',
+      resourceName: 'auth',
+      resourceId: userId,
+      userId,
+      changes: { email: user.email },
+    }).catch(() => {});
+
+    return {
+      success: true,
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+    };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản người dùng');
+    }
+
+    // Nếu cập nhật mã sinh viên, kiểm tra định dạng và trùng lặp
+    let normalizedStudentId: string | undefined = undefined;
+    if (dto.studentId && dto.studentId.trim()) {
+      normalizedStudentId = dto.studentId.trim().toUpperCase();
+      const studentIdRegex = /^DTC\d{7,10}$/;
+      if (!studentIdRegex.test(normalizedStudentId)) {
+        throw new BadRequestException('Mã sinh viên ICTU không đúng định dạng quy định (vd: DTC2151800001)');
+      }
+
+      const existingStudent = await this.userRepository.findOne({
+        where: { studentId: normalizedStudentId },
+      });
+      if (existingStudent && existingStudent.id !== userId) {
+        throw new ConflictException(`Mã sinh viên ${normalizedStudentId} đã được đăng ký bởi tài khoản khác`);
+      }
+    }
+
+    await this.userRepository.update(userId, {
+      ...(dto.fullName !== undefined && { fullName: dto.fullName.trim() }),
+      ...(dto.phoneNumber !== undefined && { phoneNumber: dto.phoneNumber.trim() }),
+      ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl.trim() }),
+      ...(normalizedStudentId !== undefined && { studentId: normalizedStudentId }),
+      ...(dto.faculty !== undefined && { faculty: dto.faculty.trim() }),
+      ...(dto.idCardNumber !== undefined && { idCardNumber: dto.idCardNumber.trim() }),
+    });
+
+    this.auditService.log({
+      action: 'UPDATE_PROFILE',
+      resourceName: 'auth',
+      resourceId: userId,
+      userId,
+      changes: { ...dto },
+    }).catch(() => {});
+
+    return this.getMe(userId);
   }
 
   private async generateTokens(userId: string, email: string, role: string) {
