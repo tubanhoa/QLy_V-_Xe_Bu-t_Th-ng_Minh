@@ -38,6 +38,7 @@ import { Role } from '../../common/constants/roles.constant.js';
 import { generateBookingCode, generateTicketCode } from '../../common/utils/booking-code.util.js';
 import { signQrPayload, generateQrDataUrl } from '../../common/utils/qr-code.util.js';
 import { NotificationService } from '../notification/notification.service.js';
+import { AuditService } from '../audit/audit.service.js';
 
 @Injectable()
 export class BookingService {
@@ -68,6 +69,8 @@ export class BookingService {
     private readonly dataSource?: DataSource,
     @Optional()
     private readonly notificationService?: NotificationService,
+    @Optional()
+    private readonly auditService?: AuditService,
   ) {}
 
   private readonly activeTicketLocks = new Set<string>();
@@ -608,6 +611,21 @@ export class BookingService {
 
       // Sau khi transaction commit thành công, giải phóng lock ghế ngay lập tức
       await this.seatLockService.releaseSeats(dto.tripId, seatIds, userId);
+
+      if (this.auditService) {
+        this.auditService.log({
+          action: 'BOOK_TICKET',
+          resourceName: 'booking',
+          resourceId: savedBooking.id,
+          userId,
+          changes: {
+            bookingCode: savedBooking.bookingCode,
+            finalAmount: savedBooking.finalAmount,
+            seatNumbers: savedTickets.map((t) => seatMap.get(t.seatId)?.seatNumber).filter(Boolean),
+            ticketCount: savedTickets.length,
+          },
+        }).catch(() => {});
+      }
 
       return {
         bookingId: savedBooking.id,

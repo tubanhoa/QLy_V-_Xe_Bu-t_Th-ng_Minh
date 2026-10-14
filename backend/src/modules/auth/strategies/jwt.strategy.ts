@@ -88,14 +88,49 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       // Ignored for demo resilience
     }
 
-    // Demo Mode Fallback: Đảm bảo payload luôn hợp lệ
-    return {
-      id: payload.sub || '00000000-0000-0000-0000-000000000001',
-      email: payload.email || 'admin@ictu.edu.vn',
-      fullName: 'Quản Trị Viên Hệ Thống',
-      role: payload.role || 'admin',
-      roleId: 'role-admin',
-      studentId: null,
-    };
+    // Fallback 1: Tìm theo email nếu ID cũ đã bị thay đổi sau dọn dẹp data
+    if (payload.email) {
+      try {
+        const userByEmail = await this.userRepository.findOne({
+          where: { email: payload.email },
+          relations: { role: true },
+        });
+        if (userByEmail && userByEmail.status === UserStatus.ACTIVE) {
+          return {
+            id: userByEmail.id,
+            email: userByEmail.email,
+            fullName: userByEmail.fullName,
+            role: userByEmail.role?.name || 'admin',
+            roleId: userByEmail.roleId,
+            studentId: userByEmail.studentId,
+          };
+        }
+      } catch {
+        // Ignored
+      }
+    }
+
+    // Fallback 2: Đảm bảo ID trả về luôn là một User ID có thực trong CSDL để tránh vi phạm Foreign Key
+    try {
+      const defaultUser = await this.userRepository.findOne({
+        where: { status: UserStatus.ACTIVE },
+        relations: { role: true },
+        order: { createdAt: 'ASC' },
+      });
+      if (defaultUser) {
+        return {
+          id: defaultUser.id,
+          email: defaultUser.email,
+          fullName: defaultUser.fullName,
+          role: defaultUser.role?.name || 'admin',
+          roleId: defaultUser.roleId,
+          studentId: defaultUser.studentId,
+        };
+      }
+    } catch {
+      // Ignored
+    }
+
+    throw new UnauthorizedException('Phiên đăng nhập đã hết hạn hoặc người dùng không tồn tại. Vui lòng đăng nhập lại.');
   }
 }

@@ -40,6 +40,7 @@ import {
   ApprovalStatus,
 } from '../../common/constants/status.constant.js';
 import { Role } from '../../common/constants/roles.constant.js';
+import { AuditService } from '../audit/audit.service.js';
 
 @Injectable()
 export class PaymentService {
@@ -75,6 +76,8 @@ export class PaymentService {
     @Optional()
     @InjectRepository(MonthlyPassTransactionEntity)
     private readonly monthlyPassTransactionRepository?: Repository<MonthlyPassTransactionEntity>,
+    @Optional()
+    private readonly auditService?: AuditService,
   ) {}
 
   async logPaymentEvent(params: {
@@ -104,6 +107,28 @@ export class PaymentService {
           errorMessage: params.errorMessage,
         });
         await this.paymentLogRepository.save(log);
+      }
+
+      // Tự động đồng bộ vào Audit Trail kiểm toán chung của hệ thống
+      if (this.auditService) {
+        let action = 'PAYMENT_EVENT';
+        if (params.eventType === 'refund') action = 'REFUND_TICKET';
+        else if (params.eventType === 'ipn_success' || params.status === 'success') action = 'PAYMENT_SUCCESS';
+        else if (params.status === 'failed') action = 'PAYMENT_FAILED';
+
+        this.auditService.log({
+          action,
+          resourceName: 'payment',
+          resourceId: params.paymentId || params.bookingId,
+          changes: {
+            bookingCode: params.bookingCode,
+            gateway: params.gateway,
+            eventType: params.eventType,
+            status: params.status,
+            errorMessage: params.errorMessage,
+          },
+          ipAddress: params.ipAddress,
+        }).catch(() => {});
       }
     } catch (err: any) {
       this.logger.warn(`Failed to save payment log: ${err?.message}`);

@@ -15,6 +15,7 @@ import { CreateUserDto, UpdateUserDto, ChangeRoleDto, ChangeStatusDto } from './
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { UserStatus, TripStatus } from '../../common/constants/status.constant.js';
+import { AuditService } from '../audit/audit.service.js';
 
 @Injectable()
 export class UsersService {
@@ -27,6 +28,7 @@ export class UsersService {
     private readonly tripRepository: Repository<TripEntity>,
     @InjectRepository(TicketEntity)
     private readonly ticketRepository: Repository<TicketEntity>,
+    private readonly auditService: AuditService,
   ) {}
 
   async findAll(
@@ -169,6 +171,15 @@ export class UsersService {
 
     const saved = await this.userRepository.save(user);
     const { passwordHash: _, refreshTokenHash: __, ...result } = saved;
+
+    this.auditService.log({
+      action: 'CREATE_USER',
+      resourceName: 'users',
+      resourceId: saved.id,
+      userId: saved.id,
+      changes: { email: saved.email, fullName: saved.fullName, role: role.name },
+    }).catch(() => {});
+
     return { ...result, role: role.name };
   }
 
@@ -184,6 +195,14 @@ export class UsersService {
       ...(dto.idCardNumber !== undefined && { idCardNumber: dto.idCardNumber }),
     });
 
+    this.auditService.log({
+      action: 'UPDATE_PROFILE',
+      resourceName: 'users',
+      resourceId: id,
+      userId: id,
+      changes: { ...dto },
+    }).catch(() => {});
+
     return this.findById(id);
   }
 
@@ -198,13 +217,32 @@ export class UsersService {
       throw new BadRequestException(`Vai trò ${dto.role} không tồn tại`);
     }
 
+    const previousRole = user.role?.name || 'unknown';
     await this.userRepository.update(id, { roleId: role.id });
+
+    this.auditService.log({
+      action: 'CHANGE_ROLE',
+      resourceName: 'users',
+      resourceId: id,
+      userId: id,
+      changes: { previousRole, newRole: dto.role, userEmail: user.email },
+    }).catch(() => {});
+
     return this.findById(id);
   }
 
   async changeStatus(id: string, dto: ChangeStatusDto) {
-    await this.findById(id);
+    const user = await this.findById(id);
     await this.userRepository.update(id, { status: dto.status });
+
+    this.auditService.log({
+      action: 'CHANGE_STATUS',
+      resourceName: 'users',
+      resourceId: id,
+      userId: id,
+      changes: { previousStatus: user.status, newStatus: dto.status, userEmail: user.email },
+    }).catch(() => {});
+
     return this.findById(id);
   }
 
@@ -215,6 +253,14 @@ export class UsersService {
     if (user.email === 'admin@smartbus.ictu.vn' || user.email === 'narukun2812@gmail.com') {
       throw new BadRequestException('Không thể xóa tài khoản Quản trị viên cấp cao của hệ thống');
     }
+
+    this.auditService.log({
+      action: 'DELETE_USER',
+      resourceName: 'users',
+      resourceId: id,
+      userId: id,
+      changes: { deletedEmail: user.email, deletedName: user.fullName, role: user.role?.name },
+    }).catch(() => {});
 
     // Xóa an toàn các ràng buộc dữ liệu phụ nếu có
     await this.userRepository.query(`DELETE FROM notifications WHERE user_id = $1`, [id]).catch(() => {});

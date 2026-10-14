@@ -14,6 +14,7 @@ import { RoleEntity } from '../../database/entities/role.entity.js';
 import { RegisterDto, LoginDto } from './dto/index.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { UserStatus } from '../../common/constants/status.constant.js';
+import { AuditService } from '../audit/audit.service.js';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +24,7 @@ export class AuthService {
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -91,6 +93,14 @@ export class AuthService {
     const tokens = await this.generateTokens(savedUser.id, savedUser.email, passengerRole.name);
     await this.updateRefreshToken(savedUser.id, tokens.refreshToken);
 
+    this.auditService.log({
+      action: 'REGISTER',
+      resourceName: 'auth',
+      resourceId: savedUser.id,
+      userId: savedUser.id,
+      changes: { email: savedUser.email, fullName: savedUser.fullName, studentId: savedUser.studentId },
+    }).catch(() => {});
+
     return {
       user: {
         id: savedUser.id,
@@ -125,6 +135,14 @@ export class AuthService {
     const roleName = user.role?.name || Role.PASSENGER;
     const tokens = await this.generateTokens(user.id, user.email, roleName);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    this.auditService.log({
+      action: 'LOGIN',
+      resourceName: 'auth',
+      resourceId: user.id,
+      userId: user.id,
+      changes: { email: user.email, fullName: user.fullName, role: roleName },
+    }).catch(() => {});
 
     return {
       user: {
