@@ -33,6 +33,8 @@ import {
   FileText,
   Trash2,
   Armchair,
+  Eye,
+  Lock,
 } from 'lucide-react'
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
@@ -378,6 +380,14 @@ export function DispatcherSchedule() {
     e.preventDefault()
     if (!dispatchingTrip) return
 
+    if (!dispatchingTrip) return
+
+    const isRunning = ['in_progress', 'departed', 'boarding'].includes(dispatchingTrip.status)
+    if (isRunning) {
+      showToast('Nghiêm cấm thay đổi tài xế hoặc phương tiện khi chuyến xe đang hoạt động!', 'error')
+      return
+    }
+
     if (!selectedVehicleId) {
       showToast('Vui lòng chọn xe buýt phục vụ chuyến này!', 'warning')
       return
@@ -414,9 +424,14 @@ export function DispatcherSchedule() {
     }
   }
 
-  // Hủy phân công chuyến xe (gỡ xe, tài xế, phụ xe)
   const handleUnassignDispatch = () => {
     if (!dispatchingTrip) return
+
+    const isRunning = ['in_progress', 'departed', 'boarding'].includes(dispatchingTrip.status)
+    if (isRunning) {
+      showToast('Nghiêm cấm hủy phân công nhân sự khi chuyến xe đang lăn bánh trên đường!', 'error')
+      return
+    }
 
     const tripCode = dispatchingTrip.route?.routeCode || 'Chuyến'
     const depTimeStr = new Date(dispatchingTrip.departureTime).toLocaleTimeString('vi-VN', {
@@ -1441,13 +1456,35 @@ export function DispatcherSchedule() {
                 {/* FOOTER ACTIONS */}
                 <div className="mt-5 border-t border-border pt-4 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenDispatch(item)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                    >
-                      <Edit2 size={13} /> Điều xe
-                    </button>
+                    {isRunning ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDispatch(item)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-300 dark:border-amber-800 hover:bg-amber-100 transition-all cursor-pointer"
+                        title="Chuyến xe đang lăn bánh - Khóa điều phối an toàn giao thông"
+                      >
+                        <Lock size={12} className="text-amber-600" />
+                        <span>Xem ca chạy (Khóa đổi)</span>
+                      </button>
+                    ) : item.status === 'completed' || item.status === 'cancelled' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDispatch(item)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:underline cursor-pointer"
+                        title="Chuyến xe đã kết thúc"
+                      >
+                        <Eye size={13} />
+                        <span>Xem chi tiết</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDispatch(item)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                      >
+                        <Edit2 size={13} /> Điều xe
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1581,6 +1618,30 @@ export function DispatcherSchedule() {
               </div>
             )}
 
+            {/* BANNER KHÓA ĐIỀU PHỐI NẾU CHUYẾN XE ĐANG HOẠT ĐỘNG */}
+            {['in_progress', 'departed', 'boarding'].includes(dispatchingTrip.status) && (
+              <div className="mt-4 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 space-y-2 animate-in fade-in">
+                <div className="flex items-center gap-2 font-black text-amber-800 dark:text-amber-300">
+                  <ShieldAlert size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>QUY CHUẨN AN TOÀN VẬN TẢI: KHÓA ĐIỀU PHỐI NHÂN SỰ & XE</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Chuyến xe này đang ở trạng thái{' '}
+                  <strong className="underline uppercase">
+                    &quot;
+                    {dispatchingTrip.status === 'in_progress'
+                      ? 'Đang lăn bánh trên đường'
+                      : dispatchingTrip.status === 'departed'
+                      ? 'Đã xuất bến'
+                      : 'Đang đón khách tại bến'}
+                    &quot;
+                  </strong>
+                  . Để bảo đảm an toàn giao thông và tính liên tục của dữ liệu định vị GPS trực tiếp, hệ thống{' '}
+                  <strong>nghiêm cấm thay đổi tài xế hoặc phương tiện giữa đường</strong>.
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleSaveDispatch} className="mt-4 flex flex-col gap-4">
               {/* 1. CHỌN XE BUÝT */}
               <div>
@@ -1596,9 +1657,10 @@ export function DispatcherSchedule() {
                   )}
                 </div>
                 <select
+                  disabled={['in_progress', 'departed', 'boarding', 'completed', 'cancelled'].includes(dispatchingTrip.status)}
                   value={selectedVehicleId}
                   onChange={(e) => setSelectedVehicleId(e.target.value)}
-                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                     dispatchConflict?.vehicleConflictTrip
                       ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
                       : 'border-border focus:border-emerald-500'
@@ -1641,9 +1703,10 @@ export function DispatcherSchedule() {
                   </span>
                 </div>
                 <select
+                  disabled={['in_progress', 'departed', 'boarding', 'completed', 'cancelled'].includes(dispatchingTrip.status)}
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                     dispatchConflict?.driverConflictTrip
                       ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
                       : 'border-border focus:border-emerald-500'
@@ -1688,9 +1751,10 @@ export function DispatcherSchedule() {
                   <span className="text-[11px] text-muted-foreground">Soát vé QR di động</span>
                 </div>
                 <select
+                  disabled={['in_progress', 'departed', 'boarding', 'completed', 'cancelled'].includes(dispatchingTrip.status)}
                   value={selectedConductorId}
                   onChange={(e) => setSelectedConductorId(e.target.value)}
-                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer ${
+                  className={`mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-semibold text-foreground focus:outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                     dispatchConflict?.conductorConflictTrip
                       ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/30'
                       : 'border-border focus:border-emerald-500'
@@ -1762,9 +1826,18 @@ export function DispatcherSchedule() {
                   <button
                     type="button"
                     onClick={handleUnassignDispatch}
-                    disabled={isSubmittingDispatch}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 cursor-pointer transition"
-                    title="Gỡ toàn bộ xe, tài xế và phụ xe khỏi chuyến này"
+                    disabled={
+                      isSubmittingDispatch ||
+                      ['in_progress', 'departed', 'boarding', 'completed', 'cancelled'].includes(
+                        dispatchingTrip.status
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+                    title={
+                      ['in_progress', 'departed', 'boarding'].includes(dispatchingTrip.status)
+                        ? 'Chuyến xe đang lăn bánh - Nghiêm cấm hủy phân công'
+                        : 'Gỡ toàn bộ xe, tài xế và phụ xe khỏi chuyến này'
+                    }
                   >
                     <Trash2 size={13} />
                     <span>Hủy Phân Công</span>
@@ -1779,15 +1852,25 @@ export function DispatcherSchedule() {
                     onClick={() => setDispatchingTrip(null)}
                     className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted cursor-pointer"
                   >
-                    Hủy bỏ
+                    Đóng
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmittingDispatch}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                    disabled={
+                      isSubmittingDispatch ||
+                      ['in_progress', 'departed', 'boarding', 'completed', 'cancelled'].includes(
+                        dispatchingTrip.status
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {isSubmittingDispatch ? (
                       'Đang xử lý...'
+                    ) : ['in_progress', 'departed', 'boarding'].includes(dispatchingTrip.status) ? (
+                      <>
+                        <Lock size={13} />
+                        <span>Đang Chạy (Khóa Điều Phối)</span>
+                      </>
                     ) : (
                       <>
                         <Send size={13} />

@@ -20,6 +20,7 @@ import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
 import { DriverProfileEntity, DriverLicenseStatus } from '../../database/entities/driver-profile.entity.js';
+import { ActivityLogEntity } from '../../database/entities/activity-log.entity.js';
 import { GenerateTripsDto, DispatchTripDto, UpdateTripStatusDto, VerifyQrDto, CreateAdhocTripDto } from './dto/trip.dto.js';
 import { ListTripsQueryDto } from './dto/list-trips-query.dto.js';
 import {
@@ -79,7 +80,11 @@ export class TripsService {
     @Optional()
     private readonly fcmService?: FcmService,
     @Optional()
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService?: AuditService,
+    @Optional()
+    @InjectRepository(ActivityLogEntity)
+    private readonly activityLogRepository?: Repository<ActivityLogEntity>,
   ) {}
 
   /**
@@ -425,6 +430,71 @@ export class TripsService {
   async unassign(tripId: string) {
     const trip = await this.findById(tripId);
 
+    const activeRunningStatuses: TripStatus[] = [
+      TripStatus.IN_PROGRESS,
+      TripStatus.DEPARTED,
+      TripStatus.BOARDING,
+    ];
+
+    if (activeRunningStatuses.includes(trip.status)) {
+      if (this.activityLogRepository) {
+        try {
+          const entry = this.activityLogRepository.create({
+            action: 'DISPATCH_BLOCKED_TRIP_ACTIVE',
+            resourceName: 'trips',
+            resourceId: trip.id,
+            endpoint: '/api/v1/trips/dispatch/unassign',
+            method: 'POST',
+            status: 'SAFETY_BLOCKED',
+            changes: {
+              tripId: trip.id,
+              tripStatus: trip.status,
+              routeCode: trip.route?.routeCode,
+              currentDriverId: trip.driverId,
+              currentVehicleId: trip.vehicleId,
+              operation: 'unassignAll',
+              reason: 'Quy chuẩn an toàn nghiêm cấm hủy phân công tài xế khi chuyến xe đang hoạt động',
+            },
+          });
+          await this.activityLogRepository.save(entry);
+        } catch (auditErr: any) {
+          this.logger.warn(`Lỗi ghi audit log khi chặn unassign: ${auditErr?.message}`);
+        }
+      } else if (this.auditService) {
+        try {
+          await this.auditService.log({
+            action: 'DISPATCH_BLOCKED_TRIP_ACTIVE',
+            resourceName: 'trips',
+            resourceId: trip.id,
+            endpoint: '/api/v1/trips/dispatch/unassign',
+            method: 'POST',
+            status: 'SAFETY_BLOCKED',
+            changes: {
+              tripId: trip.id,
+              tripStatus: trip.status,
+              routeCode: trip.route?.routeCode,
+              currentDriverId: trip.driverId,
+              currentVehicleId: trip.vehicleId,
+              operation: 'unassignAll',
+              reason: 'Quy chuẩn an toàn nghiêm cấm hủy phân công tài xế khi chuyến xe đang hoạt động',
+            },
+          });
+        } catch (auditErr: any) {
+          this.logger.warn(`Lỗi ghi audit log khi chặn unassign: ${auditErr?.message}`);
+        }
+      }
+
+      const statusViMap: Record<string, string> = {
+        [TripStatus.IN_PROGRESS]: 'Đang lăn bánh trên đường',
+        [TripStatus.DEPARTED]: 'Đã xuất bến',
+        [TripStatus.BOARDING]: 'Đang đón khách tại bến',
+      };
+      const statusText = statusViMap[trip.status] || trip.status;
+      throw new BadRequestException(
+        `Quy chuẩn an toàn vận tải: Nghiêm cấm hủy phân công hoặc thay đổi nhân sự khi chuyến xe đang hoạt động (${statusText})! Vui lòng đợi chuyến xe hoàn thành lộ trình.`,
+      );
+    }
+
     if (trip.status === TripStatus.COMPLETED || trip.status === TripStatus.CANCELLED) {
       throw new BadRequestException(`Không thể hủy phân công chuyến xe đã kết thúc hoặc đã bị hủy (${trip.status})`);
     }
@@ -507,6 +577,73 @@ export class TripsService {
 
     const trip = await this.findById(dto.tripId);
 
+    const activeRunningStatuses: TripStatus[] = [
+      TripStatus.IN_PROGRESS,
+      TripStatus.DEPARTED,
+      TripStatus.BOARDING,
+    ];
+
+    if (activeRunningStatuses.includes(trip.status)) {
+      if (this.activityLogRepository) {
+        try {
+          const entry = this.activityLogRepository.create({
+            action: 'DISPATCH_BLOCKED_TRIP_ACTIVE',
+            resourceName: 'trips',
+            resourceId: trip.id,
+            endpoint: '/api/v1/trips/dispatch',
+            method: 'POST',
+            status: 'SAFETY_BLOCKED',
+            changes: {
+              tripId: trip.id,
+              tripStatus: trip.status,
+              routeCode: trip.route?.routeCode,
+              currentDriverId: trip.driverId,
+              currentVehicleId: trip.vehicleId,
+              attemptedDriverId: dto.driverId,
+              attemptedVehicleId: dto.vehicleId,
+              reason: 'Quy chuẩn an toàn nghiêm cấm thay đổi tài xế hoặc phương tiện khi chuyến xe đang hoạt động',
+            },
+          });
+          await this.activityLogRepository.save(entry);
+        } catch (auditErr: any) {
+          this.logger.warn(`Lỗi ghi audit log khi chặn dispatch: ${auditErr?.message}`);
+        }
+      } else if (this.auditService) {
+        try {
+          await this.auditService.log({
+            action: 'DISPATCH_BLOCKED_TRIP_ACTIVE',
+            resourceName: 'trips',
+            resourceId: trip.id,
+            endpoint: '/api/v1/trips/dispatch',
+            method: 'POST',
+            status: 'SAFETY_BLOCKED',
+            changes: {
+              tripId: trip.id,
+              tripStatus: trip.status,
+              routeCode: trip.route?.routeCode,
+              currentDriverId: trip.driverId,
+              currentVehicleId: trip.vehicleId,
+              attemptedDriverId: dto.driverId,
+              attemptedVehicleId: dto.vehicleId,
+              reason: 'Quy chuẩn an toàn nghiêm cấm thay đổi tài xế hoặc phương tiện khi chuyến xe đang hoạt động',
+            },
+          });
+        } catch (auditErr: any) {
+          this.logger.warn(`Lỗi ghi audit log khi chặn dispatch: ${auditErr?.message}`);
+        }
+      }
+
+      const statusViMap: Record<string, string> = {
+        [TripStatus.IN_PROGRESS]: 'Đang lăn bánh trên đường',
+        [TripStatus.DEPARTED]: 'Đã xuất bến',
+        [TripStatus.BOARDING]: 'Đang đón khách tại bến',
+      };
+      const statusText = statusViMap[trip.status] || trip.status;
+      throw new BadRequestException(
+        `Quy chuẩn an toàn vận tải: Nghiêm cấm thay đổi tài xế hoặc phương tiện khi chuyến xe đang hoạt động (${statusText})! Vui lòng đợi chuyến xe hoàn thành lộ trình.`,
+      );
+    }
+
     if (trip.status === TripStatus.COMPLETED || trip.status === TripStatus.CANCELLED) {
       throw new BadRequestException(`Không thể điều phối chuyến xe đã kết thúc hoặc đã bị hủy (${trip.status})`);
     }
@@ -565,10 +702,12 @@ export class TripsService {
       }
 
       trip.vehicleId = vehicle.id;
+      trip.vehicle = vehicle;
     } else if (trip.vehicle) {
       vehicle = trip.vehicle;
     } else if (trip.vehicleId) {
       vehicle = await this.vehicleRepository.findOne({ where: { id: trip.vehicleId } });
+      trip.vehicle = vehicle as any;
     }
 
     // 2. XỬ LÝ TÀI XẾ
@@ -658,6 +797,7 @@ export class TripsService {
       }
 
       trip.driverId = driver.id;
+      trip.driver = driver;
     }
 
     // 3. XỬ LÝ PHỤ XE
@@ -693,6 +833,7 @@ export class TripsService {
       }
 
       trip.conductorId = conductor.id;
+      trip.conductor = conductor;
     }
 
     await this.tripRepository.save(trip);

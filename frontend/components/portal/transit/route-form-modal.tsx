@@ -1119,54 +1119,86 @@ export function RouteFormModal({
               </div>
 
               {/* PHÂN QUYỀN TÀI XẾ & GÁN XE BUÝT VẬN HÀNH */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
-                  <UserCheck size={15} className="text-emerald-600" />
-                  <span>Phân Quyền Tài Xế & Gán Phương Tiện</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Chọn Tài xế */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Tài xế phụ trách tuyến
-                    </label>
-                    <select
-                      value={assignedDriverId}
-                      onChange={(e) => setAssignedDriverId(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
-                    >
-                      {availableDrivers.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.fullName}
-                        </option>
-                      ))}
-                    </select>
+              {isEdit ? (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-black text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-emerald-600" />
+                      <span>Quản Lý Nhân Sự & Xe Vận Hành Theo Ca</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                      Điều phối độc lập theo ca
+                    </span>
                   </div>
 
-                  {/* Chọn Phương tiện */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Xe buýt vận hành (EV)
-                    </label>
-                    <select
-                      value={assignedVehicleId}
-                      onChange={(e) => setAssignedVehicleId(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
-                    >
-                      {availableVehicles.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.licensePlate} ({v.model || 'VinFast EV'})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-bold text-[11px] leading-relaxed">
+                          Phân công tài xế và xe buýt theo từng ca chạy được quản lý độc lập tại phân hệ{' '}
+                          <span className="font-black underline text-amber-950 dark:text-amber-100">
+                            Điều Hành Lịch Chạy (Dispatch)
+                          </span>.
+                        </p>
+                        <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 leading-normal">
+                          Để đảm bảo an toàn giao thông và tính toàn vẹn dữ liệu giám sát hành trình GPS, hệ thống{' '}
+                          <span className="font-bold">nghiêm cấm thay đổi tài xế hoặc phương tiện</span> của các chuyến xe đang lăn bánh trên đường.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              ) : (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
+                    <UserCheck size={15} className="text-emerald-600" />
+                    <span>Phân Quyền Tài Xế & Gán Phương Tiện Khởi Tạo</span>
+                  </div>
 
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
-                  ✓ Khi bấm lưu, hệ thống tự động sinh 6 chuyến xe hôm nay trong database cho tài xế và phương tiện này!
-                </p>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Chọn Tài xế */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                        Tài xế phụ trách ban đầu
+                      </label>
+                      <select
+                        value={assignedDriverId}
+                        onChange={(e) => setAssignedDriverId(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        {availableDrivers.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.fullName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Chọn Phương tiện */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                        Xe buýt vận hành (EV)
+                      </label>
+                      <select
+                        value={assignedVehicleId}
+                        onChange={(e) => setAssignedVehicleId(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        {availableVehicles.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.licensePlate} ({v.model || 'VinFast EV'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
+                    ✓ Khi bấm lưu, hệ thống tự động sinh 6 chuyến xe hôm nay trong database cho tài xế và phương tiện này!
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

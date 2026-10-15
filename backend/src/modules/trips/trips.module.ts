@@ -9,10 +9,12 @@ import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
 import { DriverProfileEntity } from '../../database/entities/driver-profile.entity.js';
+import { ActivityLogEntity } from '../../database/entities/activity-log.entity.js';
 import { TripsController } from './trips.controller.js';
 import { TripsService } from './trips.service.js';
 import { BookingModule } from '../booking/booking.module.js';
 import { NotificationModule } from '../notification/notification.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
   imports: [
@@ -26,9 +28,11 @@ import { NotificationModule } from '../notification/notification.module.js';
       SeatHoldEntity,
       MonthlyPassEntity,
       DriverProfileEntity,
+      ActivityLogEntity,
     ]),
     forwardRef(() => BookingModule),
     NotificationModule,
+    forwardRef(() => AuditModule),
   ],
   controllers: [TripsController],
   providers: [TripsService],
