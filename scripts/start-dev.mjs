@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const backendDir = path.resolve(rootDir, 'backend');
+const frontendDir = path.resolve(rootDir, 'frontend');
 
 const isWin = process.platform === 'win32';
 const npmCmd = isWin ? 'npm.cmd' : 'npm';
@@ -62,7 +63,7 @@ backend.stderr.on('data', (data) => {
 
 // 2. Khởi động Frontend (Next.js)
 const frontend = spawn(npmCmd, ['run', 'dev'], {
-  cwd: rootDir,
+  cwd: frontendDir,
   stdio: 'pipe',
   shell: true,
   env: devEnv,
