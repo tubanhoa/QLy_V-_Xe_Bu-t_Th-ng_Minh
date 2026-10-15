@@ -1169,7 +1169,7 @@ export function RouteFormModal({
                       >
                         {availableDrivers.map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.fullName}
+                            {d.fullName} • {d.email}
                           </option>
                         ))}
                       </select>

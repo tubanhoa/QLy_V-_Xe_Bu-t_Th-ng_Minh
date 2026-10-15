@@ -55,15 +55,23 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isVerifying, setIsVerifying] = useState(false)
   const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
+  const [availableTrips, setAvailableTrips] = useState<DriverTripItem[]>([])
 
   // Bộ nhớ đệm cục bộ lưu các vé đã check-in trên chuyến xe (Chống Replay Attack / Quét trùng lặp)
   const [checkedInHistory, setCheckedInHistory] = useState<Record<string, { scannedAt: string; passengerName: string; count: number }>>({})
 
   useEffect(() => {
     async function fetchTrip() {
-      if (tripId) return
       const tripsRes = await driverService.getTodayTrips()
       if (tripsRes.success && tripsRes.data && tripsRes.data.length > 0) {
+        setAvailableTrips(tripsRes.data)
+        if (tripId) {
+          const matched = tripsRes.data.find((t) => t.id === tripId)
+          if (matched) {
+            setActiveTrip(matched)
+            return
+          }
+        }
         const found =
           tripsRes.data.find((t) => t.status === 'in_progress' || t.status === 'delayed') ||
           tripsRes.data.find((t) => t.status === 'scheduled') ||
@@ -199,12 +207,40 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
               Máy Soát Vé QR Trực Tuyến
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Xe {activeTrip?.vehicle?.plateNumber || '20B-012.34'} • {activeTrip?.route?.name || 'Tuyến CT-01'}
+              Xe {activeTrip?.vehicle?.plateNumber || (activeTrip?.vehicle as any)?.licensePlate || 'Chưa gán xe'} • {activeTrip?.route?.name || 'Tuyến buýt ICTU'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {availableTrips.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-emerald-500/10 dark:bg-emerald-950/30 px-3 py-1.5 rounded-2xl border border-emerald-500/30">
+              <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hidden sm:inline">
+                Ca chạy:
+              </span>
+              <select
+                value={activeTrip?.id || ''}
+                onChange={(e) => {
+                  const sel = availableTrips.find((t) => t.id === e.target.value)
+                  if (sel) setActiveTrip(sel)
+                }}
+                className="bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200 focus:outline-none cursor-pointer"
+              >
+                {availableTrips.map((t) => {
+                  const depTime = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                  return (
+                    <option key={t.id} value={t.id} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900">
+                      {depTime} • Tuyến {t.route?.routeCode || 'CT'} ({t.vehicle?.plateNumber || (t.vehicle as any)?.licensePlate || 'Xe buýt'})
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setSoundEnabled((v) => !v)}
