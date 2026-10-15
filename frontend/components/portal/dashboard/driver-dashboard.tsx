@@ -233,7 +233,7 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
   }, [activeTrip])
 
   const departureTimeString = useMemo(() => {
-    if (!activeTrip?.departureTime) return 'Chưa xếp lịch'
+    if (!activeTrip?.departureTime) return '---'
     return new Date(activeTrip.departureTime).toLocaleTimeString('vi-VN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -243,7 +243,7 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
   const vehicleLicensePlate =
     (activeTrip?.vehicle as any)?.licensePlate ||
     activeTrip?.vehicle?.plateNumber ||
-    '20B-012.34'
+    (activeTrip ? 'Chưa gán xe' : '---')
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
@@ -431,10 +431,10 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
             </div>
           </div>
           <p className="mt-2 font-mono text-xl sm:text-2xl font-black text-foreground">
-            {activeTrip?.route?.routeCode || 'CT-01'}
+            {activeTrip?.route?.routeCode || '---'}
           </p>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {activeTrip?.route?.name || 'Tuyến nội đô Thái Nguyên'}
+            {activeTrip?.route?.name || (isLoading ? 'Đang tải dữ liệu...' : 'Chưa có ca chạy')}
           </p>
         </div>
 
@@ -447,11 +447,11 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
             </div>
           </div>
           <p className="mt-2 font-mono text-xl sm:text-2xl font-black text-foreground">
-            {departureTimeString}
+            {activeTrip ? departureTimeString : '---'}
           </p>
           <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-0.5 flex items-center gap-1">
-            <span className="size-1.5 rounded-full bg-emerald-500 animate-ping" />
-            Đúng lịch trình
+            <span className={`size-1.5 rounded-full ${activeTrip ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
+            {activeTrip ? 'Đúng lịch trình' : 'Chưa xếp lịch'}
           </p>
         </div>
 
@@ -464,10 +464,15 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
             </div>
           </div>
           <p className="mt-2 font-mono text-xl sm:text-2xl font-black text-foreground">
-            {manifestCount} <span className="text-xs font-bold text-muted-foreground">/ 28 khách</span>
+            {activeTrip ? manifestCount : 0}{' '}
+            <span className="text-xs font-bold text-muted-foreground">
+              / {activeTrip?.vehicle?.capacity ?? (activeTrip?.vehicle as any)?.seatCapacity ?? 28} khách
+            </span>
           </p>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
-            Còn trống: {Math.max(0, 28 - manifestCount)} ghế
+            {activeTrip
+              ? `Còn trống: ${Math.max(0, (activeTrip?.vehicle?.capacity ?? (activeTrip?.vehicle as any)?.seatCapacity ?? 28) - manifestCount)} ghế`
+              : 'Chưa có hành khách'}
           </p>
         </div>
 
@@ -483,7 +488,7 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
             {vehicleLicensePlate}
           </p>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
-            VinFast eBus 2024 (EV)
+            {activeTrip ? ((activeTrip?.vehicle as any)?.model || 'VinFast eBus 2024 (EV)') : 'Chưa gán xe'}
           </p>
         </div>
       </div>

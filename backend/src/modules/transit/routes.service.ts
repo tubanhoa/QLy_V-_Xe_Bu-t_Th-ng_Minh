@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -12,6 +13,9 @@ import { RouteStationEntity } from '../../database/entities/route-station.entity
 import { StationEntity } from '../../database/entities/station.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
+import { VehicleEntity } from '../../database/entities/vehicle.entity.js';
+import { UserEntity } from '../../database/entities/user.entity.js';
+import { NotificationCenterService } from '../notification/notification-center.service.js';
 import {
   CreateRouteDto,
   UpdateRouteDto,
@@ -38,6 +42,12 @@ export class RoutesService {
     private readonly tripRepository: Repository<TripEntity>,
     @InjectRepository(TicketEntity)
     private readonly ticketRepository: Repository<TicketEntity>,
+    @InjectRepository(VehicleEntity)
+    private readonly vehicleRepository: Repository<VehicleEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    @Optional()
+    private readonly notificationCenterService?: NotificationCenterService,
   ) {}
 
   private calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -296,6 +306,74 @@ export class RoutesService {
       this.logger.log(
         `[RoutesService.create] Đã tự động khởi tạo ${tripsToCreate.length} chuyến xe trong 7 ngày tới cho tuyến: ${savedRoute.routeCode} (${savedRoute.name})`,
       );
+
+      // Tự động gửi thông báo phân công cho Tài xế
+      if (dto.assignedDriverId && this.notificationCenterService) {
+        try {
+          const vehicle = dto.assignedVehicleId
+            ? await this.vehicleRepository.findOne({ where: { id: dto.assignedVehicleId } })
+            : null;
+          const licensePlate = vehicle?.licensePlate || 'Xe buýt ICTU';
+
+          // 1. Thông báo tổng hợp phân công tuyến mới
+          const summaryTitle = `📋 Phân công tuyến mới: ${savedRoute.routeCode} (${savedRoute.name})`;
+          const summaryMsg = `Bạn đã được phân công phụ trách tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) với tổng cộng ${tripsToCreate.length} ca chạy trong 7 ngày tới. Vui lòng kiểm tra lịch trình làm việc trên ứng dụng.`;
+
+          await this.notificationCenterService.saveNotification({
+            userId: dto.assignedDriverId,
+            type: 'TRIP_ASSIGNED',
+            title: summaryTitle,
+            message: summaryMsg,
+            deepLink: '/portal/driver',
+            data: {
+              routeId: savedRoute.id,
+              routeCode: savedRoute.routeCode,
+              routeName: savedRoute.name,
+              licensePlate,
+              totalTripsCreated: tripsToCreate.length,
+            },
+          });
+
+          // 2. Thông báo chi tiết ca chạy đầu tiên hôm nay (nếu có ca hôm nay)
+          const todayTrips = tripsToCreate
+            .filter((t) => t.departureTime.toDateString() === now.toDateString())
+            .sort((a, b) => a.departureTime.getTime() - b.departureTime.getTime());
+
+          if (todayTrips.length > 0) {
+            const firstTodayTrip = todayTrips[0];
+            const depTimeStr = firstTodayTrip.departureTime.toLocaleTimeString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            });
+            const depDateStr = firstTodayTrip.departureTime.toLocaleDateString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            });
+
+            const tripTitle = `Phân công ca chạy hôm nay: Tuyến ${savedRoute.routeCode} lúc ${depTimeStr}`;
+            const tripMsg = `Bạn có ca chạy xe ${licensePlate} trên tuyến ${savedRoute.name} lúc ${depTimeStr} ngày ${depDateStr}. Vui lòng tiếp nhận ca và kiểm tra phương tiện trước giờ xuất bến.`;
+
+            await this.notificationCenterService.saveNotification({
+              userId: dto.assignedDriverId,
+              tripId: firstTodayTrip.id,
+              type: 'TRIP_ASSIGNED',
+              title: tripTitle,
+              message: tripMsg,
+              deepLink: '/portal/driver',
+              data: {
+                tripId: firstTodayTrip.id,
+                routeCode: savedRoute.routeCode,
+                licensePlate,
+                departureTime: firstTodayTrip.departureTime,
+              },
+            });
+          }
+        } catch (notifErr: any) {
+          this.logger.warn(`[RoutesService.create] Lỗi khi gửi thông báo phân công cho tài xế: ${notifErr?.message}`);
+        }
+      }
     } catch (tripErr: any) {
       this.logger.warn(`[RoutesService.create] Lỗi khi tự động sinh chuyến xe: ${tripErr?.message}`);
     }

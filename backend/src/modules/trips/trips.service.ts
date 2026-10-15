@@ -1253,26 +1253,47 @@ export class TripsService {
   }
 
   async getDriverTodayTrips(driverId: string) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    // Tự động đóng các chuyến xe quá khứ bị kẹt in_progress / boarding quá 2 giờ so với giờ đến bến
+    try {
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      await this.tripRepository
+        .createQueryBuilder()
+        .update(TripEntity)
+        .set({ status: TripStatus.COMPLETED })
+        .where('(driverId = :driverId OR conductorId = :driverId)', { driverId })
+        .andWhere('status IN (:...staleStatuses)', {
+          staleStatuses: [TripStatus.IN_PROGRESS, TripStatus.BOARDING, TripStatus.DEPARTED],
+        })
+        .andWhere('arrivalTime < :twoHoursAgo', { twoHoursAgo })
+        .execute();
+    } catch (e: any) {
+      this.logger.warn(`[getDriverTodayTrips] Không thể tự động đóng chuyến cũ: ${e?.message}`);
+    }
 
-    return this.tripRepository.find({
-      where: [
+    return this.tripRepository
+      .createQueryBuilder('trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('route.routeStations', 'routeStation')
+      .leftJoinAndSelect('routeStation.station', 'station')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
+      .leftJoinAndSelect('trip.conductor', 'conductor')
+      .where('(trip.driverId = :driverId OR trip.conductorId = :driverId)', { driverId })
+      .andWhere(
+        '(trip.status = :inProgressStatus OR trip.departureTime BETWEEN :startOfDay AND :endOfDay)',
         {
-          driverId,
-          departureTime: Between(startOfDay, endOfDay),
+          inProgressStatus: TripStatus.IN_PROGRESS,
+          startOfDay,
+          endOfDay,
         },
-        {
-          conductorId: driverId,
-          departureTime: Between(startOfDay, endOfDay),
-        },
-      ],
-      relations: { route: true, vehicle: true, driver: true, conductor: true },
-      order: { departureTime: 'ASC' },
-    });
+      )
+      .orderBy('trip.departureTime', 'ASC')
+      .addOrderBy('routeStation.stopOrder', 'ASC')
+      .getMany();
   }
 
   async getManifest(tripId: string) {
@@ -1534,22 +1555,31 @@ export class TripsService {
     // Kiểm tra vé có thuộc đúng chuyến xe hiện tại không
     const ticketTripId = ticket.booking?.tripId || ticket.booking?.trip?.id;
     if (dto.tripId && ticketTripId && ticketTripId !== dto.tripId) {
-      return {
-        valid: false,
-        success: false,
-        isWrongTrip: true,
-        alreadyCheckedIn: false,
-        message: 'CẢNH BÁO: Mã vé này không thuộc về chuyến xe hiện tại!',
-        passenger: ticket.passengerName,
-        seat: ticket.seat?.seatNumber,
-        ticketCode: ticket.ticketCode,
-        correctTrip: {
-          tripId: ticketTripId,
-          routeName: ticket.booking?.trip?.route?.name || 'Chuyến xe khác',
-          departureTime: ticket.booking?.trip?.departureTime?.toISOString(),
-          vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
-        },
-      };
+      // KIỂM TRA THÔNG MINH: Nếu chuyến xe của vé cũng do chính tài xế/phụ xe này phụ trách:
+      const isAssignedToStaff =
+        conductorId &&
+        (ticket.booking?.trip?.driverId === conductorId ||
+          ticket.booking?.trip?.conductorId === conductorId);
+
+      if (!isAssignedToStaff) {
+        return {
+          valid: false,
+          success: false,
+          isWrongTrip: true,
+          alreadyCheckedIn: false,
+          message: 'CẢNH BÁO: Mã vé này không thuộc về chuyến xe hiện tại!',
+          passenger: ticket.passengerName,
+          seat: ticket.seat?.seatNumber,
+          ticketCode: ticket.ticketCode,
+          correctTrip: {
+            tripId: ticketTripId,
+            routeName: ticket.booking?.trip?.route?.name || 'Chuyến xe khác',
+            departureTime: ticket.booking?.trip?.departureTime?.toISOString(),
+            vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+          },
+        };
+      }
+      // Chuyến xe thuộc quyền phụ trách của tài xế: Cho phép tiếp tục check-in tự động
     }
 
     // Kiểm tra vé đã được soát trước đó (Trùng lặp check-in)

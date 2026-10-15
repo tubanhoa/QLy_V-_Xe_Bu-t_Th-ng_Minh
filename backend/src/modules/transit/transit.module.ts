@@ -8,6 +8,7 @@ import { SeatEntity } from '../../database/entities/seat.entity.js';
 import { TripEntity } from '../../database/entities/trip.entity.js';
 import { BookingEntity } from '../../database/entities/booking.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
+import { UserEntity } from '../../database/entities/user.entity.js';
 import { RoutesService } from './routes.service.js';
 import { RoutesController } from './routes.controller.js';
 import { StationsService } from './stations.service.js';
@@ -26,6 +27,7 @@ import { VehiclesController } from './vehicles.controller.js';
       TripEntity,
       BookingEntity,
       TicketEntity,
+      UserEntity,
     ]),
   ],
   controllers: [RoutesController, StationsController, VehiclesController],

@@ -542,16 +542,21 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
         zoomControl: false,
       })
 
-      const tileUrl = isDayMode
-        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
-
-      const tileLayer = L.tileLayer(tileUrl, {
-        attribution: '&copy; CARTO &copy; OpenStreetMap',
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
-        subdomains: 'abcd',
+        subdomains: 'abc',
       }).addTo(map)
       tileLayerRef.current = tileLayer
+
+      // Áp dụng bộ lọc ban đêm nếu đang ở chế độ Night Mode
+      const container = map.getContainer()
+      const tilePane = container.querySelector('.leaflet-tile-pane') as HTMLElement | null
+      if (tilePane) {
+        tilePane.style.filter = !isDayMode
+          ? 'brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3)'
+          : 'none'
+      }
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)
       mapInstanceRef.current = map
@@ -568,25 +573,18 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
     }
   }, [])
 
-  // Đổi Tile Layer khi chuyển Day / Night Mode
+  // Đổi style Tile Layer khi chuyển Day / Night Mode tức thì (0ms reload)
   useEffect(() => {
     const map = mapInstanceRef.current
-    const L = leafletModuleRef.current
-    if (!map || !L) return
+    if (!map) return
 
-    if (tileLayerRef.current) {
-      tileLayerRef.current.remove()
+    const container = map.getContainer()
+    const tilePane = container.querySelector('.leaflet-tile-pane') as HTMLElement | null
+    if (tilePane) {
+      tilePane.style.filter = !isDayMode
+        ? 'brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3)'
+        : 'none'
     }
-
-    const tileUrl = isDayMode
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
-
-    tileLayerRef.current = L.tileLayer(tileUrl, {
-      attribution: '&copy; CARTO &copy; OpenStreetMap',
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map)
   }, [isDayMode])
 
   // 4. Vẽ Lộ trình OSRM Road Geometry & Trạm dừng trên Leaflet

@@ -333,11 +333,11 @@ export function DispatcherGpsMap() {
         zoomControl: false,
       })
 
-      // Layer CartoDB Voyager siêu mượt, phong cách ứng dụng công nghệ Grab/Be
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
+      // Layer OpenStreetMap chuẩn, miễn phí 100%, không cần API Key, địa danh tiếng Việt chuẩn xác
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
-        subdomains: 'abcd',
+        subdomains: 'abc',
       }).addTo(map)
 
       // Zoom control góc trên bên phải
