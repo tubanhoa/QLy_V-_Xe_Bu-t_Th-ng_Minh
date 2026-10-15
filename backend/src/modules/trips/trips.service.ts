@@ -1253,26 +1253,30 @@ export class TripsService {
   }
 
   async getDriverTodayTrips(driverId: string) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    return this.tripRepository.find({
-      where: [
+    return this.tripRepository
+      .createQueryBuilder('trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('route.routeStations', 'routeStation')
+      .leftJoinAndSelect('routeStation.station', 'station')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
+      .leftJoinAndSelect('trip.conductor', 'conductor')
+      .where('(trip.driverId = :driverId OR trip.conductorId = :driverId)', { driverId })
+      .andWhere(
+        '(trip.status = :inProgressStatus OR trip.departureTime BETWEEN :startOfDay AND :endOfDay)',
         {
-          driverId,
-          departureTime: Between(startOfDay, endOfDay),
+          inProgressStatus: TripStatus.IN_PROGRESS,
+          startOfDay,
+          endOfDay,
         },
-        {
-          conductorId: driverId,
-          departureTime: Between(startOfDay, endOfDay),
-        },
-      ],
-      relations: { route: true, vehicle: true, driver: true, conductor: true },
-      order: { departureTime: 'ASC' },
-    });
+      )
+      .orderBy('trip.departureTime', 'ASC')
+      .addOrderBy('routeStation.stopOrder', 'ASC')
+      .getMany();
   }
 
   async getManifest(tripId: string) {
