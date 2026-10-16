@@ -101,6 +101,10 @@ const AdminAuditLogs = dynamic(
   () => import('./modules/admin-audit-logs').then((m) => m.AdminAuditLogs),
   { loading: () => <ContentSkeleton /> }
 )
+const UserProfileModule = dynamic(
+  () => import('./modules/user-profile-module').then((m) => m.UserProfileModule),
+  { loading: () => <ContentSkeleton /> }
+)
 
 const SKELETON_MS = 550
 
@@ -236,6 +240,7 @@ export function AppShell() {
       if (activeItem.key === 'scanner') return <DriverScanner onBack={() => handleNavigate('driver-trip')} />
       if (activeItem.key === 'manifest') return <DriverManifest onBack={() => handleNavigate('driver-trip')} />
       if (activeItem.key === 'incident-report') return <DriverIncident onBack={() => handleNavigate('driver-trip')} />
+      if (activeItem.key === 'profile') return <UserProfileModule onBack={() => handleNavigate('driver-trip')} />
     }
 
     // Phân hệ Dispatcher (Điều hành viên)
@@ -247,6 +252,7 @@ export function AppShell() {
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />
       if (activeItem.key === 'feedback') return <AdminFeedback />
+      if (activeItem.key === 'profile') return <UserProfileModule onBack={() => handleNavigate('dashboard')} />
     }
 
     // Phân hệ Super Admin (Quản trị viên)
@@ -267,6 +273,7 @@ export function AppShell() {
       if (activeItem.key === 'reports') return <AdminReports />
       if (activeItem.key === 'audit-logs') return <AdminAuditLogs />
       if (activeItem.key === 'settings') return <AdminSettings />
+      if (activeItem.key === 'profile') return <UserProfileModule onBack={() => handleNavigate('dashboard')} />
     }
 
     return <ModulePreview item={activeItem} />
@@ -291,6 +298,7 @@ export function AppShell() {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           onOpenMobileNav={() => setSheetOpen(true)}
           activeItem={activeItem}
+          onNavigate={handleNavigate}
           onLogout={handleLogout}
         />
         <Layout.Content>
@@ -311,13 +319,21 @@ export function AppShell() {
         <DriverBottomNav
           activeKey={activeItem.key}
           onNavigate={handleNavigate}
-          onOpenProfile={() => setSheetOpen(true)}
+          onOpenProfile={() => handleNavigate('profile')}
         />
       )}
 
       <BottomSheet open={sheetOpen} onClose={closeSheet} title="Menu điều hướng">
         <div className="px-1 pb-3">
-          <OperatorCard user={user} role={portalRole} variant="sheet" />
+          <OperatorCard
+            user={user}
+            role={portalRole}
+            variant="sheet"
+            onClick={() => {
+              closeSheet()
+              handleNavigate('profile')
+            }}
+          />
         </div>
         <nav aria-label="Điều hướng chính">
           <NavMenu items={navItems} activeKey={activeItem.key} onNavigate={handleNavigate} theme={themeMode} />

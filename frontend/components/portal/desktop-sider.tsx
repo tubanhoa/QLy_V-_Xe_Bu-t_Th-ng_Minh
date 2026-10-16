@@ -37,7 +37,7 @@ export function DesktopSider({ collapsed, user, role, items, activeKey, onNaviga
 
         {!collapsed && (
           <div className="px-4 pb-3">
-            <OperatorCard user={user} role={role} />
+            <OperatorCard user={user} role={role} onClick={() => onNavigate('profile')} />
           </div>
         )}
 

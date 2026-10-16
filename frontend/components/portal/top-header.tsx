@@ -19,20 +19,27 @@ import { useAuth } from '@/lib/auth-context'
 import { analyticsService, type IncidentReportItem } from '@/lib/services/analytics.service'
 import { ROLE_META, type NavItem, type Role } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
-import { UserProfileModal } from './modals/user-profile-modal'
 
 interface TopHeaderProps {
   collapsed: boolean
   onToggleCollapse: () => void
   onOpenMobileNav: () => void
   activeItem: NavItem
+  onNavigate?: (key: string) => void
   onLogout: () => void
 }
 
 const iconButton =
   'press inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-brand/30 hover:text-foreground'
 
-export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, activeItem, onLogout }: TopHeaderProps) {
+export function TopHeader({
+  collapsed,
+  onToggleCollapse,
+  onOpenMobileNav,
+  activeItem,
+  onNavigate,
+  onLogout,
+}: TopHeaderProps) {
   const { user, role, themeMode, toggleTheme } = useAuth()
   const searchRef = useRef<HTMLInputElement>(null)
   const [incidents, setIncidents] = useState<IncidentReportItem[]>([])
@@ -70,9 +77,6 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
 
   if (!user) return null
 
-  const [profileModalOpen, setProfileModalOpen] = useState(false)
-  const [profileModalTab, setProfileModalTab] = useState<'profile' | 'password'>('profile')
-
   const profileItems: MenuProps['items'] = [
     {
       key: 'profile-info',
@@ -88,12 +92,12 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
     {
       key: 'user-profile',
       icon: <User size={16} strokeWidth={1.75} className="text-emerald-600" aria-hidden="true" />,
-      label: 'Hồ sơ cá nhân',
+      label: 'Hồ sơ cá nhân & Bằng lái',
     },
     {
       key: 'change-password',
       icon: <KeyRound size={16} strokeWidth={1.75} className="text-blue-600" aria-hidden="true" />,
-      label: 'Đổi mật khẩu',
+      label: 'Đổi mật khẩu tài khoản',
     },
     { type: 'divider' },
     {
@@ -108,12 +112,10 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
     role === 'driver' ? 'driver' : role === 'dispatcher' || role === 'manager' ? 'dispatcher' : 'admin'
 
   const handleProfileClick: MenuProps['onClick'] = ({ key }) => {
-    if (key === 'user-profile') {
-      setProfileModalTab('profile')
-      setProfileModalOpen(true)
-    } else if (key === 'change-password') {
-      setProfileModalTab('password')
-      setProfileModalOpen(true)
+    if (key === 'user-profile' || key === 'change-password') {
+      if (typeof onNavigate === 'function') {
+        onNavigate('profile')
+      }
     } else if (key === 'logout') {
       onLogout()
     }
@@ -280,12 +282,6 @@ export function TopHeader({ collapsed, onToggleCollapse, onOpenMobileNav, active
           </Dropdown>
         </div>
       </div>
-
-      <UserProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        initialTab={profileModalTab}
-      />
     </header>
   )
 }

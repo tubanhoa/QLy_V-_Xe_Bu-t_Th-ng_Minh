@@ -6,14 +6,19 @@ interface OperatorCardProps {
   user: StaffUser
   role: Role
   variant?: 'sider' | 'sheet'
+  onClick?: () => void
 }
 
-export function OperatorCard({ user, role, variant = 'sider' }: OperatorCardProps) {
+export function OperatorCard({ user, role, variant = 'sider', onClick }: OperatorCardProps) {
   const isSider = variant === 'sider'
   return (
     <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-2xl p-3',
+        'flex items-center gap-3 rounded-2xl p-3 transition-all text-left',
+        onClick && 'cursor-pointer hover:border-emerald-500/40 hover:bg-white/[0.07] active:scale-[0.99]',
         isSider ? 'border border-white/[0.06] bg-white/[0.03]' : 'border border-border bg-muted/60',
       )}
     >

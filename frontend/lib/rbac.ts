@@ -22,6 +22,7 @@ import {
   Tag,
   Ticket,
   Users,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -190,6 +191,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       description: 'Tần suất chuyến, ngưỡng cảnh báo trễ',
       icon: SlidersHorizontal,
     },
+    {
+      key: 'profile',
+      label: 'Hồ sơ & Tài khoản',
+      description: 'Thông tin quản trị viên & bảo mật tài khoản',
+      icon: UserCheck,
+    },
   ],
   dispatcher: [
     {
@@ -236,6 +243,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       description: 'Passenger feedback hub',
       icon: MessageSquare,
     },
+    {
+      key: 'profile',
+      label: 'Hồ sơ cá nhân',
+      description: 'Thông tin cán bộ & cài đặt tài khoản',
+      icon: UserCheck,
+    },
   ],
   driver: [
     {
@@ -261,6 +274,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Báo cáo sự cố',
       description: 'One-touch quick incident alert',
       icon: Siren,
+    },
+    {
+      key: 'profile',
+      label: 'Hồ sơ & Bằng lái',
+      description: 'Định danh tài xế & Giấy phép lái xe GPLX',
+      icon: IdCard,
     },
   ],
 }
