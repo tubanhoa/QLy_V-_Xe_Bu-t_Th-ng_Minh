@@ -124,6 +124,16 @@ const ROUTES_INFO = [
 // Danh mục câu hỏi thường gặp
 const FAQ_ITEMS = [
   {
+    category: 'Vận hành & Điểm đón',
+    q: 'Khi sinh viên đặt vé, xe buýt điện có đến tận nơi đón không hay sinh viên phải ra trạm xe buýt?',
+    a: 'Xe buýt điện ICTU Transit là dịch vụ vận tải hành khách công cộng tuyến cố định (xe 28 - 45 chỗ), tuân thủ nghiêm ngặt Luật Giao thông Đường bộ và Nghị định 10/2020/NĐ-CP. Xe CHỈ đón và trả khách tại các Nhà chờ và Trạm dừng quy định được phê duyệt (không đón tận nhà riêng, ngõ xóm hay điểm vẫy tự phát). Sinh viên vui lòng tra cứu trạm đón gần nhất trên ứng dụng và có mặt tại nhà chờ trước giờ xe chạy 05 phút.',
+  },
+  {
+    category: 'Vận hành & Điểm đón',
+    q: 'Địa chỉ trụ sở nhà xe, bãi đỗ và trạm sạc trung tâm (Depot) ở đâu?',
+    a: 'Trụ sở Trung tâm Quản trị Vận tải & Bãi đỗ trạm sạc trung tâm (Depot) của Hệ thống Xe Buýt Điện ICTU Transit được đặt tại: Khuôn viên Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên, Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên. Ngoài ra, hệ thống còn kết nối với các đầu mối bến bãi chính: Bến xe Trung tâm TP. Thái Nguyên (Đường Lương Ngọc Quyến), Bến xe Đồng Quang (Đường Quang Trung) và Bến xe Nam Thái Nguyên (Tích Lương). Hotline điều phối 24/7: 1900 8899.',
+  },
+  {
     category: 'Vé & Thanh toán',
     q: 'Làm sao để sinh viên ICTU được hưởng mức giảm giá 50% khi mua vé tháng?',
     a: 'Khi đăng ký tài khoản trên hệ thống, bạn chỉ cần chọn đối tượng "Sinh viên", nhập đúng Mã sinh viên ICTU và tải lên ảnh thẻ sinh viên hoặc ảnh chụp VNeID/giấy báo nhập học. Hệ thống sẽ tự động đối soát dữ liệu với cổng đào tạo ICTU hoặc phê duyệt thủ công trong vòng 2 - 4 giờ làm việc. Sau khi được duyệt, tất cả vé tháng sẽ tự động giảm 50% vĩnh viễn trong thời gian học tập.',
@@ -1298,18 +1308,26 @@ export function ServiceInfoView() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 text-sm sm:text-base">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Giấy phép kinh doanh vận tải:</span>
-                <span className="font-mono font-black text-slate-900 text-base">{CONTACT.license}</span>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm sm:text-base">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
+                <span className="font-bold text-emerald-800 block mb-1 text-xs">Trụ sở & Depot bãi sạc chính:</span>
+                <span className="font-extrabold text-slate-900 text-xs sm:text-sm block">Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">Khuôn viên Trường ĐH CNTT&TT</span>
               </div>
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Cơ quan phê duyệt:</span>
-                <span className="font-bold text-slate-900">Sở Giao thông Vận tải Thái Nguyên</span>
+                <span className="font-bold text-slate-500 block mb-1 text-xs">Giấy phép kinh doanh vận tải:</span>
+                <span className="font-mono font-black text-slate-900 text-sm sm:text-base block">{CONTACT.license}</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">Sở GTVT Thái Nguyên cấp</span>
               </div>
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-                <span className="font-bold text-slate-500 block mb-1 text-xs sm:text-sm">Mã định danh đơn vị:</span>
-                <span className="font-mono font-black text-blue-700 text-base">ICTU-TRANSIT-TN</span>
+                <span className="font-bold text-slate-500 block mb-1 text-xs">Quy chuẩn đón/trả khách:</span>
+                <span className="font-bold text-emerald-800 text-xs sm:text-sm block">100% Trạm dừng & Nhà chờ</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">Tuyến cố định Nghị định 10/2020</span>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                <span className="font-bold text-slate-500 block mb-1 text-xs">Hotline điều độ 24/7:</span>
+                <span className="font-mono font-black text-blue-700 text-sm sm:text-base block">{CONTACT.hotline}</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">Tiếp nhận hỗ trợ hành trình</span>
               </div>
             </div>
           </div>

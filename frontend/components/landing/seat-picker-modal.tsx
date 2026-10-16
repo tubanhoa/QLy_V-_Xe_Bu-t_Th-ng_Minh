@@ -4,11 +4,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
+  AlertTriangle,
   Armchair,
   ArrowRight,
   Ban,
   BatteryCharging,
+  Building2,
   Bus,
+  Flag,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -516,6 +519,27 @@ export function SeatPickerModal({
           </div>
         </div>
 
+        {/* Banner điểm đón trạm dừng & thông tin nhà xe điều hành */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/70 border-b border-emerald-200/90 px-4 sm:px-6 py-2.5 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="size-6 rounded-lg bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-2xs text-[11px] font-bold">
+              <MapPin size={13} />
+            </span>
+            <div>
+              <span className="text-slate-900 font-extrabold">
+                Điểm đón khách: <strong className="text-[#005A36] underline decoration-emerald-500 underline-offset-2">{originName}</strong> (Nhà chờ trạm xe buýt)
+              </span>
+              <span className="block text-[11px] text-slate-600 font-medium mt-0.5">
+                Xe đón trả cố định tại trạm dừng quy định. Vui lòng có mặt trước 05 phút so với giờ xuất bến ({departureTime}).
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-emerald-950 bg-white/90 border border-emerald-300 rounded-xl px-3 py-1 font-semibold shrink-0 shadow-2xs flex items-center gap-1.5">
+            <Building2 size={13} className="text-[#005A36] shrink-0" />
+            <span>Nhà xe ICTU Transit · Depot Z115 Quyết Thắng · Hotline <strong>1900 8899</strong></span>
+          </div>
+        </div>
+
         {/* 1. Thông báo khi ghế được giữ thành công (Point 1) */}
         {lockSuccess && !lockError && (step === 'seats' || step === 'mobile-info') && (
           <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shrink-0 animate-in slide-in-from-top-1">
@@ -652,6 +676,33 @@ export function SeatPickerModal({
                       GIẢM 50% HSSV
                     </span>
                   )}
+                </div>
+
+                {/* Thẻ Lộ Trình & Điểm Đón Chi Tiết */}
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-1.5">
+                    <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <Bus size={13} className="text-[#005A36]" />
+                      <span>{routeCode} · {originName} ➔ {destinationName}</span>
+                    </span>
+                    <span className="font-mono font-bold text-emerald-800 text-[11px]">{departureTime}</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex items-start gap-1.5">
+                      <MapPin size={12} className="text-emerald-700 shrink-0 mt-0.5" />
+                      <span className="text-emerald-700 font-extrabold shrink-0">Điểm đón:</span>
+                      <span className="text-slate-900 font-bold">{originName} (Nhà chờ trạm buýt)</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <Flag size={12} className="text-slate-500 shrink-0 mt-0.5" />
+                      <span className="text-slate-500 font-extrabold shrink-0">Điểm trả:</span>
+                      <span className="text-slate-800 font-medium">{destinationName} (Trạm kết thúc)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-200/60 font-medium flex items-center gap-1.5">
+                      <AlertTriangle size={11} className="text-amber-600 shrink-0" />
+                      <span>Xe buýt điện đón/trả cố định tại trạm dừng quy định, không đón tại ngõ xóm/nhà riêng.</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Danh sách ghế đã chọn */}
@@ -1183,6 +1234,26 @@ export function SeatPickerModal({
 
                 {/* CỘT 2: CHI TIẾT CHUYỂN KHOẢN & THẺ TEST SANDBOX (lg:col-span-7) */}
                 <div className="lg:col-span-7 flex flex-col space-y-3 text-left">
+                  {/* Tóm tắt hành trình đón xe buýt tại trạm */}
+                  <div className="rounded-2xl border border-emerald-300/80 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/60 p-3 text-xs flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <div className="size-6 rounded-lg bg-[#005A36] text-white flex items-center justify-center shrink-0 text-xs shadow-2xs">
+                        <MapPin size={13} />
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-slate-900 block text-xs">
+                          {routeCode} · {originName} ➔ {destinationName}
+                        </span>
+                        <span className="text-[11px] text-slate-600 block mt-0.5">
+                          Đón tại nhà chờ trạm buýt · Giờ xuất bến: <strong>{departureTime}</strong> (Có mặt trước 05 phút)
+                        </span>
+                      </div>
+                    </div>
+                    <span className="rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-mono font-black text-emerald-800 border border-emerald-200 shrink-0 shadow-2xs">
+                      Ghế: {selectedSeats.map((s) => s.seatNumber).join(', ')}
+                    </span>
+                  </div>
+
                   {/* Khung Thông Tin Chuyển Khoản & Tổng Tiền */}
                   <div className="rounded-3xl bg-white border border-slate-200/90 p-4 sm:p-5 shadow-sm space-y-3">
                     {/* Hàng Số Tiền To Nổi Bật */}
@@ -1445,6 +1516,49 @@ export function SeatPickerModal({
                 </div>
               </div>
 
+              {/* Thẻ hướng dẫn địa điểm đón xe & nhà xe vận hành */}
+              <div className="rounded-2xl border border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/60 p-3.5 space-y-2 text-xs text-left shadow-2xs">
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-5 rounded-lg bg-[#005A36] text-white flex items-center justify-center font-bold text-[10px] shrink-0 shadow-2xs">
+                      <MapPin size={11} />
+                    </span>
+                    <span className="font-extrabold text-[#005A36] text-[11px] uppercase tracking-wide">
+                      Hướng Dẫn Đón Xe Buýt Tại Trạm
+                    </span>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 border border-emerald-300">
+                    Tuyến Cố Định
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-start gap-1.5">
+                    <MapPin size={13} className="text-emerald-700 shrink-0 mt-0.5" />
+                    <span className="text-emerald-800 font-extrabold shrink-0">Trạm đón:</span>
+                    <strong className="text-slate-900">{originName}</strong>
+                    <span className="text-slate-500 font-medium">(Nhà chờ trạm buýt)</span>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <Flag size={13} className="text-slate-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-600 font-bold shrink-0">Trạm trả:</span>
+                    <strong className="text-slate-800">{destinationName}</strong>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <Clock size={13} className="text-slate-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-600 font-bold shrink-0">Khuyến nghị:</span>
+                    <span className="text-slate-800 font-medium">Có mặt trước 05 phút so với giờ xuất bến ({departureTime})</span>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <Building2 size={13} className="text-slate-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-600 font-bold shrink-0">Đơn vị vận hành:</span>
+                    <span className="text-slate-800 font-medium">Nhà xe Buýt Điện ICTU (Depot: ĐH CNTT&TT Thái Nguyên, Đường Z115)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic pt-1 border-t border-emerald-200/60">
+                    * Lưu ý: Xe buýt đón trả tại nhà chờ trạm xe theo quy định, không đón trả tùy tiện ngoài trạm.
+                  </p>
+                </div>
+              </div>
+
               {/* Nút 1-Chạm: Thêm vào Apple / Google Wallet */}
               <button
                 type="button"
@@ -1464,8 +1578,9 @@ export function SeatPickerModal({
                 </span>
               </button>
 
-              <div className="rounded-xl bg-white border border-emerald-200/80 p-3 text-xs sm:text-sm text-emerald-950 font-medium">
-                👉 Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.
+              <div className="rounded-xl bg-white border border-emerald-200/80 p-3 text-xs sm:text-sm text-emerald-950 font-medium flex items-start gap-2">
+                <QrCode size={16} className="text-[#005A36] shrink-0 mt-0.5" />
+                <span>Đưa mã QR trên màn hình điện thoại lại gần máy quét tại cửa lên xe buýt thông minh để qua cổng tự động.</span>
               </div>
 
               {/* Card thông báo Hóa đơn điện tử */}

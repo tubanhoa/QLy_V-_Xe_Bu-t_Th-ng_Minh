@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react'
 import {
   Bot,
+  Building2,
+  Clock,
+  Footprints,
+  GraduationCap,
   MessageCircle,
   PhoneCall,
   Send,
@@ -19,7 +23,7 @@ export function FloatingSupportBot() {
   const [messages, setMessages] = useState<Array<{ sender: 'bot' | 'user'; text: string }>>([
     {
       sender: 'bot',
-      text: 'Xin chào! Mình là trợ lý ảo ICTU Transit Bot 🤖. Mình có thể hỗ trợ gì cho hành trình di chuyển của bạn hôm nay?',
+      text: 'Xin chào! Mình là trợ lý ảo ICTU Transit Bot. Mình có thể hỗ trợ gì cho hành trình di chuyển của bạn hôm nay?',
     },
   ])
   const [inputVal, setInputVal] = useState('')
@@ -40,7 +44,11 @@ export function FloatingSupportBot() {
     setTimeout(() => {
       let reply = 'Cảm ơn bạn! Ban điều phối xe buýt ICTU đã ghi nhận thông tin và sẽ hỗ trợ bạn ngay.'
       const lower = query.toLowerCase()
-      if (lower.includes('vé tháng') || lower.includes('sinh viên')) {
+      if (lower.includes('địa chỉ') || lower.includes('nhà xe') || lower.includes('ở đâu') || lower.includes('trụ sở') || lower.includes('depot')) {
+        reply = 'Trụ sở điều hành & Bãi đỗ/Trạm sạc trung tâm (Depot) của Nhà xe Buýt Điện ICTU đặt tại: Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên (Khuôn viên Trường ĐH CNTT & TT Thái Nguyên). Các đầu mối bến bãi chính gồm: Bến xe Trung tâm TP Thái Nguyên, Bến xe Đồng Quang và Bến xe Nam Thái Nguyên.'
+      } else if (lower.includes('đón tận nơi') || lower.includes('tận nhà') || lower.includes('ra trạm') || lower.includes('điểm đón') || lower.includes('đứng đợi')) {
+        reply = 'Quy định đón/trả: Xe buýt điện ICTU là phương tiện công cộng 28 chỗ hoạt động theo lộ trình cố định. Xe CHỈ đón/trả khách tại các Nhà chờ và Trạm xe buýt được phê duyệt (không đón tận nhà/ngõ riêng như xe ôm/taxi). Bạn vui lòng có mặt tại Trạm xe buýt trước 5 phút so với giờ xuất bến để lên xe nhé!'
+      } else if (lower.includes('vé tháng') || lower.includes('sinh viên')) {
         reply = 'Vé tháng sinh viên ICTU được trợ giá 50% (chỉ 100.000đ/tháng). Bạn có thể đăng ký trực tuyến bằng cách nộp ảnh thẻ SV tại mục "Đăng ký vé tháng".'
       } else if (lower.includes('giờ') || lower.includes('lịch') || lower.includes('chuyến')) {
         reply = 'Tuyến CT-01 xuất bến từ KTX ICTU từ 06:00 đến 21:00 hàng ngày, tần suất 15 phút/chuyến vào giờ cao điểm.'
@@ -152,24 +160,43 @@ export function FloatingSupportBot() {
           <div className="bg-slate-50 border-b border-slate-100 p-2.5 flex items-center gap-2 overflow-x-auto text-[11px] font-semibold text-slate-700">
             <button
               type="button"
-              onClick={() => handleSend('Lịch chạy xe buýt hôm nay?')}
-              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36]"
+              onClick={() => handleSend('Xe buýt có đến tận nơi đón không hay phải ra trạm?')}
+              className="shrink-0 rounded-full bg-white border border-emerald-300 text-emerald-800 px-2.5 py-1 hover:bg-emerald-50 hover:border-[#005A36] font-bold flex items-center gap-1.5"
             >
-              🕒 Giờ xe chạy
+              <Footprints size={12} className="text-emerald-700 shrink-0" />
+              <span>Đón tại trạm hay tận nơi?</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSend('Địa chỉ nhà xe và trạm sạc ở đâu?')}
+              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36] flex items-center gap-1.5"
+            >
+              <Building2 size={12} className="text-[#005A36] shrink-0" />
+              <span>Địa chỉ nhà xe & Depot</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSend('Lịch chạy xe buýt hôm nay?')}
+              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36] flex items-center gap-1.5"
+            >
+              <Clock size={12} className="text-slate-600 shrink-0" />
+              <span>Giờ xe chạy</span>
             </button>
             <button
               type="button"
               onClick={() => handleSend('Đăng ký vé tháng sinh viên giảm 50%?')}
-              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36]"
+              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36] flex items-center gap-1.5"
             >
-              🎓 Vé tháng HSSV
+              <GraduationCap size={12} className="text-slate-600 shrink-0" />
+              <span>Vé tháng HSSV</span>
             </button>
             <button
               type="button"
               onClick={() => handleSend('Hotline khẩn cấp 24/7')}
-              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36]"
+              className="shrink-0 rounded-full bg-white border border-slate-200 px-2.5 py-1 hover:border-[#005A36] hover:text-[#005A36] flex items-center gap-1.5"
             >
-              📞 Hotline
+              <PhoneCall size={12} className="text-slate-600 shrink-0" />
+              <span>Hotline</span>
             </button>
           </div>
 
