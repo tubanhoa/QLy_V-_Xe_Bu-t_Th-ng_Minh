@@ -248,7 +248,7 @@ export function AppShell() {
       if (activeItem.key === 'dashboard') return <OpsDashboard role={portalRole} onNavigate={handleNavigate} />
       if (activeItem.key === 'gps') return <DispatcherGpsMap />
       if (activeItem.key === 'student-pass') return <DispatcherStudentApproval />
-      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses />
+      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses onBack={() => handleNavigate('dashboard')} />
       if (activeItem.key === 'schedule') return <DispatcherSchedule />
       if (activeItem.key === 'incidents') return <DispatcherIncidents />
       if (activeItem.key === 'feedback') return <AdminFeedback />
@@ -268,8 +268,8 @@ export function AppShell() {
       if (activeItem.key === 'vouchers') return <AdminVouchers />
       if (activeItem.key === 'invoices') return <AdminInvoices />
       if (activeItem.key === 'feedback') return <AdminFeedback />
-      if (activeItem.key === 'staff') return <AdminStaff />
-      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses />
+      if (activeItem.key === 'driver-licenses') return <AdminDriverLicenses onBack={() => handleNavigate('dashboard')} />
+      if (activeItem.key === 'staff') return <AdminStaff onNavigate={handleNavigate} />
       if (activeItem.key === 'reports') return <AdminReports />
       if (activeItem.key === 'audit-logs') return <AdminAuditLogs />
       if (activeItem.key === 'settings') return <AdminSettings />

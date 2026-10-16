@@ -25,6 +25,7 @@ import {
   Loader2,
   AlertTriangle,
   User,
+  ArrowLeft,
 } from 'lucide-react'
 import {
   driverProfileService,
@@ -36,7 +37,11 @@ import {
 } from '@/lib/types/driver-profile'
 import { formatProofUrl } from '@/lib/utils'
 
-export function AdminDriverLicenses() {
+export interface AdminDriverLicensesProps {
+  onBack?: () => void
+}
+
+export function AdminDriverLicenses({ onBack }: AdminDriverLicensesProps = {}) {
   const [items, setItems] = useState<DriverWithProfileItem[]>([])
   const [kpis, setKpis] = useState<DriverProfileKPIs>({
     totalDrivers: 0,
@@ -267,7 +272,17 @@ export function AdminDriverLicenses() {
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-600/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="flex size-10 items-center justify-center rounded-2xl border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer shadow-2xs"
+                title="Quay lại"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            )}
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
               <IdCard size={22} />
             </div>
             <div>

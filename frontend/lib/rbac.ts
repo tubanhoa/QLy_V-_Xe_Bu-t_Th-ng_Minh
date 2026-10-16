@@ -131,6 +131,19 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       icon: Bus,
     },
     {
+      key: 'driver-licenses',
+      label: 'Hồ sơ & Bằng lái Tài xế',
+      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề 3 tài xế',
+      icon: IdCard,
+      badge: 1,
+    },
+    {
+      key: 'staff',
+      label: 'Nhân sự & Phân quyền',
+      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
+      icon: Users,
+    },
+    {
       key: 'payments',
       label: 'Vé & Cổng thanh toán',
       description: 'Giao dịch VNPay/MoMo, hoàn tiền',
@@ -160,18 +173,6 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       description: 'Hòm thư khiếu nại, đánh giá chất lượng',
       icon: MessageSquare,
       badge: 3,
-    },
-    {
-      key: 'staff',
-      label: 'Nhân sự & Phân quyền',
-      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
-      icon: Users,
-    },
-    {
-      key: 'driver-licenses',
-      label: 'Hồ sơ & Bằng lái Tài xế',
-      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
-      icon: IdCard,
     },
     {
       key: 'reports',
@@ -229,6 +230,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Hồ sơ & Bằng lái Tài xế',
       description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
       icon: IdCard,
+      badge: 1,
     },
     {
       key: 'incidents',
