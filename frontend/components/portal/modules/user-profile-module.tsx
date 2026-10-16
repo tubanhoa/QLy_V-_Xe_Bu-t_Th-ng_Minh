@@ -28,6 +28,11 @@ import {
   ArrowLeft,
   Clock,
   ChevronRight,
+  Upload,
+  UploadCloud,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { authService, type AuthUser } from '@/lib/services/auth.service'
@@ -78,6 +83,103 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
   const [isSavingLicense, setIsSavingLicense] = useState(false)
   const [licenseFeedback, setLicenseFeedback] = useState<string | null>(null)
   const [licenseError, setLicenseError] = useState<string | null>(null)
+
+  // Uploading States
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isUploadingFront, setIsUploadingFront] = useState(false)
+  const [isUploadingBack, setIsUploadingBack] = useState(false)
+
+  // Hàm xử lý upload tệp ảnh từ thiết bị (Lưu trên server và Instant preview)
+  const uploadImageFile = async (file: File): Promise<string> => {
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Vui lòng chọn tệp định dạng hình ảnh (JPG, PNG, WEBP)')
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('Dung lượng tệp ảnh không được vượt quá 5MB')
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = authService.getToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001/api/v1'
+      const res = await fetch(`${baseUrl}/upload/student-card`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      })
+
+      const resJson = await res.json().catch(() => null)
+      if (res.ok && resJson?.url) {
+        const url: string = resJson.url
+        return url.startsWith('http')
+          ? url
+          : `${baseUrl.replace(/\/api\/v1$/, '')}${url.startsWith('/') ? '' : '/'}${url}`
+      }
+    } catch (err) {
+      console.warn('Lỗi kết nối upload máy chủ, chuyển sang Base64:', err)
+    }
+
+    // Fallback sang Base64 Data URL nếu server offline
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('Không thể đọc tệp ảnh từ thiết bị'))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingAvatar(true)
+    setProfileError(null)
+    try {
+      const url = await uploadImageFile(file)
+      setAvatarUrl(url)
+    } catch (err: any) {
+      setProfileError(err?.message || 'Không thể tải ảnh đại diện lên')
+    } finally {
+      setIsUploadingAvatar(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleFrontImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingFront(true)
+    setLicenseError(null)
+    try {
+      const url = await uploadImageFile(file)
+      setFrontImageUrl(url)
+    } catch (err: any) {
+      setLicenseError(err?.message || 'Không thể tải ảnh mặt trước GPLX')
+    } finally {
+      setIsUploadingFront(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleBackImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingBack(true)
+    setLicenseError(null)
+    try {
+      const url = await uploadImageFile(file)
+      setBackImageUrl(url)
+    } catch (err: any) {
+      setLicenseError(err?.message || 'Không thể tải ảnh mặt sau GPLX')
+    } finally {
+      setIsUploadingBack(false)
+      e.target.value = ''
+    }
+  }
 
   // Password Form States
   const [oldPassword, setOldPassword] = useState('')
@@ -631,19 +733,61 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1.5">
-                      Link ảnh đại diện (Avatar URL)
+                  <div className="sm:col-span-2 p-4 rounded-2xl border border-border bg-muted/20">
+                    <label className="block text-xs font-bold text-foreground mb-2">
+                      Ảnh đại diện tài khoản
                     </label>
-                    <div className="relative">
-                      <Camera size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        type="url"
-                        value={avatarUrl}
-                        onChange={(e) => setAvatarUrl(e.target.value)}
-                        placeholder="https://images.unsplash.com/..."
-                        className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-3.5 text-xs text-foreground focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all shadow-xs"
-                      />
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      {/* Avatar Preview */}
+                      <div className="relative group shrink-0">
+                        <div className="size-20 rounded-2xl ring-2 ring-emerald-500/40 shadow-md overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-xl font-black">
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={fullName}
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <span>{userInitials}</span>
+                          )}
+                        </div>
+                        {isUploadingAvatar && (
+                          <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-white">
+                            <Loader2 size={24} className="animate-spin text-emerald-400" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Upload Controls */}
+                      <div className="flex-1 space-y-2 text-center sm:text-left">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95">
+                            <Upload size={14} />
+                            <span>{isUploadingAvatar ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={isUploadingAvatar}
+                              onChange={handleAvatarFileChange}
+                              className="hidden"
+                            />
+                          </label>
+
+                          {avatarUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setAvatarUrl('')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-semibold cursor-pointer transition-all"
+                            >
+                              <Trash2 size={13} />
+                              <span>Gỡ ảnh</span>
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Hỗ trợ định dạng PNG, JPG, WEBP từ máy tính hoặc điện thoại (Tối đa 5MB).
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -882,31 +1026,159 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div>
-                          <label className="block text-xs font-bold text-foreground mb-1.5">
-                            Ảnh mặt trước GPLX (URL)
-                          </label>
-                          <input
-                            type="url"
-                            value={frontImageUrl}
-                            onChange={(e) => setFrontImageUrl(e.target.value)}
-                            placeholder="https://..."
-                            className="h-11 w-full rounded-xl border border-border bg-background px-3.5 text-xs text-foreground focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all shadow-xs"
-                          />
-                        </div>
+                      {/* KHUNG TẢI ẢNH 2 MẶT GPLX TỪ THIẾT BỊ */}
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold text-foreground">
+                          Hình ảnh chụp 2 mặt Giấy phép lái xe (GPLX)
+                        </label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Chụp rõ nét 2 mặt phôi thẻ PET, không bị mất góc hoặc lóa sáng để Hội đồng thẩm định phê duyệt ca chạy.
+                        </p>
 
-                        <div>
-                          <label className="block text-xs font-bold text-foreground mb-1.5">
-                            Ảnh mặt sau GPLX (URL)
-                          </label>
-                          <input
-                            type="url"
-                            value={backImageUrl}
-                            onChange={(e) => setBackImageUrl(e.target.value)}
-                            placeholder="https://..."
-                            className="h-11 w-full rounded-xl border border-border bg-background px-3.5 text-xs text-foreground focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all shadow-xs"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+                          {/* MẶT TRƯỚC GPLX */}
+                          <div className="rounded-2xl border-2 border-dashed border-border hover:border-emerald-500/50 bg-muted/20 p-4 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[200px]">
+                            {frontImageUrl ? (
+                              <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-xs border border-border group">
+                                <img
+                                  src={frontImageUrl}
+                                  alt="Mặt trước GPLX"
+                                  className="size-full object-cover"
+                                />
+                                <div className="absolute top-2 left-2 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-[10px] font-bold text-emerald-300 flex items-center gap-1">
+                                  <CheckCircle2 size={12} />
+                                  Mặt trước GPLX
+                                </div>
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold cursor-pointer hover:bg-slate-100 shadow-md">
+                                    <Upload size={13} />
+                                    <span>Đổi ảnh</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      disabled={isUploadingFront}
+                                      onChange={handleFrontImageFileChange}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setFrontImageUrl('')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer"
+                                  >
+                                    <Trash2 size={13} />
+                                    <span>Xóa</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center py-4 space-y-2.5">
+                                <div className="size-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                  <UploadCloud size={24} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-foreground">
+                                    Ảnh mặt trước GPLX
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Mặt có ảnh chân dung và hạng bằng
+                                  </p>
+                                </div>
+                                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95">
+                                  <Upload size={14} />
+                                  <span>{isUploadingFront ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    disabled={isUploadingFront}
+                                    onChange={handleFrontImageFileChange}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            {isUploadingFront && (
+                              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white z-10">
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 size={24} className="animate-spin text-emerald-400" />
+                                  <span className="text-xs font-semibold">Đang xử lý tệp ảnh...</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* MẶT SAU GPLX */}
+                          <div className="rounded-2xl border-2 border-dashed border-border hover:border-emerald-500/50 bg-muted/20 p-4 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[200px]">
+                            {backImageUrl ? (
+                              <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-xs border border-border group">
+                                <img
+                                  src={backImageUrl}
+                                  alt="Mặt sau GPLX"
+                                  className="size-full object-cover"
+                                />
+                                <div className="absolute top-2 left-2 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-[10px] font-bold text-emerald-300 flex items-center gap-1">
+                                  <CheckCircle2 size={12} />
+                                  Mặt sau GPLX
+                                </div>
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold cursor-pointer hover:bg-slate-100 shadow-md">
+                                    <Upload size={13} />
+                                    <span>Đổi ảnh</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      disabled={isUploadingBack}
+                                      onChange={handleBackImageFileChange}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBackImageUrl('')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer"
+                                  >
+                                    <Trash2 size={13} />
+                                    <span>Xóa</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center py-4 space-y-2.5">
+                                <div className="size-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                  <UploadCloud size={24} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-foreground">
+                                    Ảnh mặt sau GPLX
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    Mặt có các hạng xe được phép điều khiển
+                                  </p>
+                                </div>
+                                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95">
+                                  <Upload size={14} />
+                                  <span>{isUploadingBack ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    disabled={isUploadingBack}
+                                    onChange={handleBackImageFileChange}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            {isUploadingBack && (
+                              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white z-10">
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 size={24} className="animate-spin text-emerald-400" />
+                                  <span className="text-xs font-semibold">Đang xử lý tệp ảnh...</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
