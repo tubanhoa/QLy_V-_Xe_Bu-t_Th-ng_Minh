@@ -15,6 +15,9 @@ import {
   Calendar,
   CalendarDays,
   Filter,
+  IdCard,
+  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react'
 import type { Role } from '@/lib/rbac'
 import type { Trip, TripStatus } from '@/lib/mock-data'
@@ -23,6 +26,7 @@ import {
   type AdminDashboardData,
   type LiveTripItem,
 } from '@/lib/services/analytics.service'
+import { driverProfileService } from '@/lib/services/driver-profile.service'
 import { authService } from '@/lib/services/auth.service'
 import { KpiCard } from './kpi-card'
 import { IncidentsCard, RevenueChannelsCard } from './side-panels'
@@ -66,6 +70,13 @@ export function OpsDashboard({
   const [customDate, setCustomDate] = useState<string>('')
   const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({})
   const dateRangeRef = useRef<{ start?: string; end?: string }>({})
+
+  // KPI Hồ sơ & Bằng lái 3 tài xế hoạt động
+  const [driverKpis, setDriverKpis] = useState<{ total: number; approved: number; pending: number }>({
+    total: 3,
+    approved: 2,
+    pending: 1,
+  })
 
   const currentUser = authService.getUser()
 
@@ -117,8 +128,21 @@ export function OpsDashboard({
     const effectiveStart = start !== undefined ? start : dateRangeRef.current.start
     const effectiveEnd = end !== undefined ? end : dateRangeRef.current.end
     try {
-      const summary = await analyticsService.getAdminDashboardSummary(effectiveStart, effectiveEnd)
-      setData(summary)
+      const [summaryRes, profileRes] = await Promise.allSettled([
+        analyticsService.getAdminDashboardSummary(effectiveStart, effectiveEnd),
+        driverProfileService.getDriverProfiles({ limit: 1 }),
+      ])
+
+      if (summaryRes.status === 'fulfilled') {
+        setData(summaryRes.value)
+      }
+      if (profileRes.status === 'fulfilled' && profileRes.value.success && profileRes.value.data?.kpis) {
+        setDriverKpis({
+          total: profileRes.value.data.kpis.totalDrivers,
+          approved: profileRes.value.data.kpis.approvedCount,
+          pending: profileRes.value.data.kpis.pendingCount,
+        })
+      }
       setLastSyncTime(new Date())
     } catch (err) {
       console.error('[OpsDashboard] Lỗi tải dữ liệu thời gian thực:', err)
@@ -281,15 +305,32 @@ export function OpsDashboard({
         <div className="flex flex-wrap items-center gap-2">
           {/* Nút Chuyển nhanh sang Điều phối & Phân công */}
           {onNavigate && (
-            <button
-              type="button"
-              onClick={() => onNavigate('schedule')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs"
-              title="Mở Bàn Điều Phối & Lịch Gantt phân công xe, tài xế"
-            >
-              <CalendarDays size={14} />
-              <span>Điều Phối Chuyến Xe</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigate('schedule')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs"
+                title="Mở Bàn Điều Phối & Lịch Gantt phân công xe, tài xế"
+              >
+                <CalendarDays size={14} />
+                <span>Điều Phối Chuyến Xe</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('driver-licenses')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-xs"
+                title="Khám & Thẩm định hồ sơ bằng lái cho 3 tài xế"
+              >
+                <IdCard size={14} />
+                <span>Thẩm Định GPLX</span>
+                {driverKpis.pending > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-black/20 text-[10px] font-mono">
+                    {driverKpis.pending} chờ
+                  </span>
+                )}
+              </button>
+            </>
           )}
 
           {/* Nút Làm Mới Realtime */}
@@ -428,6 +469,59 @@ export function OpsDashboard({
           </button>
         </div>
       )}
+
+      {/* THẺ THẨM ĐỊNH HỒ SƠ & BẰNG LÁI TÀI XẾ (QUICK COMPLIANCE WIDGET) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4.5 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-500/5 to-emerald-500/10 border border-amber-500/20 dark:border-amber-500/30 shadow-xs">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="size-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+            <IdCard size={22} />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                Thẩm Định Hồ Sơ & Bằng Lái 3 Tài Xế Hoạt Động
+              </h3>
+              {driverKpis.pending > 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/50">
+                  <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                  {driverKpis.pending} Hồ sơ chờ phê duyệt
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/50">
+                  <CheckCircle2 size={11} /> 100% Đạt chuẩn
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+              Hệ thống hiện có <strong className="text-slate-900 dark:text-white">{driverKpis.total} tài xế</strong>: 
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold"> {driverKpis.approved} đã phê duyệt GPLX (Hạng E)</span>, 
+              <span className="text-amber-700 dark:text-amber-400 font-semibold"> {driverKpis.pending} đang chờ thẩm định (Nguyễn Văn Hùng - Hạng D)</span>.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {onNavigate && (
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigate('staff')}
+                className="px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-xs"
+              >
+                Danh Sách Nhân Sự
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('driver-licenses')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer shadow-sm"
+              >
+                <span>Khám & Phê Duyệt GPLX</span>
+                <ArrowRight size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* KPI Cards Hàng Ngang (Real Data Driven) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

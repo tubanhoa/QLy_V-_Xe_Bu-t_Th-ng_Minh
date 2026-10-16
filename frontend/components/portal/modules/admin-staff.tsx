@@ -90,7 +90,11 @@ const ROLE_DETAILS = {
 type SortField = 'role' | 'fullName' | 'createdAt'
 type SortOrder = 'asc' | 'desc'
 
-export function AdminStaff() {
+export interface AdminStaffProps {
+  onNavigate?: (key: string) => void
+}
+
+export function AdminStaff({ onNavigate }: AdminStaffProps = {}) {
   const [users, setUsers] = useState<BackendUser[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -583,6 +587,22 @@ export function AdminStaff() {
 
         {/* Nút tác vụ */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Nút Thẩm định GPLX Tài xế */}
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('driver-licenses')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer"
+              title="Khám & Thẩm định hồ sơ bằng lái cho 3 tài xế"
+            >
+              <IdCard size={14} />
+              <span>Thẩm Định GPLX</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-black/20 text-[10px] font-mono">
+                1 chờ duyệt
+              </span>
+            </button>
+          )}
+
           {/* Nút Thêm mới tài khoản */}
           <button
             type="button"
@@ -760,6 +780,35 @@ export function AdminStaff() {
         </div>
       )}
 
+      {/* Banner nhắc việc thẩm định khi lọc vai trò Tài Xế */}
+      {roleFilter === 'driver' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4.5 rounded-2xl bg-linear-to-r from-amber-500/10 via-amber-500/5 to-emerald-500/10 border border-amber-300 dark:border-amber-700/60 text-xs shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <IdCard size={20} />
+            </div>
+            <div>
+              <p className="font-black text-slate-900 dark:text-white text-sm">
+                Đang Xem Danh Sách {driverCount} Tài Khoản Tài Xế
+              </p>
+              <p className="text-slate-600 dark:text-slate-300 text-[11px] mt-0.5">
+                Kiểm tra hình ảnh 2 mặt GPLX Hạng D/E, phóng to, xoay ảnh và duyệt chứng chỉ hành nghề trực tiếp tại module Thẩm định GPLX.
+              </p>
+            </div>
+          </div>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('driver-licenses')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer shrink-0 shadow-xs"
+            >
+              <IdCard size={14} />
+              <span>Khám & Phê Duyệt GPLX →</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Staff Table */}
       <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
@@ -915,17 +964,31 @@ export function AdminStaff() {
                       </td>
                       <td className="p-4 pr-6 text-right whitespace-nowrap">
                         <div className="inline-flex items-center justify-end gap-1.5">
-                          {/* Nút Xem hoạt động tài xế */}
+                          {/* Nút Xem hoạt động tài xế & Thẩm định GPLX */}
                           {roleName === 'driver' && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDriverActivity(u)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
-                              title="Xem ca chạy & lịch sử soát vé của tài xế"
-                            >
-                              <Activity size={13} />
-                              <span className="hidden sm:inline">Ca chạy</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDriverActivity(u)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                title="Xem ca chạy & lịch sử soát vé của tài xế"
+                              >
+                                <Activity size={13} />
+                                <span className="hidden sm:inline">Ca chạy</span>
+                              </button>
+
+                              {onNavigate && (
+                                <button
+                                  type="button"
+                                  onClick={() => onNavigate('driver-licenses')}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-300 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                  title="Khám & Thẩm định hồ sơ bằng lái GPLX tài xế"
+                                >
+                                  <IdCard size={13} />
+                                  <span className="hidden sm:inline">Duyệt GPLX</span>
+                                </button>
+                              )}
+                            </>
                           )}
 
                           {/* Nút Phân quyền */}
@@ -1504,13 +1567,29 @@ export function AdminStaff() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setViewingDriver(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                {onNavigate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingDriver(null)
+                      onNavigate('driver-licenses')
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                    title="Mở module Thẩm định GPLX"
+                  >
+                    <IdCard size={14} />
+                    <span>Thẩm Định GPLX</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setViewingDriver(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-sidebar-scroll">

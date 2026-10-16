@@ -22,6 +22,7 @@ import {
   Tag,
   Ticket,
   Users,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -130,6 +131,19 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       icon: Bus,
     },
     {
+      key: 'driver-licenses',
+      label: 'Hồ sơ & Bằng lái Tài xế',
+      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề 3 tài xế',
+      icon: IdCard,
+      badge: 1,
+    },
+    {
+      key: 'staff',
+      label: 'Nhân sự & Phân quyền',
+      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
+      icon: Users,
+    },
+    {
       key: 'payments',
       label: 'Vé & Cổng thanh toán',
       description: 'Giao dịch VNPay/MoMo, hoàn tiền',
@@ -161,18 +175,6 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       badge: 3,
     },
     {
-      key: 'staff',
-      label: 'Nhân sự & Phân quyền',
-      description: 'Users, tài xế, phụ xe, phân quyền RBAC',
-      icon: Users,
-    },
-    {
-      key: 'driver-licenses',
-      label: 'Hồ sơ & Bằng lái Tài xế',
-      description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
-      icon: IdCard,
-    },
-    {
       key: 'reports',
       label: 'Báo cáo & Phân tích',
       description: 'Báo cáo doanh thu, tài chính & tỷ lệ lấp đầy',
@@ -189,6 +191,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Cài đặt hệ thống',
       description: 'Tần suất chuyến, ngưỡng cảnh báo trễ',
       icon: SlidersHorizontal,
+    },
+    {
+      key: 'profile',
+      label: 'Hồ sơ & Tài khoản',
+      description: 'Thông tin quản trị viên & bảo mật tài khoản',
+      icon: UserCheck,
     },
   ],
   dispatcher: [
@@ -222,6 +230,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Hồ sơ & Bằng lái Tài xế',
       description: 'Thẩm định GPLX Hạng D/E, hồ sơ hành nghề',
       icon: IdCard,
+      badge: 1,
     },
     {
       key: 'incidents',
@@ -235,6 +244,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Đánh giá & Khiếu nại',
       description: 'Passenger feedback hub',
       icon: MessageSquare,
+    },
+    {
+      key: 'profile',
+      label: 'Hồ sơ cá nhân',
+      description: 'Thông tin cán bộ & cài đặt tài khoản',
+      icon: UserCheck,
     },
   ],
   driver: [
@@ -261,6 +276,12 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
       label: 'Báo cáo sự cố',
       description: 'One-touch quick incident alert',
       icon: Siren,
+    },
+    {
+      key: 'profile',
+      label: 'Hồ sơ & Bằng lái',
+      description: 'Định danh tài xế & Giấy phép lái xe GPLX',
+      icon: IdCard,
     },
   ],
 }

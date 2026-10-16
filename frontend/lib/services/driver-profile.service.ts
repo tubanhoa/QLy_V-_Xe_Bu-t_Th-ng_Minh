@@ -67,6 +67,59 @@ class DriverProfileService {
   }
 
   /**
+   * Tài xế lấy thông tin chi tiết hồ sơ bằng lái của chính mình
+   */
+  async getMyDriverProfile(): Promise<UnifiedApiResponse<DriverWithProfileItem>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/driver/my-profile`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải hồ sơ bằng lái của bạn',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[DriverProfileService.getMyDriverProfile]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Tài xế tự nộp hoặc cập nhật hồ sơ bằng lái của mình
+   */
+  async updateMyDriverProfile(payload: UpdateDriverProfilePayload): Promise<UnifiedApiResponse<any>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/driver/my-profile`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể cập nhật hồ sơ bằng lái của bạn',
+        }
+      }
+
+      return { success: true, data: resJson?.data || resJson }
+    } catch (error: any) {
+      console.error('[DriverProfileService.updateMyDriverProfile]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
    * Lấy chi tiết hồ sơ bằng lái của một tài xế
    */
   async getDriverProfile(driverId: string): Promise<UnifiedApiResponse<DriverWithProfileItem>> {
