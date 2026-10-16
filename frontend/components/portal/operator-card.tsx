@@ -36,7 +36,7 @@ export function OperatorCard({ user, role, variant = 'sider', onClick }: Operato
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-sm font-semibold', isSider ? 'text-white' : 'text-foreground')}>
+        <p className={cn('truncate text-sm font-bold', isSider ? 'text-white' : 'text-foreground')} title={user.name}>
           {user.name}
         </p>
         <div className="mt-0.5 flex items-center gap-1.5">

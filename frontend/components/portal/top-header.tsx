@@ -273,10 +273,10 @@ export function TopHeader({
                 {user.initials}
               </Avatar>
               <span className="hidden text-left leading-tight sm:block">
-                <span className="block max-w-40 truncate text-sm font-semibold text-foreground">
+                <span className="block max-w-64 truncate text-sm font-bold text-foreground" title={user.name}>
                   {user.name}
                 </span>
-                <span className="block text-[11px] text-muted-foreground">{user.roleTitle}</span>
+                <span className="block text-[11px] font-medium text-muted-foreground">{user.roleTitle}</span>
               </span>
             </button>
           </Dropdown>
