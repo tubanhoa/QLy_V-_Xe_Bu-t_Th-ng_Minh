@@ -35,9 +35,26 @@ export class DriverProfileController {
     return this.driverProfileService.findAll(query);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.DRIVER, Role.CONDUCTOR)
+  @Get('driver/my-profile')
+  @ApiOperation({ summary: 'Xem hồ sơ bằng lái của chính tài khoản tài xế đang đăng nhập' })
+  async getMyDriverProfile(@CurrentUser('id') driverId: string) {
+    return this.driverProfileService.findByDriverId(driverId);
+  }
+
+  @Roles(Role.DRIVER, Role.CONDUCTOR)
+  @Put('driver/my-profile')
+  @ApiOperation({ summary: 'Tài xế tự cập nhật thông tin GPLX của mình và gửi thẩm định' })
+  async updateMyDriverProfile(
+    @CurrentUser('id') driverId: string,
+    @Body() dto: UpdateDriverProfileDto,
+  ) {
+    return this.driverProfileService.upsertProfile(driverId, dto);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.DRIVER, Role.CONDUCTOR)
   @Get('admin/driver-profiles/:driverId')
-  @ApiOperation({ summary: 'Xem chi tiết hồ sơ bằng lái của tài xế (Admin, Manager)' })
+  @ApiOperation({ summary: 'Xem chi tiết hồ sơ bằng lái của tài xế (Admin, Manager, Driver)' })
   async getDriverProfileDetail(@Param('driverId') driverId: string) {
     return this.driverProfileService.findByDriverId(driverId);
   }
