@@ -27,6 +27,7 @@ import { transitService } from '@/lib/services/transit.service'
 import { trackingService } from '@/lib/services/tracking.service'
 import type { TransitRoute } from '@/lib/types/transit'
 import type { LiveTrackingResponse, SimulatorStatus, StationEtaItem, TripIncident } from '@/lib/types/tracking'
+import { calculateDistanceMeters } from '@/lib/utils/map-routing'
 
 interface StationCoord {
   id: string
