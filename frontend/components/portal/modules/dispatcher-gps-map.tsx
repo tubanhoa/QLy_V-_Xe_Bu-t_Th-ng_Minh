@@ -459,11 +459,31 @@ export function DispatcherGpsMap() {
     const L = leafletModuleRef.current
     if (!map || !L) return
 
-    const lat = telemetry?.latitude || stationsList[0]?.lat || 21.585284
-    const lng = telemetry?.longitude || stationsList[0]?.lng || 105.806297
+    // Xác thực tọa độ xe buýt thông minh: nếu chưa có hoặc lệch tuyến xa, ưu tiên hiển thị tại trạm xuất phát
+    let lat = telemetry?.latitude
+    let lng = telemetry?.longitude
+
+    if (stationsList.length > 0) {
+      const firstSt = stationsList[0]
+      if (!lat || !lng) {
+        lat = firstSt.lat
+        lng = firstSt.lng
+      } else {
+        const d = calculateDistanceMeters(lat, lng, firstSt.lat, firstSt.lng)
+        // Nếu cách trạm 1 quá 20km (tọa độ cũ của tuyến khác) và chưa chạy mô phỏng, snap về trạm 1
+        if (d > 20000 && !simStatus?.isRunning) {
+          lat = firstSt.lat
+          lng = firstSt.lng
+        }
+      }
+    } else {
+      lat = lat || 21.585284
+      lng = lng || 105.806297
+    }
+
     const heading = telemetry?.headingDegrees || 0
     const speed = telemetry?.speedKmh ?? (simStatus?.isRunning ? 38 : 0)
-    const plate = selectedTrip?.vehicle?.licensePlate || '20B-056.78'
+    const plate = selectedTrip?.vehicle?.licensePlate || (selectedTrip?.vehicle as any)?.plateNumber || '20B-056.78'
 
     const busIcon = L.divIcon({
       className: 'custom-bus-glide-marker',
@@ -478,7 +498,7 @@ export function DispatcherGpsMap() {
             <div style="position: absolute; top: -7px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 11px solid #00A86B; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></div>
           </div>
           <!-- 3D Bus Badge -->
-          <div style="position: relative; width: 40px; height: 40px; border-radius: 9999px; background: linear-gradient(135deg, #00A86B 0%, #047857 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0, 168, 107, 0.5); border: 2.5px solid #ffffff;">
+          <div style="position: relative; width: 40px; height: 40px; border-radius: 9999px; background: linear-gradient(135deg, #00A86B 0%, #047857 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0, 168, 107, 0.6); border: 2.5px solid #ffffff;">
             <svg style="width: 22px; height: 22px; fill: white;" viewBox="0 0 24 24">
               <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
             </svg>
@@ -492,11 +512,12 @@ export function DispatcherGpsMap() {
     })
 
     if (!busMarkerRef.current) {
-      const marker = L.marker([lat, lng], { icon: busIcon, zIndexOffset: 1000 }).addTo(map)
+      const marker = L.marker([lat, lng], { icon: busIcon, zIndexOffset: 3000 }).addTo(map)
       busMarkerRef.current = marker
     } else {
       busMarkerRef.current.setIcon(busIcon)
       busMarkerRef.current.setLatLng([lat, lng])
+      busMarkerRef.current.setZIndexOffset(3000)
     }
 
     // Bám theo xe buýt (Follow Bus Mode)
@@ -537,6 +558,21 @@ export function DispatcherGpsMap() {
                   speedMultiplier,
                 } as any),
           )
+          setFollowBus(true)
+          if (stationsList[0]) {
+            setTelemetry((prev) => ({
+              ...prev,
+              tripId: selectedTripId,
+              latitude: stationsList[0].lat,
+              longitude: stationsList[0].lng,
+              speedKmh: 35 * speedMultiplier,
+              headingDegrees: 90,
+              batteryPercent: 95,
+              lastUpdated: new Date().toISOString(),
+              isSimulated: true,
+              stationEtas: prev?.stationEtas || [],
+            }))
+          }
         } else {
           setErrorMsg(res.message || 'Không thể khởi động bộ mô phỏng GPS')
         }

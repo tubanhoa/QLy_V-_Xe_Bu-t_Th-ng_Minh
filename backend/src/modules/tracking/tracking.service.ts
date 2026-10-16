@@ -712,45 +712,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // Reset lại trạm đã qua trong cache
     await this.cacheDel(`tracking:trip:${tripId}:stations_passed`);
 
-    // Tạo danh sách waypoints nội suy (interpolation) giữa các trạm
-    const waypoints: Array<{ latitude: number; longitude: number; heading: number }> = [];
-    const STEPS_PER_SEGMENT = 10;
-
-    for (let i = 0; i < routeStations.length - 1; i++) {
-      const s1 = routeStations[i].station;
-      const s2 = routeStations[i + 1].station;
-
-      const lat1 = Number(s1.latitude);
-      const lon1 = Number(s1.longitude);
-      const lat2 = Number(s2.latitude);
-      const lon2 = Number(s2.longitude);
-
-      // Tính góc hướng (heading)
-      const dLon = ((lon2 - lon1) * Math.PI) / 180;
-      const y = Math.sin(dLon) * Math.cos((lat2 * Math.PI) / 180);
-      const x =
-        Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
-        Math.sin((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.cos(dLon);
-      const heading = (Math.atan2(y, x) * 180) / Math.PI;
-      const normalizedHeading = Math.round((heading + 360) % 360);
-
-      for (let step = 0; step < STEPS_PER_SEGMENT; step++) {
-        const factor = step / STEPS_PER_SEGMENT;
-        waypoints.push({
-          latitude: Number((lat1 + (lat2 - lat1) * factor).toFixed(6)),
-          longitude: Number((lon1 + (lon2 - lon1) * factor).toFixed(6)),
-          heading: normalizedHeading,
-        });
-      }
-    }
-
-    // Thêm điểm cuối cùng (trạm cuối)
-    const lastStation = routeStations[routeStations.length - 1].station;
-    waypoints.push({
-      latitude: Number(lastStation.latitude),
-      longitude: Number(lastStation.longitude),
-      heading: waypoints[waypoints.length - 1]?.heading || 0,
-    });
+    // Trích xuất danh sách waypoints bám sát 100% mặt đường thực tế OSRM
+    const stationsData = routeStations.map((rs) => ({
+      latitude: rs.station.latitude,
+      longitude: rs.station.longitude,
+    }));
+    const waypoints = await this.generateOsrmRoadWaypoints(stationsData);
 
     const speedKmh = 35 * Math.min(10, Math.max(0.5, speedMultiplier));
     const tickIntervalMs = Math.max(200, Math.round(2000 / Math.max(0.5, speedMultiplier)));
@@ -862,6 +829,89 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       speedMultiplier: sim.speedMultiplier || 1,
       tickIntervalMs: sim.tickIntervalMs || 2000,
     };
+  }
+
+  /**
+   * Trích xuất danh sách waypoints bám sát 100% mặt đường thực tế từ OSRM Road Routing
+   * Giúp xe buýt chạy chuẩn theo từng ngã tư, khúc cua của TP Thái Nguyên
+   */
+  private async generateOsrmRoadWaypoints(
+    stations: Array<{ latitude: number | string; longitude: number | string }>,
+  ): Promise<Array<{ latitude: number; longitude: number; heading: number }>> {
+    if (stations.length < 2) return [];
+
+    let rawCoords: Array<[number, number]> = []; // [lat, lng]
+    try {
+      const coordsStr = stations
+        .map((s) => `${Number(s.longitude).toFixed(6)},${Number(s.latitude).toFixed(6)}`)
+        .join(';');
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.routes?.[0]?.geometry?.coordinates?.length) {
+          rawCoords = data.routes[0].geometry.coordinates.map((pt: [number, number]) => [pt[1], pt[0]]);
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`[OSRM Road Simulator] Không thể lấy đường bộ OSRM (${e?.message}), chuyển sang fallback.`);
+    }
+
+    // Nếu không lấy được từ OSRM (lỗi mạng hoặc timeout), fallback sang nối trạm dừng
+    if (rawCoords.length < 2) {
+      rawCoords = stations.map((s) => [Number(s.latitude), Number(s.longitude)]);
+    }
+
+    // Làm mịn và chia nhỏ các bước để xe di chuyển đều đặn, mượt mà bám mặt đường
+    const waypoints: Array<{ latitude: number; longitude: number; heading: number }> = [];
+
+    for (let i = 0; i < rawCoords.length - 1; i++) {
+      const p1 = rawCoords[i];
+      const p2 = rawCoords[i + 1];
+
+      // Tính khoảng cách giữa 2 điểm liên tiếp (theo Haversine)
+      const dLat = ((p2[0] - p1[0]) * Math.PI) / 180;
+      const dLon = ((p2[1] - p1[1]) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((p1[0] * Math.PI) / 180) *
+          Math.cos((p2[0] * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const distanceMeters = Math.round(6371e3 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+
+      // Tính góc phương vị (bearing)
+      const y = Math.sin(dLon) * Math.cos((p2[0] * Math.PI) / 180);
+      const x =
+        Math.cos((p1[0] * Math.PI) / 180) * Math.sin((p2[0] * Math.PI) / 180) -
+        Math.sin((p1[0] * Math.PI) / 180) * Math.cos((p2[0] * Math.PI) / 180) * Math.cos(dLon);
+      const heading = Math.round(((Math.atan2(y, x) * 180) / Math.PI + 360) % 360);
+
+      // Nếu khoảng cách dài hơn 30 mét, chia nhỏ thành các điểm trung gian
+      const subSteps = Math.max(1, Math.min(10, Math.ceil(distanceMeters / 25)));
+      for (let s = 0; s < subSteps; s++) {
+        const factor = s / subSteps;
+        waypoints.push({
+          latitude: Number((p1[0] + (p2[0] - p1[0]) * factor).toFixed(6)),
+          longitude: Number((p1[1] + (p2[1] - p1[1]) * factor).toFixed(6)),
+          heading,
+        });
+      }
+    }
+
+    // Thêm điểm cuối cùng
+    const last = rawCoords[rawCoords.length - 1];
+    waypoints.push({
+      latitude: Number(last[0].toFixed(6)),
+      longitude: Number(last[1].toFixed(6)),
+      heading: waypoints[waypoints.length - 1]?.heading || 0,
+    });
+
+    return waypoints;
   }
 
   // ==========================================
