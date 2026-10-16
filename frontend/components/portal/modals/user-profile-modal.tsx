@@ -46,7 +46,8 @@ export function UserProfileModal({ isOpen, onClose, initialTab = 'profile' }: Us
   
   // Xác định role người dùng hiện tại
   const currentUser = authService.getUser()
-  const roleName = (currentUser?.role || authUser?.role || 'passenger').toLowerCase()
+  const rawRole = currentUser?.role || authUser?.role || 'passenger'
+  const roleName = (typeof rawRole === 'string' ? rawRole : (rawRole as any)?.name || 'passenger').toLowerCase()
   const isDriverOrConductor = roleName === 'driver' || roleName === 'conductor'
   const isAdminOrDispatcher = roleName === 'admin' || roleName === 'manager' || roleName === 'dispatcher'
   const isStudentOrPassenger = !isDriverOrConductor && !isAdminOrDispatcher
