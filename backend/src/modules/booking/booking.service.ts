@@ -20,6 +20,7 @@ import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
 import { RefundLogEntity } from '../../database/entities/refund-log.entity.js';
+import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
 import { SeatLockService } from './seat-lock.service.js';
 import { PaymentService } from '../payment/payment.service.js';
 import {
@@ -33,7 +34,15 @@ import {
   AdminTicketsQueryDto,
 } from './dto/booking.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
-import { BookingStatus, TicketStatus, TripStatus, PaymentStatus } from '../../common/constants/status.constant.js';
+import {
+  BookingStatus,
+  TicketStatus,
+  TripStatus,
+  PaymentStatus,
+  PaymentMethod,
+  ApprovalStatus,
+  MonthlyPassPaymentStatus,
+} from '../../common/constants/status.constant.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { generateBookingCode, generateTicketCode } from '../../common/utils/booking-code.util.js';
 import { signQrPayload, generateQrDataUrl } from '../../common/utils/qr-code.util.js';
@@ -70,7 +79,11 @@ export class BookingService {
     @Optional()
     private readonly notificationService?: NotificationService,
     @Optional()
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService?: AuditService,
+    @Optional()
+    @InjectRepository(MonthlyPassEntity)
+    private readonly monthlyPassRepository?: Repository<MonthlyPassEntity>,
   ) {}
 
   private readonly activeTicketLocks = new Set<string>();
@@ -443,11 +456,40 @@ export class BookingService {
       }
     }
 
+    // 1. Kiểm tra xem người dùng có Thẻ vé tháng còn hiệu lực trên tuyến này không
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let activeMonthlyPass: MonthlyPassEntity | null = null;
+
+    if (this.monthlyPassRepository && userId) {
+      const passes = await this.monthlyPassRepository.find({
+        where: {
+          userId,
+          approvalStatus: ApprovalStatus.APPROVED,
+          paymentStatus: MonthlyPassPaymentStatus.PAID,
+        },
+      });
+
+      activeMonthlyPass =
+        passes.find((p) => {
+          if (p.endDate < todayStr) return false;
+          // Áp dụng nếu liên tuyến toàn mạng (routeId == null hoặc 'all-routes') hoặc đúng tuyến của chuyến xe
+          return !p.routeId || p.routeId === 'all-routes' || p.routeId === trip.routeId;
+        }) || null;
+    }
+
+    // Nếu người dùng có Thẻ vé tháng hợp lệ và áp dụng
+    const isMonthlyPassApplied =
+      Boolean(activeMonthlyPass) && (dto.useMonthlyPass !== false);
+
     // Calculate prices
     const isStudent = !!user.studentId;
-    const unitPrice = isStudent
+    let unitPrice = isStudent
       ? Number(trip.route.studentPrice) || Math.round(Number(trip.route.basePrice) * 0.5)
       : Number(trip.route.basePrice);
+
+    if (isMonthlyPassApplied) {
+      unitPrice = 0; // Miễn phí 100% trọn gói nhờ Thẻ vé tháng!
+    }
 
     let totalAmount = unitPrice * dto.passengers.length;
     let discountAmount = 0;
@@ -550,9 +592,15 @@ export class BookingService {
         await voucherRepo.save(voucher);
       }
 
-      const finalAmount = Math.max(10000, totalAmount - discountAmount);
+      const finalAmount = isMonthlyPassApplied
+        ? 0
+        : Math.max(10000, totalAmount - discountAmount);
       const bookingCode = generateBookingCode();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      const initialBookingStatus = isMonthlyPassApplied
+        ? BookingStatus.CONFIRMED
+        : BookingStatus.PENDING;
 
       const booking = bookingRepo.create({
         bookingCode,
@@ -562,7 +610,7 @@ export class BookingService {
         totalAmount,
         discountAmount,
         finalAmount,
-        status: BookingStatus.PENDING,
+        status: initialBookingStatus,
         expiresAt,
       });
 
@@ -571,6 +619,10 @@ export class BookingService {
       // Create tickets with signed QR
       const qrSecret = process.env.QR_HMAC_SECRET || 'smart-bus-qr-signature-secret-key-2026';
       const ticketsToSave: TicketEntity[] = [];
+
+      const initialTicketStatus = isMonthlyPassApplied
+        ? TicketStatus.PAID
+        : TicketStatus.RESERVED;
 
       for (const passenger of dto.passengers) {
         const seat = seatMap.get(passenger.seatId)!;
@@ -598,12 +650,31 @@ export class BookingService {
             passengerPhone: passenger.passengerPhone || user.phoneNumber,
             originalPrice: unitPrice,
             discountPrice: unitPrice,
-            status: TicketStatus.RESERVED,
+            status: initialTicketStatus,
           }),
         );
       }
 
       const savedTickets = await ticketRepo.save(ticketsToSave);
+
+      // Nếu áp dụng vé tháng: Tự động ghi nhận giao dịch thanh toán 0 VNĐ hoàn tất
+      if (isMonthlyPassApplied && this.paymentRepository) {
+        const paymentRepo = manager ? manager.getRepository(PaymentEntity) : this.paymentRepository;
+        const payment = paymentRepo.create({
+          bookingId: savedBooking.id,
+          amount: 0,
+          paymentMethod: PaymentMethod.CASH,
+          status: PaymentStatus.SUCCESS,
+          transactionId: `MP-COVER-${activeMonthlyPass!.passCode}-${Date.now().toString().slice(-6)}`,
+          paymentTime: new Date(),
+          paymentDetails: {
+            type: 'monthly_pass_coverage',
+            monthlyPassCode: activeMonthlyPass!.passCode,
+            note: `Miễn phí 100% giữ chỗ theo Thẻ vé tháng ${activeMonthlyPass!.passCode}`,
+          },
+        });
+        await paymentRepo.save(payment).catch(() => {});
+      }
 
       if (queryRunner) {
         await queryRunner.commitTransaction();
@@ -611,6 +682,30 @@ export class BookingService {
 
       // Sau khi transaction commit thành công, giải phóng lock ghế ngay lập tức
       await this.seatLockService.releaseSeats(dto.tripId, seatIds, userId);
+
+      // Gửi email xác nhận vé điện tử tới hành khách khi được miễn phí bằng Thẻ vé tháng
+      if (isMonthlyPassApplied && this.notificationService && user.email) {
+        for (const t of savedTickets) {
+          generateQrDataUrl(t.qrData)
+            .then((qrDataUrl) => {
+              return this.notificationService!.sendTicketConfirmationEmail({
+                recipientEmail: user.email,
+                passengerName: t.passengerName || user.fullName,
+                bookingCode: savedBooking.bookingCode,
+                ticketCode: t.ticketCode,
+                routeName: trip.route?.name || 'Tuyến xe buýt thông minh ICTU',
+                origin: trip.route?.origin,
+                destination: trip.route?.destination,
+                departureTime: trip.departureTime || new Date(),
+                seatNumber: seatMap.get(t.seatId)?.seatNumber || 'Ghế tiêu chuẩn',
+                vehiclePlate: trip.vehicle?.licensePlate,
+                price: 0,
+                qrDataUrl,
+              });
+            })
+            .catch(() => {});
+        }
+      }
 
       if (this.auditService) {
         this.auditService.log({
@@ -621,6 +716,8 @@ export class BookingService {
           changes: {
             bookingCode: savedBooking.bookingCode,
             finalAmount: savedBooking.finalAmount,
+            isMonthlyPassApplied,
+            monthlyPassCode: activeMonthlyPass?.passCode,
             seatNumbers: savedTickets.map((t) => seatMap.get(t.seatId)?.seatNumber).filter(Boolean),
             ticketCount: savedTickets.length,
           },
@@ -635,6 +732,8 @@ export class BookingService {
         finalAmount: savedBooking.finalAmount,
         status: savedBooking.status,
         expiresAt: savedBooking.expiresAt,
+        isMonthlyPassApplied,
+        appliedMonthlyPassCode: activeMonthlyPass?.passCode,
         trip: {
           id: trip.id,
           routeName: trip.route?.name,
@@ -646,6 +745,9 @@ export class BookingService {
           passengerName: t.passengerName,
           seatNumber: seatMap.get(t.seatId)?.seatNumber,
           price: t.originalPrice,
+          status: t.status,
+          qrData: t.qrData,
+          qrSignatureHash: t.qrSignatureHash,
         })),
       };
     } catch (error) {

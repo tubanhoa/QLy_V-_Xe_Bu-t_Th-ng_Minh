@@ -8,6 +8,7 @@ import { VoucherEntity } from '../../database/entities/voucher.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { SeatHoldEntity } from '../../database/entities/seat-hold.entity.js';
 import { PaymentEntity } from '../../database/entities/payment.entity.js';
+import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.js';
 import { BookingController } from './booking.controller.js';
 import { BookingService } from './booking.service.js';
 import { SeatLockService } from './seat-lock.service.js';
@@ -25,6 +26,7 @@ import { PaymentModule } from '../payment/payment.module.js';
       UserEntity,
       SeatHoldEntity,
       PaymentEntity,
+      MonthlyPassEntity,
     ]),
     NotificationModule,
     forwardRef(() => PaymentModule),

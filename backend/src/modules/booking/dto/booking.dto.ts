@@ -88,10 +88,16 @@ export class CreateBookingDto {
   passengerEmail?: any;
 
   @IsOptional()
-  invoiceEmail?: any;
-
-  @IsOptional()
   isInvoiceRequested?: any;
+
+  @ApiPropertyOptional({ description: 'Áp dụng Thẻ vé tháng còn hiệu lực để giữ chỗ miễn phí' })
+  @IsOptional()
+  useMonthlyPass?: boolean;
+
+  @ApiPropertyOptional({ description: 'Mã thẻ vé tháng được áp dụng' })
+  @IsOptional()
+  @IsString()
+  monthlyPassCode?: string;
 
   @IsOptional()
   departureTime?: any;

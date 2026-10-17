@@ -286,6 +286,8 @@ class BookingService {
         })),
         ...(payload.voucherCode ? { voucherCode: payload.voucherCode } : {}),
         ...(payload.paymentMethod ? { paymentMethod: payload.paymentMethod } : {}),
+        ...(payload.useMonthlyPass !== undefined ? { useMonthlyPass: payload.useMonthlyPass } : {}),
+        ...(payload.monthlyPassCode ? { monthlyPassCode: payload.monthlyPassCode } : {}),
       }
       const response = await fetch(`${this.baseUrl}/booking/create`, {
         method: 'POST',
