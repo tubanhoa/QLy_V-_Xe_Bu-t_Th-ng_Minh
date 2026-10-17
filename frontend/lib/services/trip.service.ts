@@ -15,6 +15,8 @@ export interface TripItem {
   conductorId?: string
   departureTime: string
   arrivalTime?: string
+  actualDeparture?: string
+  actualArrival?: string
   status: 'scheduled' | 'boarding' | 'departed' | 'in_progress' | 'completed' | 'delayed' | 'cancelled'
   tripType?: 'regular' | 'adhoc' | 'special'
   note?: string
@@ -343,6 +345,31 @@ class TripService {
     }
 
     return { total: tripIds.length, successCount, failedCount, errors }
+  }
+
+  /** Quét và tự động đóng các chuyến xe quá hạn / hết ngày sang trạng thái 'completed' (Admin, Manager) */
+  async autoClosePastTrips(): Promise<TripApiResponse<{ closedCount: number } | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/admin/auto-close-past-trips`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể quét và đóng các chuyến quá hạn',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
   }
 }
 
