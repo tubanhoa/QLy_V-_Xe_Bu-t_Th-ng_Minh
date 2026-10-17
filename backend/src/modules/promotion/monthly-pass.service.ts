@@ -11,6 +11,10 @@ import { MonthlyPassEntity } from '../../database/entities/monthly-pass.entity.j
 import { MonthlyPassTransactionEntity } from '../../database/entities/monthly-pass-transaction.entity.js';
 import { RouteEntity } from '../../database/entities/route.entity.js';
 import {
+  PriorityVerificationEntity,
+  VerificationStatus,
+} from '../../database/entities/priority-verification.entity.js';
+import {
   CalculateMonthlyPassPriceDto,
   RegisterMonthlyPassDto,
   ResubmitMonthlyPassProofDto,
@@ -52,6 +56,8 @@ export class MonthlyPassService {
     private readonly transactionRepository: Repository<MonthlyPassTransactionEntity>,
     @InjectRepository(RouteEntity)
     private readonly routeRepository: Repository<RouteEntity>,
+    @InjectRepository(PriorityVerificationEntity)
+    private readonly priorityVerificationRepository?: Repository<PriorityVerificationEntity>,
     @Optional()
     private readonly notificationCenterService?: NotificationCenterService,
   ) {}
@@ -205,11 +211,33 @@ export class MonthlyPassService {
     const endDate = dto.endDate || this.calculateEndDate(startDate, durationMonths);
 
     // Đối với người đi làm / phổ thông không trợ giá -> tự động APPROVED để thanh toán ngay
-    // Đối với Sinh viên (STUDENT) hoặc Người cao tuổi (ELDERLY) -> Bắt buộc PENDING để Admin phê duyệt thủ công
-    const initialApprovalStatus =
+    // Đối với Sinh viên (STUDENT) hoặc Người cao tuổi (ELDERLY):
+    // KẾ THỪA THÔNG MINH: Nếu tài khoản của sinh viên / người cao tuổi đã có hồ sơ xác thực được VERIFIED
+    // -> Kế thừa trạng thái APPROVED ngay lập tức, tự động gán ảnh minh chứng đã duyệt, MIỄN DUYỆT LẠI!
+    let initialApprovalStatus =
       dto.category === MonthlyPassCategory.WORKER
         ? ApprovalStatus.APPROVED
         : ApprovalStatus.PENDING;
+
+    let finalProofImageUrl = dto.proofImageUrl || null;
+    let isInheritedVerification = false;
+
+    if (dto.category !== MonthlyPassCategory.WORKER && this.priorityVerificationRepository) {
+      const verifiedPriority = await this.priorityVerificationRepository.findOne({
+        where: {
+          userId,
+          category: dto.category as any,
+          status: VerificationStatus.VERIFIED,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (verifiedPriority) {
+        initialApprovalStatus = ApprovalStatus.APPROVED;
+        finalProofImageUrl = finalProofImageUrl || verifiedPriority.frontImageUrl;
+        isInheritedVerification = true;
+      }
+    }
 
     const monthlyPass = this.monthlyPassRepository.create({
       userId,
@@ -219,7 +247,7 @@ export class MonthlyPassService {
       startDate,
       endDate,
       durationMonths,
-      proofImageUrl: dto.proofImageUrl || null,
+      proofImageUrl: finalProofImageUrl,
       price: priceBreakdown.finalPrice,
       approvalStatus: initialApprovalStatus,
       paymentStatus: MonthlyPassPaymentStatus.UNPAID,
@@ -228,19 +256,30 @@ export class MonthlyPassService {
 
     const saved = await this.monthlyPassRepository.save(monthlyPass);
 
-    // Gửi thông báo xác nhận đã tiếp nhận hồ sơ
+    // Gửi thông báo xác nhận đã tiếp nhận / tự động duyệt hồ sơ
     if (this.notificationCenterService && userId) {
+      const notifTitle =
+        initialApprovalStatus === ApprovalStatus.APPROVED
+          ? 'Vé tháng được tự động duyệt'
+          : 'Hồ sơ vé tháng đã được tiếp nhận';
+
+      const notifMessage =
+        initialApprovalStatus === ApprovalStatus.APPROVED
+          ? `Hồ sơ vé tháng ${passCode} (${routeName}) của bạn đã được TỰ ĐỘNG DUYỆT theo hồ sơ đối tượng ưu đãi đã xác thực. Bạn có thể thanh toán ngay!`
+          : `Hồ sơ đăng ký vé tháng ${passCode} (${routeName}) của bạn đã được gửi thành công. Vui lòng chờ Ban Quản Lý thẩm định.`;
+
       await this.notificationCenterService
         .saveNotification({
           userId,
           type: 'SYSTEM',
-          title: 'Hồ sơ vé tháng đã được tiếp nhận',
-          message: `Hồ sơ đăng ký vé tháng ${passCode} (${routeName}) của bạn đã được gửi thành công. Vui lòng chờ Ban Quản Lý thẩm định.`,
+          title: notifTitle,
+          message: notifMessage,
           deepLink: '/portal/monthly-pass',
           data: {
             passId: saved.id,
             passCode: saved.passCode,
             status: saved.approvalStatus,
+            isInheritedVerification,
           },
         })
         .catch(() => {});
@@ -249,6 +288,11 @@ export class MonthlyPassService {
     return {
       ...saved,
       priceBreakdown,
+      isInheritedVerification,
+      autoApproved: initialApprovalStatus === ApprovalStatus.APPROVED,
+      message: isInheritedVerification
+        ? 'Tài khoản của bạn đã được xác thực ưu đãi trước đó. Hồ sơ vé tháng đã được TỰ ĐỘNG PHÊ DUYỆT để thanh toán ngay!'
+        : undefined,
     };
   }
 

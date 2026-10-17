@@ -9,6 +9,8 @@ import { MonthlyPassController } from './monthly-pass.controller.js';
 import { VoucherService } from './voucher.service.js';
 import { VoucherController } from './voucher.controller.js';
 
+import { PriorityVerificationEntity } from '../../database/entities/priority-verification.entity.js';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -16,6 +18,7 @@ import { VoucherController } from './voucher.controller.js';
       MonthlyPassTransactionEntity,
       RouteEntity,
       VoucherEntity,
+      PriorityVerificationEntity,
     ]),
   ],
   controllers: [MonthlyPassController, VoucherController],

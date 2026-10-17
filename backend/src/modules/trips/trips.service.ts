@@ -87,6 +87,12 @@ export class TripsService {
     private readonly activityLogRepository?: Repository<ActivityLogEntity>,
   ) {}
 
+  // Bộ nhớ đệm kiểm soát chống quẹt thẻ vé tháng liên tục (Anti-Passback: 15 phút trên cùng chuyến xe)
+  private readonly recentMonthlyPassCheckIns = new Map<
+    string,
+    { tripId?: string; timestamp: number; conductorId?: string; passengerName?: string }
+  >();
+
   /**
    * GET /api/v1/trips — Danh sách chuyến xe cho Admin/Manager
    * Hỗ trợ filter (date, routeId, status, excludeDeparted), pagination, sort
@@ -1458,6 +1464,64 @@ export class TripsService {
           };
         }
 
+        // KIỂM TRA CHỐNG QUẸT THẺ LIÊN TỤC (ANTI-PASSBACK: 15 PHÚT TRÊN CÙNG CHUYẾN XE)
+        const now = Date.now();
+        const ANTI_PASSBACK_WINDOW_MS = 15 * 60 * 1000;
+        const lastCheckIn = this.recentMonthlyPassCheckIns.get(monthlyPass.passCode);
+
+        if (
+          lastCheckIn &&
+          (!currentTrip || !lastCheckIn.tripId || lastCheckIn.tripId === currentTrip.id) &&
+          now - lastCheckIn.timestamp < ANTI_PASSBACK_WINDOW_MS
+        ) {
+          const elapsedMinutes = Math.max(1, Math.round((now - lastCheckIn.timestamp) / 60000));
+          return {
+            valid: false,
+            success: false,
+            alreadyCheckedIn: true,
+            isAntiPassback: true,
+            isMonthlyPass: true,
+            message: `CẢNH BÁO: Thẻ vé tháng ${monthlyPass.passCode} vừa được quẹt lên xe ${elapsedMinutes} phút trước! Nghi vấn hành khách quẹt thẻ hộ (Anti-Passback).`,
+            passenger: monthlyPass.user?.fullName || 'Hành khách vé tháng',
+            seat: 'Ghế tự do (Vé tháng HSSV)',
+            ticketCode: monthlyPass.passCode,
+            bookingCode: `PASS-${monthlyPass.passCode}`,
+            checkedInAt: new Date(lastCheckIn.timestamp).toISOString(),
+            checkedInBy: lastCheckIn.conductorId || 'DRIVER',
+          };
+        }
+
+        // Ghi nhận lần check-in hợp lệ vào bộ nhớ Anti-Passback
+        this.recentMonthlyPassCheckIns.set(monthlyPass.passCode, {
+          tripId: currentTrip?.id,
+          timestamp: now,
+          conductorId: conductorId || 'DRIVER',
+          passengerName: monthlyPass.user?.fullName || 'Hành khách vé tháng',
+        });
+
+        // Ghi nhận lịch sử kiểm toán vào CSDL Activity Log
+        if (this.activityLogRepository) {
+          this.activityLogRepository
+            .save(
+              this.activityLogRepository.create({
+                userId: monthlyPass.userId,
+                action: 'MONTHLY_PASS_CHECK_IN',
+                resourceName: 'monthly_pass',
+                resourceId: monthlyPass.passCode,
+                endpoint: `/trips/${dto.tripId || 'scan'}/validate-ticket`,
+                method: 'POST',
+                status: 'SUCCESS',
+                changes: {
+                  tripId: currentTrip?.id,
+                  routeName: monthlyPass.route?.name || currentTrip?.route?.name || 'Liên tuyến toàn mạng ICTU',
+                  passengerName: monthlyPass.user?.fullName,
+                  category: monthlyPass.category,
+                },
+              }),
+            )
+            .catch(() => {});
+        }
+
         // Thẻ vé tháng hợp lệ
         return {
           valid: true,
@@ -1512,6 +1576,39 @@ export class TripsService {
             `Thẻ vé tháng ${fallbackPass.passCode} chưa được duyệt (Trạng thái: ${fallbackPass.approvalStatus})`,
           );
         }
+        const now = Date.now();
+        const ANTI_PASSBACK_WINDOW_MS = 15 * 60 * 1000;
+        const lastCheckIn = this.recentMonthlyPassCheckIns.get(fallbackPass.passCode);
+
+        if (
+          lastCheckIn &&
+          (!currentTrip || !lastCheckIn.tripId || lastCheckIn.tripId === currentTrip.id) &&
+          now - lastCheckIn.timestamp < ANTI_PASSBACK_WINDOW_MS
+        ) {
+          const elapsedMinutes = Math.max(1, Math.round((now - lastCheckIn.timestamp) / 60000));
+          return {
+            valid: false,
+            success: false,
+            alreadyCheckedIn: true,
+            isAntiPassback: true,
+            isMonthlyPass: true,
+            message: `CẢNH BÁO: Thẻ vé tháng ${fallbackPass.passCode} vừa được quẹt lên xe ${elapsedMinutes} phút trước! Nghi vấn hành khách quẹt thẻ hộ (Anti-Passback).`,
+            passenger: fallbackPass.user?.fullName || 'Hành khách vé tháng',
+            seat: 'Ghế tự do (Vé tháng HSSV)',
+            ticketCode: fallbackPass.passCode,
+            bookingCode: `PASS-${fallbackPass.passCode}`,
+            checkedInAt: new Date(lastCheckIn.timestamp).toISOString(),
+            checkedInBy: lastCheckIn.conductorId || 'DRIVER',
+          };
+        }
+
+        this.recentMonthlyPassCheckIns.set(fallbackPass.passCode, {
+          tripId: currentTrip?.id,
+          timestamp: now,
+          conductorId: conductorId || 'DRIVER',
+          passengerName: fallbackPass.user?.fullName || 'Hành khách vé tháng',
+        });
+
         return {
           valid: true,
           success: true,

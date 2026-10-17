@@ -145,6 +145,7 @@ export function MonthlyPassModal({
   const [isUploadingProof, setIsUploadingProof] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [registerSuccess, setRegisterSuccess] = useState(false)
+  const [registeredPass, setRegisteredPass] = useState<MonthlyPass | null>(null)
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [proofType, setProofType] = useState<'student_card' | 'id_card'>('student_card')
 
@@ -158,6 +159,14 @@ export function MonthlyPassModal({
   const [submittingResubmit, setSubmittingResubmit] = useState(false)
   const [resubmitError, setResubmitError] = useState<string | null>(null)
   const resubmitFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Dọn dẹp bộ nhớ URL Preview khi đóng hoặc đổi ảnh (Tránh rò rỉ bộ nhớ)
+  useEffect(() => {
+    return () => {
+      if (proofPreview) URL.revokeObjectURL(proofPreview)
+      if (resubmitProofPreview) URL.revokeObjectURL(resubmitProofPreview)
+    }
+  }, [proofPreview, resubmitProofPreview])
 
   // Modal Thanh Toán
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -247,6 +256,9 @@ export function MonthlyPassModal({
     }
 
     setProofFileName(file.name)
+    if (proofPreview) {
+      URL.revokeObjectURL(proofPreview)
+    }
     const localPreview = URL.createObjectURL(file)
     setProofPreview(localPreview)
 
@@ -278,7 +290,13 @@ export function MonthlyPassModal({
       return
     }
 
-    if (category !== 'worker' && !uploadedProofUrl && !proofPreview) {
+    // Kiểm tra xem tài khoản đã được xác thực ưu đãi trước đó chưa
+    const isProfileVerified =
+      verificationData?.verificationStatus === 'verified' &&
+      verificationData?.priorityCategory === category
+
+    // Nếu chưa xác thực ưu đãi và không phải vé phổ thông thì bắt buộc phải nộp ảnh minh chứng
+    if (category !== 'worker' && !isProfileVerified && !uploadedProofUrl && !proofPreview) {
       setRegisterError('Vui lòng tải lên ảnh minh chứng (Thẻ sinh viên hoặc CCCD)')
       return
     }
@@ -307,6 +325,7 @@ export function MonthlyPassModal({
     setSubmitting(false)
 
     if (res.success) {
+      setRegisteredPass(res.data || null)
       setRegisterSuccess(true)
       loadMyPasses()
     } else {
@@ -704,21 +723,43 @@ export function MonthlyPassModal({
                   </div>
                   <div className="space-y-1.5">
                     <h3 className="text-lg font-black text-slate-900">
-                      Nộp Hồ Sơ Đăng Ký Thành Công!
+                      {registeredPass?.approvalStatus === 'approved'
+                        ? 'Hồ Sơ Vé Tháng Đã Được Phê Duyệt!'
+                        : 'Nộp Hồ Sơ Đăng Ký Thành Công!'}
                     </h3>
                     <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
-                      Hồ sơ vé tháng của bạn đã được tiếp nhận. Ban Quản Lý ICTU Transit sẽ đối soát thông tin và phê duyệt nhanh chóng. Bạn có thể kiểm tra trạng thái thẻ tại mục <strong>&quot;Thẻ của tôi&quot;</strong>.
+                      {registeredPass?.approvalStatus === 'approved'
+                        ? 'Tài khoản của bạn đã được đối soát ưu đãi trước đó. Thẻ vé tháng đã được TỰ ĐỘNG PHÊ DUYỆT và sẵn sàng thanh toán để nhận mã QR đi xe buýt!'
+                        : 'Hồ sơ vé tháng của bạn đã được tiếp nhận. Ban Quản Lý ICTU Transit sẽ đối soát thông tin và phê duyệt nhanh chóng. Bạn có thể kiểm tra trạng thái thẻ tại mục "Thẻ của tôi".'}
                     </p>
                   </div>
 
-                  <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center max-w-xs mx-auto">
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center max-w-md mx-auto">
+                    {registeredPass?.approvalStatus === 'approved' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegisterSuccess(false)
+                          handleOpenPayment(registeredPass)
+                        }}
+                        className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-5 py-2.5 text-xs font-black text-white shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Zap size={15} />
+                        <span>Thanh toán ngay ({formatPrice(registeredPass.price)})</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
                         setRegisterSuccess(false)
                         setActiveTab('my-passes')
                       }}
-                      className="rounded-xl bg-[#005A36] hover:bg-[#004529] px-5 py-2.5 text-xs font-black text-white shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      className={cn(
+                        'rounded-xl px-5 py-2.5 text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5',
+                        registeredPass?.approvalStatus === 'approved'
+                          ? 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-xs'
+                          : 'bg-[#005A36] hover:bg-[#004529] text-white shadow-md',
+                      )}
                     >
                       <CreditCard size={15} />
                       <span>Xem thẻ tháng của tôi</span>
@@ -895,6 +936,29 @@ export function MonthlyPassModal({
                       </label>
                     </div>
 
+                    {/* THÔNG BÁO TỰ ĐỘNG KẾ THỪA HỒ SƠ ƯU ĐÃI ĐÃ XÁC THỰC */}
+                    {verificationData?.verificationStatus === 'verified' &&
+                      verificationData?.priorityCategory === category && (
+                        <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 border border-emerald-200/90 p-3.5 text-xs text-emerald-900 shadow-xs animate-in fade-in">
+                          <div className="size-8 rounded-xl bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <CheckCircle2 size={18} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-black text-emerald-950">
+                                Tài khoản đã xác thực {category === 'student' ? 'Sinh viên ICTU' : 'Người cao tuổi'} (Trợ giá 50%)
+                              </span>
+                              <span className="rounded-full bg-emerald-200/80 px-2 py-0.5 text-[9px] font-black text-[#005A36]">
+                                MIỄN DUYỆT LẠI · TỰ ĐỘNG DUYỆT
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
+                              Hệ thống tự động liên kết thẻ minh chứng đã thẩm định của bạn. Bạn không cần tải lại ảnh và hồ sơ vé tháng sẽ được <strong>TỰ ĐỘNG PHÊ DUYỆT NGAY LẬP TỨC</strong> để thanh toán!
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                     {/* Selector chọn loại giấy tờ: Thẻ sinh viên HOẶC Căn cước công dân */}
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -1036,20 +1100,37 @@ export function MonthlyPassModal({
                     )}
                   </div>
 
-                  {/* Thông báo quy trình phê duyệt thủ công của Admin */}
-                  <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3 sm:p-3.5 flex items-start gap-3 text-xs">
-                    <div className="size-8 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                      <ShieldCheck size={16} />
+                  {/* Thông báo quy trình phê duyệt */}
+                  {verificationData?.verificationStatus === 'verified' &&
+                  verificationData?.priorityCategory === category ? (
+                    <div className="rounded-2xl border border-emerald-300 bg-emerald-50/90 p-3 sm:p-3.5 flex items-start gap-3 text-xs shadow-xs">
+                      <div className="size-8 rounded-xl bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                        <Zap size={16} />
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-emerald-950 block text-xs">
+                          Tự động phê duyệt hồ sơ trong 1 giây
+                        </span>
+                        <span className="text-[11px] text-emerald-800 leading-relaxed block mt-0.5">
+                          Tài khoản của bạn đã được chứng thực ưu đãi hợp lệ. Sau khi nhấn nút nộp hồ sơ, vé tháng sẽ được <strong>TỰ ĐỘNG DUYỆT</strong> và chuyển ngay sang bước thanh toán!
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-extrabold text-teal-950 block text-xs">
-                        Quy trình phê duyệt vé tháng HSSV
-                      </span>
-                      <span className="text-[11px] text-teal-800/90 leading-relaxed block mt-0.5">
-                        Hồ sơ đăng ký sẽ được Quản trị viên (Admin) thẩm định ảnh thẻ trong Dashboard. Sau khi được duyệt, cổng thanh toán sẽ tự động mở để bạn thanh toán và kích hoạt mã QR lên xe.
-                      </span>
+                  ) : (
+                    <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3 sm:p-3.5 flex items-start gap-3 text-xs">
+                      <div className="size-8 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                        <ShieldCheck size={16} />
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-teal-950 block text-xs">
+                          Quy trình phê duyệt vé tháng HSSV
+                        </span>
+                        <span className="text-[11px] text-teal-800/90 leading-relaxed block mt-0.5">
+                          Hồ sơ đăng ký sẽ được Quản trị viên (Admin) thẩm định ảnh thẻ trong Dashboard. Sau khi được duyệt, cổng thanh toán sẽ tự động mở để bạn thanh toán và kích hoạt mã QR lên xe.
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {registerError && (
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2">
