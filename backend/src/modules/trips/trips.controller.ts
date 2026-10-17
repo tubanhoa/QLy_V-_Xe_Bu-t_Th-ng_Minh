@@ -46,6 +46,20 @@ export class TripsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
+  @Post('admin/auto-close-past-trips')
+  @ApiOperation({ summary: 'Kích hoạt quét & tự động đóng các chuyến xe đã kết thúc / hết ngày (Admin, Manager)' })
+  async autoClosePastTrips() {
+    const closedCount = await this.tripsService.autoCloseCompletedTrips();
+    return {
+      success: true,
+      message: `Đã tự động đóng hoàn thành ${closedCount} chuyến xe quá hạn / kết thúc theo nghiệp vụ.`,
+      closedCount,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post('generate')
   @ApiOperation({ summary: 'Tự động sinh lịch trình chạy xe theo ngày (Manager, Admin)' })
   async generateSchedule(@Body() dto: GenerateTripsDto) {

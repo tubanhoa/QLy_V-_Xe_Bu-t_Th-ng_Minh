@@ -8,6 +8,8 @@ import {
   forwardRef,
   Optional,
   Logger,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, Not } from 'typeorm';
@@ -47,8 +49,87 @@ const SORT_COLUMN_MAP: Record<string, string> = {
 };
 
 @Injectable()
-export class TripsService {
+export class TripsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TripsService.name);
+  private autoCloseInterval: NodeJS.Timeout | null = null;
+
+  async onModuleInit() {
+    // Tự động quét và hoàn thành các chuyến xe quá hạn ngay khi khởi động backend
+    await this.autoCloseCompletedTrips().catch(() => {});
+
+    // Định kỳ quét tự động mỗi 60 giây để đóng các chuyến xe khi đến bến cuối hoặc hết ngày
+    this.autoCloseInterval = setInterval(() => {
+      this.autoCloseCompletedTrips().catch(() => {});
+    }, 60000);
+  }
+
+  onModuleDestroy() {
+    if (this.autoCloseInterval) {
+      clearInterval(this.autoCloseInterval);
+      this.autoCloseInterval = null;
+    }
+  }
+
+  /**
+   * Tự động hoàn thành các chuyến xe đã kết thúc lộ trình hoặc trước ngày hôm nay
+   * Nghiệp vụ: Chuyến xe chỉ được phép chạy trong ngày, hết 1 ngày là chuyến xe phải đến bến cuối
+   * và tự động cập nhật trạng thái hoàn thành (COMPLETED).
+   */
+  async autoCloseCompletedTrips(): Promise<number> {
+    try {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+      const overdueTrips = await this.tripRepository
+        .createQueryBuilder('trip')
+        .where('trip.status NOT IN (:...finishedStatuses)', {
+          finishedStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
+        })
+        .andWhere('(trip.arrivalTime <= :now OR trip.departureTime < :startOfToday)', {
+          now,
+          startOfToday,
+        })
+        .getMany();
+
+      if (overdueTrips.length === 0) return 0;
+
+      const tripIds = overdueTrips.map((t) => t.id);
+
+      await this.tripRepository
+        .createQueryBuilder()
+        .update(TripEntity)
+        .set({
+          status: TripStatus.COMPLETED,
+          actualDeparture: () => 'COALESCE(actual_departure, departure_time)',
+          actualArrival: () => 'COALESCE(actual_arrival, arrival_time, departure_time + interval \'35 minutes\')',
+        })
+        .where('id IN (:...tripIds)', { tripIds })
+        .execute();
+
+      // Hết hạn các vé giữ chỗ chưa thanh toán (status = 'reserved') của các chuyến xe đã hoàn thành
+      if (this.ticketRepository) {
+        await this.ticketRepository
+          .createQueryBuilder()
+          .update(TicketEntity)
+          .set({ status: TicketStatus.EXPIRED })
+          .where('status = :status', { status: TicketStatus.RESERVED })
+          .andWhere(
+            'bookingId IN (SELECT b.id FROM bookings b WHERE b.trip_id IN (:...tripIds))',
+            { tripIds },
+          )
+          .execute()
+          .catch(() => {});
+      }
+
+      this.logger.log(
+        `[AutoCloseTrips] Đã tự động cập nhật trạng thái COMPLETED cho ${tripIds.length} chuyến xe đã kết thúc hành trình.`,
+      );
+      return tripIds.length;
+    } catch (error) {
+      this.logger.error('[AutoCloseTrips] Lỗi khi tự động đóng chuyến xe:', error);
+      return 0;
+    }
+  }
 
   constructor(
     @InjectRepository(TripEntity)
@@ -98,6 +179,8 @@ export class TripsService {
    * Hỗ trợ filter (date, routeId, status, excludeDeparted), pagination, sort
    */
   async findAll(query: ListTripsQueryDto) {
+    // Đảm bảo dữ liệu chuyến xe hiển thị cho Admin luôn cập nhật tự động các chuyến đã kết thúc
+    await this.autoCloseCompletedTrips().catch(() => {});
     const {
       date,
       routeId,
