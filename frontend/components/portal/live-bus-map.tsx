@@ -486,7 +486,7 @@ export function LiveBusMap({
                     textAnchor="middle"
                     dominantBaseline="middle"
                   >
-                    📍 ĐIỂM ĐÓN BẠN
+                    ĐIỂM ĐÓN CỦA BẠN
                   </text>
                 </g>
               </g>

@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Heart,
   Briefcase,
+  Building2,
   X,
   Upload,
   CheckCircle2,
@@ -39,6 +40,7 @@ import {
   User,
   AlertTriangle,
   IdCard,
+  MapPin,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { promotionService } from '@/lib/services/promotion.service'
@@ -690,6 +692,27 @@ export function MonthlyPassModal({
             <ShieldCheck size={13} />
             <span>Xác thực ưu đãi</span>
           </button>
+        </div>
+
+        {/* Banner thông tin vận hành & trạm đón cố định toàn tuyến */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/70 border-b border-emerald-200/90 px-4 sm:px-6 py-2.5 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="size-6 rounded-lg bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-2xs text-[11px] font-bold">
+              <MapPin size={13} />
+            </span>
+            <div>
+              <span className="text-slate-900 font-extrabold">
+                Xe Buýt Điện Đón/Trả Khách Cố Định 100% Tại Trạm Dừng & Nhà Chờ Quy Định
+              </span>
+              <span className="block text-[11px] text-slate-600 font-medium mt-0.5">
+                Vé tháng áp dụng đi lại không giới hạn trên toàn bộ mạng lưới trạm buýt ICTU Transit (không đón trả tại nhà riêng).
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-emerald-950 bg-white/90 border border-emerald-300 rounded-xl px-3 py-1 font-semibold shrink-0 shadow-2xs flex items-center gap-1.5">
+            <Building2 size={13} className="text-[#005A36] shrink-0" />
+            <span>Depot Bãi sạc: ĐH CNTT&TT (Đường Z115 Quyết Thắng) · Hotline <strong>1900 8899</strong></span>
+          </div>
         </div>
 
         {/* 2. MODAL BODY */}

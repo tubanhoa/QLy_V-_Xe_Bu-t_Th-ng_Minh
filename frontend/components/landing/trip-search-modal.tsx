@@ -9,12 +9,14 @@ import {
   ArrowUpDown,
   Ban,
   BatteryCharging,
+  Building2,
   Bus,
   Calendar,
   Check,
   Clock,
   Compass,
   Filter,
+  Flag,
   Loader2,
   MapPin,
   RefreshCw,
@@ -435,6 +437,27 @@ export function TripSearchModal({
           </form>
         </div>
 
+        {/* Banner thông tin nhà xe & quy định đón/trả khách tại trạm cố định */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/60 border-b border-emerald-200/80 px-4 sm:px-6 py-2.5 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="size-7 rounded-lg bg-[#005A36] text-white flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 shadow-2xs">
+              <MapPin size={14} />
+            </div>
+            <div>
+              <p className="font-extrabold text-slate-900 text-xs">
+                Xe Buýt Điện Đón/Trả Khách Cố Định Tại Các Trạm & Nhà Chờ Đã Quy Hoạch
+              </p>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Vui lòng có mặt tại trạm đón trước 05 phút so với giờ xuất bến. Xe buýt không đón/trả tùy tiện ngoài trạm.
+              </p>
+            </div>
+          </div>
+          <div className="text-[11px] text-emerald-900 bg-white/90 border border-emerald-200 rounded-xl px-3 py-1.5 shrink-0 font-medium shadow-2xs flex items-center gap-1.5">
+            <Building2 size={13} className="text-[#005A36] shrink-0" />
+            <span><strong>Depot Bãi sạc</strong>: Khuôn viên ĐH CNTT&TT (Đường Z115, TP. Thái Nguyên) · Hotline: <strong>1900 8899</strong></span>
+          </div>
+        </div>
+
         {/* Quick Filter Tabs & Sorter Bar */}
         {trips.length > 0 && !loading && (
           <div className="border-b border-slate-100 bg-slate-50/80 px-3.5 sm:px-6 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shrink-0">
@@ -758,13 +781,19 @@ export function TripSearchModal({
                         {/* Pill trạng thái ghế hoặc trạng thái xuất bến */}
                         {!isTripBookable ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
-                            <span className="size-1.5 rounded-full bg-slate-400" />
+                            {trip.status === 'completed' ? (
+                              <Flag size={11} className="text-slate-500 shrink-0" />
+                            ) : trip.status === 'cancelled' ? (
+                              <Ban size={11} className="text-rose-500 shrink-0" />
+                            ) : (
+                              <Bus size={11} className="text-slate-500 shrink-0" />
+                            )}
                             <span>
                               {trip.status === 'completed'
-                                ? '🏁 Đã hoàn thành lộ trình'
+                                ? 'Đã hoàn thành lộ trình'
                                 : trip.status === 'cancelled'
-                                  ? '❌ Đã hủy chuyến'
-                                  : '🚌 Đã xuất bến'}
+                                  ? 'Đã hủy chuyến'
+                                  : 'Đã xuất bến'}
                             </span>
                           </span>
                         ) : (
@@ -816,6 +845,43 @@ export function TripSearchModal({
                       <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-800 border border-emerald-200">
                         <Sparkles size={11} className="text-emerald-600" />
                         <span>SV ICTU: {Number(trip.studentPrice).toLocaleString('vi-VN')}đ (-50%)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Điểm đón trạm xuất phát & Điểm trả trạm kết thúc chi tiết */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 my-3 p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <div className="size-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs font-bold text-[10px]">
+                        <MapPin size={13} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] text-emerald-800 font-extrabold uppercase tracking-wider block">
+                          Điểm đón (Trạm xuất phát):
+                        </span>
+                        <strong className="text-slate-900 text-xs sm:text-[13px] block truncate" title={trip.origin}>
+                          {trip.origin}
+                        </strong>
+                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                          Xe buýt đón tại nhà chờ quy định · Có mặt trước 05 phút
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 sm:border-l sm:border-slate-200/80 sm:pl-3">
+                      <div className="size-6 rounded-lg bg-slate-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs font-bold text-[10px]">
+                        <Compass size={13} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block">
+                          Điểm trả (Trạm kết thúc):
+                        </span>
+                        <strong className="text-slate-900 text-xs sm:text-[13px] block truncate" title={trip.destination}>
+                          {trip.destination}
+                        </strong>
+                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                          Trả khách tại nhà chờ theo lộ trình tuyến
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -930,6 +996,9 @@ export function TripSearchModal({
 
                     {/* Amenities Micro-Badges */}
                     <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-teal-800 border border-teal-200/70">
+                        <MapPin size={10} className="text-teal-700" /> Đón Trạm Cố Định
+                      </span>
                       <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50/80 px-2 py-0.5 text-emerald-800 border border-emerald-200/50">
                         <Zap size={10} className="text-emerald-600" /> 100% Buýt Điện
                       </span>

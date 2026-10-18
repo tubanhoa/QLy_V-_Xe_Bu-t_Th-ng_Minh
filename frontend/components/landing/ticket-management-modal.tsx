@@ -21,6 +21,7 @@ import {
   User,
   Phone,
   Armchair,
+  Building2,
   Search,
   Filter,
   CheckCircle2,
@@ -959,6 +960,43 @@ export function TicketManagementModal({
 
                       <div className="mt-3.5 rounded-xl bg-emerald-50 border border-emerald-200/90 p-2.5 text-[11px] text-emerald-950 font-medium max-w-lg mx-auto">
                         Đưa mã QR trên màn hình lại gần mắt đọc máy quét tự động ở cửa lên xe buýt. Cổng soát vé sẽ tự động mở khi có tiếng bíp xác nhận.
+                      </div>
+                    </div>
+
+                    {/* Thẻ hướng dẫn địa điểm đón xe & nhà xe vận hành */}
+                    <div className="rounded-2xl border border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/60 p-4 space-y-2 text-xs text-left shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="size-6 rounded-lg bg-[#005A36] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                            <MapPin size={13} />
+                          </span>
+                          <span className="font-extrabold text-[#005A36] text-xs uppercase tracking-wide">
+                            Hướng Dẫn Đón Xe Buýt Tại Trạm
+                          </span>
+                        </div>
+                        <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 border border-emerald-300">
+                          Tuyến Cố Định
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-start gap-1.5">
+                          <MapPin size={13} className="text-emerald-700 shrink-0 mt-0.5" />
+                          <span className="text-emerald-800 font-extrabold shrink-0">Trạm đón hành khách:</span>
+                          <strong className="text-slate-900">{ticketDetail.origin}</strong>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <Clock size={13} className="text-slate-600 shrink-0 mt-0.5" />
+                          <span className="text-slate-600 font-bold shrink-0">Khuyến nghị có mặt:</span>
+                          <span className="text-slate-800 font-medium">Trước 05 phút so với giờ xuất bến ({formatTime(ticketDetail.departureTime)})</span>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <Building2 size={13} className="text-slate-600 shrink-0 mt-0.5" />
+                          <span className="text-slate-600 font-bold shrink-0">Đơn vị vận hành:</span>
+                          <span className="text-slate-800 font-medium">Nhà xe Buýt Điện ICTU (Depot: Khuôn viên ĐH CNTT&TT Thái Nguyên, Đường Z115)</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 italic pt-1 border-t border-emerald-200/60">
+                          * Lưu ý: Xe buýt đón trả tại nhà chờ trạm xe theo quy định, không đón trả tùy tiện ngoài trạm.
+                        </p>
                       </div>
                     </div>
 
