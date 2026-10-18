@@ -13,14 +13,16 @@ async function checkDatabase() {
     process.exit(1);
   }
 
+  const isPooler = url.includes('pooler.supabase.com');
   const ds = new DataSource({
     type: 'postgres',
     url,
     entities: ALL_ENTITIES,
-    ssl: { rejectUnauthorized: false },
+    ssl: isPooler ? false : { rejectUnauthorized: false },
+    connectTimeoutMS: 30000,
     extra: {
       max: 5,
-      connectionTimeoutMillis: 10000,
+      connectionTimeoutMillis: 30000,
       idleTimeoutMillis: 30000,
     },
   });

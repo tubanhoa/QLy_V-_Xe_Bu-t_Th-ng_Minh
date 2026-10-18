@@ -54,6 +54,7 @@ import { BookingResultData, CreateBookingPayload, SeatItem } from '@/lib/types/b
 import { PaymentGateway, PaymentUrlResponseData } from '@/lib/types/payment'
 import { TripSearchResult } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
+import { authService } from '@/lib/services/auth.service'
 import { cn, isValidEmail } from '@/lib/utils'
 import { VoucherInput } from '@/components/portal/voucher-input'
 import { promotionService } from '@/lib/services/promotion.service'
@@ -106,9 +107,9 @@ export function SeatPickerModal({
 
   // Các bước: 'seats' (chọn ghế) | 'mobile-info' (điền thông tin mobile) | 'payment-qr' (quét QR thanh toán đa cổng) | 'success' (thành công)
   const [step, setStep] = useState<'seats' | 'mobile-info' | 'payment-qr' | 'success'>('seats')
-  const [passengerName, setPassengerName] = useState(user?.fullName || user?.name || 'Nguyễn Thu An')
-  const [phone, setPhone] = useState(user?.phoneNumber || '0981234567')
-  const [invoiceEmail, setInvoiceEmail] = useState(user?.email || 'ductrandanh06@gmail.com')
+  const [passengerName, setPassengerName] = useState(user?.fullName || user?.name || '')
+  const [phone, setPhone] = useState(user?.phoneNumber || '')
+  const [invoiceEmail, setInvoiceEmail] = useState(user?.email || '')
   const [isInvoiceRequested, setIsInvoiceRequested] = useState(true)
   const [emailTouched, setEmailTouched] = useState(false)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -200,14 +201,29 @@ export function SeatPickerModal({
     enabled: open,
   })
 
-  // Đồng bộ thông tin user khi đăng nhập
+  // Đồng bộ thông tin user khi đăng nhập hoặc khi mở modal
   useEffect(() => {
     if (user) {
       if (user.fullName || user.name) setPassengerName(user.fullName || user.name)
-      if (user.phoneNumber) setPhone(user.phoneNumber)
       if (user.email) setInvoiceEmail(user.email)
+
+      if (user.phoneNumber) {
+        setPhone(user.phoneNumber)
+      } else {
+        const localMatch = authService.findLocalUser(user.email || user.studentId || '')
+        if (localMatch?.phoneNumber) {
+          setPhone(localMatch.phoneNumber)
+        } else if (isAuthenticated) {
+          authService
+            .fetchProfile()
+            .then((fresh) => {
+              if (fresh?.phoneNumber) setPhone(fresh.phoneNumber)
+            })
+            .catch(() => {})
+        }
+      }
     }
-  }, [user])
+  }, [user, open, isAuthenticated])
 
   // Giá vé và ưu đãi sinh viên
   const originName = selectedTrip?.origin || initialOrigin
@@ -864,14 +880,25 @@ export function SeatPickerModal({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
-                        Số điện thoại nhận vé
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs sm:text-sm font-bold text-slate-700">
+                          Số điện thoại nhận vé
+                        </label>
+                        {user?.phoneNumber && phone !== user.phoneNumber && (
+                          <button
+                            type="button"
+                            onClick={() => setPhone(user.phoneNumber || '')}
+                            className="text-xs font-bold text-[#005A36] hover:underline cursor-pointer"
+                          >
+                            Dùng SĐT tài khoản
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        placeholder="0981 234 567"
+                        placeholder="VD: 0981 234 567"
                         className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 outline-none focus:border-[#005A36] transition-colors"
                       />
                     </div>
@@ -881,7 +908,7 @@ export function SeatPickerModal({
                       </label>
                       <input
                         type="text"
-                        value={user?.studentId || 'DTC215180001'}
+                        value={user?.studentId || 'Chưa liên kết'}
                         disabled
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-500 outline-none"
                       />

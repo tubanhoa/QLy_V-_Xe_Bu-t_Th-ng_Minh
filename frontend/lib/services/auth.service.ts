@@ -162,6 +162,12 @@ class AuthService {
 
       if (response.ok) {
         const responseData: LoginResponseData = resJson.data || resJson
+        if (responseData?.user && !responseData.user.phoneNumber) {
+          const localMatch = this.findLocalUser(inputIdentifier)
+          if (localMatch?.phoneNumber) {
+            responseData.user.phoneNumber = localMatch.phoneNumber
+          }
+        }
         return {
           success: true,
           data: responseData,
@@ -355,6 +361,9 @@ class AuthService {
       if (response.ok) {
         backendSuccess = true
         backendData = resJson.data || resJson
+        if (phoneNumber && backendData?.user && !backendData.user.phoneNumber) {
+          backendData.user.phoneNumber = phoneNumber
+        }
       } else if (response.status === 400 || response.status === 409) {
         let errorMsg = 'Đăng ký không thành công'
         if (resJson?.message) {
@@ -510,7 +519,18 @@ class AuthService {
     if (typeof window === 'undefined') return null
     try {
       const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY)
-      return raw ? JSON.parse(raw) : null
+      if (!raw) return null
+      const user = JSON.parse(raw) as AuthUser
+      // Khôi phục số điện thoại nếu profile hiện tại bị khuyết
+      if (user && !user.phoneNumber && (user.email || user.studentId)) {
+        const localMatch = this.findLocalUser(user.email || user.studentId || '')
+        if (localMatch?.phoneNumber) {
+          user.phoneNumber = localMatch.phoneNumber
+          localStorage.setItem(USER_KEY, JSON.stringify(user))
+          sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+        }
+      }
+      return user
     } catch {
       return null
     }
@@ -522,7 +542,8 @@ class AuthService {
   updateUserLocally(partial: Partial<AuthUser>): AuthUser | null {
     if (typeof window === 'undefined') return null
     try {
-      const current = this.getUser() || ({} as AuthUser)
+      const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY)
+      const current = raw ? (JSON.parse(raw) as AuthUser) : ({} as AuthUser)
       const updated = { ...current, ...partial }
       localStorage.setItem(USER_KEY, JSON.stringify(updated))
       sessionStorage.setItem(USER_KEY, JSON.stringify(updated))
@@ -546,6 +567,12 @@ class AuthService {
       const json = await res.json()
       const userData = json.data?.user || json.data || json
       if (userData?.id) {
+        if (!userData.phoneNumber) {
+          const localMatch = this.findLocalUser(userData.email || userData.studentId || '')
+          if (localMatch?.phoneNumber) {
+            userData.phoneNumber = localMatch.phoneNumber
+          }
+        }
         this.updateUserLocally(userData)
         return userData
       }

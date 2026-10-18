@@ -736,6 +736,7 @@ export class BookingService {
         appliedMonthlyPassCode: activeMonthlyPass?.passCode,
         trip: {
           id: trip.id,
+          routeCode: trip.route?.routeCode,
           routeName: trip.route?.name,
           departureTime: trip.departureTime,
         },
@@ -774,6 +775,7 @@ export class BookingService {
       .innerJoinAndSelect('ticket.booking', 'booking')
       .innerJoinAndSelect('booking.trip', 'trip')
       .innerJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle')
       .leftJoinAndSelect('ticket.seat', 'seat')
       .leftJoinAndSelect('booking.payments', 'payments')
       .where('booking.userId = :userId', { userId })
@@ -807,11 +809,17 @@ export class BookingService {
           ticketCode: t.ticketCode,
           bookingCode: t.booking?.bookingCode,
           passengerName: t.passengerName,
+          passengerPhone: t.passengerPhone,
           seatNumber: t.seat?.seatNumber,
           status: t.status,
           price: t.originalPrice,
           tripId: t.booking?.trip?.id,
+          routeCode: t.booking?.trip?.route?.routeCode,
+          busNumber: t.booking?.trip?.route?.routeCode,
           routeName: t.booking?.trip?.route?.name,
+          origin: t.booking?.trip?.route?.origin,
+          destination: t.booking?.trip?.route?.destination,
+          vehiclePlate: t.booking?.trip?.vehicle?.licensePlate,
           departureTime: t.booking?.trip?.departureTime,
           refundInfo,
           createdAt: t.createdAt,
@@ -985,6 +993,8 @@ export class BookingService {
       status: ticket.status,
       price: ticket.originalPrice,
       tripId: ticket.booking?.trip?.id,
+      routeCode: ticket.booking?.trip?.route?.routeCode,
+      busNumber: ticket.booking?.trip?.route?.routeCode,
       routeName: ticket.booking?.trip?.route?.name,
       origin: ticket.booking?.trip?.route?.origin,
       destination: ticket.booking?.trip?.route?.destination,

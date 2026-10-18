@@ -99,6 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccessToken(storedToken)
         setUser(formatUserProfile(storedUser))
         setIsAuthenticated(true)
+
+        // Tự động đồng bộ profile đầy đủ từ backend (bao gồm SĐT chính xác đã đăng ký)
+        authService.fetchProfile().then((fresh) => {
+          if (fresh) {
+            setUser(formatUserProfile(fresh))
+          }
+        }).catch(() => {})
       }
     } catch (err) {
       console.error('[AuthProvider] Lỗi nạp phiên đăng nhập:', err)
@@ -128,6 +135,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authService.login({ email, password })
       if (res.success && res.data) {
         setUserSession(res.data, remember)
+        // Đồng bộ thêm thông tin hồ sơ mới nhất từ server
+        authService.fetchProfile().then((fresh) => {
+          if (fresh) {
+            setUser(formatUserProfile(fresh))
+          }
+        }).catch(() => {})
         return { success: true, message: res.message, user: res.data.user }
       }
       return { success: false, message: res.message || 'Đăng nhập không thành công' }

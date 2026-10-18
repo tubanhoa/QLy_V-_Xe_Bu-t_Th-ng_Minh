@@ -21,6 +21,7 @@ import { SeatLockService } from '../../src/modules/booking/seat-lock.service.js'
 import { PaymentController } from '../../src/modules/payment/payment.controller.js';
 import { PaymentService } from '../../src/modules/payment/payment.service.js';
 import { NotificationService } from '../../src/modules/notification/notification.service.js';
+import { AuditService } from '../../src/modules/audit/audit.service.js';
 
 import { UserEntity } from '../../src/database/entities/user.entity.js';
 import { RoleEntity } from '../../src/database/entities/role.entity.js';
@@ -541,6 +542,7 @@ describe('Sprint 1 Automation Test Suite - Core Features [QA Specification]', ()
         SeatLockService,
         PaymentService,
         NotificationService,
+        { provide: AuditService, useValue: { log: () => Promise.resolve() } },
         {
           provide: JwtService,
           useValue: {

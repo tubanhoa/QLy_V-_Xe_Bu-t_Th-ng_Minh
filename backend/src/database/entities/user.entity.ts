@@ -8,6 +8,7 @@ import {
   JoinColumn,
   OneToMany,
   type Relation,
+  Index,
 } from 'typeorm';
 import { RoleEntity } from './role.entity.js';
 import { UserStatus } from '../../common/constants/status.constant.js';
@@ -23,6 +24,7 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 150, unique: true })
   email: string;
 
+  @Index('idx_users_phone_number')
   @Column({ name: 'phone_number', type: 'varchar', length: 15, nullable: true })
   phoneNumber: string;
 

@@ -102,12 +102,12 @@ function TicketCard({ ticket, onClick, onExchange, onCancel, onViewRefund, onVie
     >
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="flex items-center gap-2">
-          <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs">
-            {ticket.routeCode || ticket.busNumber || 'CT-01'}
+          <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs shrink-0">
+            {ticket.routeCode || ticket.busNumber || (ticket.routeName?.match(/CT-\d+/i)?.[0]) || 'CT-01'}
           </span>
           <div>
             <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-[#005A36] transition-colors leading-snug">
-              {ticket.routeName || 'Tuyến CT-01 KTX ICTU ↔ Bến Xe TP'}
+              {ticket.routeName || 'ĐH CNTT & TT (ICTU) ↔ Bến Xe Trung Tâm Thái Nguyên'}
             </h4>
             <span className="text-[10px] font-mono text-slate-400">
               Mã: {ticket.ticketCode}

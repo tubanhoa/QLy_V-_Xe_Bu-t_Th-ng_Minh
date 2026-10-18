@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
+ALTER TABLE users ADD CONSTRAINT chk_users_phone_number CHECK (phone_number IS NULL OR phone_number ~ '^[0-9]{10,11}$');
 
 -- 3. Routes
 CREATE TABLE IF NOT EXISTS routes (

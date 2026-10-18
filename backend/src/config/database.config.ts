@@ -7,7 +7,7 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
 
   const poolOptions = {
     max: 10, // Giới hạn connection pool tránh cạn kiệt slots Supabase Free Tier
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 30000,
     idleTimeoutMillis: 30000,
   };
 
@@ -17,14 +17,19 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
   const enableLogging = process.env.DB_LOGGING === 'true';
 
   if (url) {
-    const isCloud = url.includes('supabase') || url.includes('neon') || url.includes('pooler') || url.includes('sslmode=require');
+    const isPooler = url.includes('pooler.supabase.com');
+    const isCloud = url.includes('supabase') || url.includes('neon') || url.includes('sslmode=require');
+    const sslConfig = isPooler ? false : (isCloud ? { rejectUnauthorized: false } : undefined);
+
     return {
       type: 'postgres',
       url,
       entities: ALL_ENTITIES,
       synchronize: syncSchema,
       logging: enableLogging,
-      ssl: isCloud ? { rejectUnauthorized: false } : undefined,
+      ssl: sslConfig,
+      installExtensions: false,
+      connectTimeoutMS: 30000,
       extra: poolOptions,
     };
   }
@@ -39,6 +44,7 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
     entities: ALL_ENTITIES,
     synchronize: syncSchema,
     logging: enableLogging,
+    connectTimeoutMS: 30000,
     extra: poolOptions,
   };
 };

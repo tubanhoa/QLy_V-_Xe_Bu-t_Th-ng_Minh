@@ -244,7 +244,7 @@ class ExchangeService {
         destination: oldTicket?.destination || 'Bến Xe Trung Tâm Thái Nguyên',
         departureTime: newDepartureTime,
         passengerName: oldTicket?.passengerName || currentUser?.fullName || 'Hành khách',
-        passengerPhone: oldTicket?.passengerPhone || currentUser?.phoneNumber || '0981234567',
+        passengerPhone: oldTicket?.passengerPhone || currentUser?.phoneNumber || '',
         price: oldTicket?.price || 10000,
         status: 'PAID',
         qrData: `ICTU-PASS:${newTicketCode}`,

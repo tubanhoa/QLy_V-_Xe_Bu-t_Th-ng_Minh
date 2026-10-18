@@ -61,6 +61,13 @@ export function RegisterForm() {
       return
     }
 
+    const cleanPhone = phoneNumber.trim().replace(/[\s.-]/g, '')
+    const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/
+    if (!phoneRegex.test(cleanPhone)) {
+      message.error('Số điện thoại không đúng định dạng quy định của Việt Nam (10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)')
+      return
+    }
+
     if (userType === 'student' && !studentId.trim()) {
       message.error('Vui lòng nhập Mã sinh viên ICTU để nhận trợ giá 50%')
       return

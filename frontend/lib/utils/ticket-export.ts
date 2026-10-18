@@ -197,7 +197,10 @@ function drawTicketDetails(
   const col2X = width / 2 + 15
 
   // Tuyến xe
-  drawField(ctx, 'TUYẾN XE', ticket.routeName || 'Tuyến CT-01 KTX ICTU ↔ Bến Xe TP', col1X, gridY)
+  const routeDisplay = ticket.routeCode
+    ? `[${ticket.routeCode}] ${ticket.routeName || 'Tuyến buýt ICTU Transit'}`
+    : (ticket.routeName || 'Tuyến buýt ICTU Transit')
+  drawField(ctx, 'TUYẾN XE', routeDisplay, col1X, gridY)
   // Khởi hành
   const depTime = new Date(ticket.departureTime).toLocaleString('vi-VN', {
     day: '2-digit',

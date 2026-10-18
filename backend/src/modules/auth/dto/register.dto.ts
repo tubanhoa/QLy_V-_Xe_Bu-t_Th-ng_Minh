@@ -32,12 +32,13 @@ export class RegisterDto {
   @MaxLength(100, { message: 'Họ tên không được vượt quá 100 ký tự' })
   fullName: string;
 
-  @ApiPropertyOptional({ example: '0987654321', description: 'Số điện thoại VN (10 chữ số, bắt đầu bằng 03/05/07/08/09)' })
+  @ApiPropertyOptional({ example: '0987654321', description: 'Số điện thoại VN (10 chữ số, bắt đầu bằng 03/05/07/08/09 hoặc +84)' })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Số điện thoại phải là chuỗi' })
   @MaxLength(15, { message: 'Số điện thoại không được vượt quá 15 ký tự' })
-  @Matches(/^(0[3|5|7|8|9])+([0-9]{8})$/, {
-    message: 'Số điện thoại không hợp lệ (VD: 0987654321)',
+  @ValidateIf((o) => typeof o.phoneNumber === 'string' && o.phoneNumber.trim().length > 0)
+  @Matches(/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/, {
+    message: 'Số điện thoại không đúng định dạng quy định của Việt Nam (10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)',
   })
   phoneNumber?: string;
 

@@ -279,7 +279,7 @@ export function TicketManagementModal({
           user?.fullName ||
           user?.name ||
           'Hành khách ICTU',
-        passengerPhone: data.passengerPhone || summary?.passengerPhone || user?.phoneNumber || '0981234567',
+        passengerPhone: data.passengerPhone || summary?.passengerPhone || user?.phoneNumber || '',
         seatNumber: data.seatNumber || summary?.seatNumber || '01A',
         seatType: data.seatType || summary?.seatType || 'Ghế tiêu chuẩn',
         price: Number(data.price || summary?.price || 5000),
@@ -298,8 +298,8 @@ export function TicketManagementModal({
         qrDataUrl: data.qrDataUrl || summary?.qrDataUrl || '',
         qrData: data.qrData || summary?.qrData || `ICTU-PASS:${data.ticketCode || ticketId}`,
         signature: data.signature || summary?.signature,
-        busNumber: data.busNumber || summary?.busNumber || 'CT-01',
-        routeCode: data.routeCode || summary?.routeCode || 'CT-01',
+        busNumber: data.busNumber || summary?.busNumber || (data.routeName?.match(/CT-\d+/i)?.[0]) || (summary?.routeName?.match(/CT-\d+/i)?.[0]) || 'CT-01',
+        routeCode: data.routeCode || summary?.routeCode || (data.routeName?.match(/CT-\d+/i)?.[0]) || (summary?.routeName?.match(/CT-\d+/i)?.[0]) || 'CT-01',
         checkedInAt: data.checkedInAt || null,
         tripId: data.tripId || summary?.tripId,
         createdAt: data.createdAt || summary?.createdAt || new Date().toISOString(),
@@ -315,7 +315,7 @@ export function TicketManagementModal({
         setIsOffline(true)
       } else if (currentTicketSummary) {
         setTicketDetail({
-          passengerPhone: (currentTicketSummary as any).passengerPhone || user?.phoneNumber || '0981234567',
+          passengerPhone: (currentTicketSummary as any).passengerPhone || user?.phoneNumber || '',
           seatType: 'Ghế tiêu chuẩn',
           origin: currentTicketSummary.origin || 'ĐH CNTT & TT (ICTU)',
           destination: currentTicketSummary.destination || 'Bến Xe Trung Tâm Thái Nguyên',
@@ -369,6 +369,8 @@ export function TicketManagementModal({
         (t) =>
           t.ticketCode?.toLowerCase().includes(kw) ||
           t.routeName?.toLowerCase().includes(kw) ||
+          t.routeCode?.toLowerCase().includes(kw) ||
+          t.busNumber?.toLowerCase().includes(kw) ||
           t.seatNumber?.toLowerCase().includes(kw) ||
           t.passengerName?.toLowerCase().includes(kw),
       )
@@ -942,8 +944,13 @@ export function TicketManagementModal({
                           )}
                         </button>
 
-                        <div className="text-sm sm:text-base font-extrabold text-slate-900">
-                          {ticketDetail.routeName || 'Tuyến buýt ICTU Transit'}
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
+                          <span className="rounded-lg bg-[#005A36] text-white px-2 py-0.5 text-xs font-black shadow-2xs">
+                            {ticketDetail.routeCode || ticketDetail.busNumber || (ticketDetail.routeName?.match(/CT-\d+/i)?.[0]) || 'CT-01'}
+                          </span>
+                          <span className="text-sm sm:text-base font-extrabold text-slate-900">
+                            {ticketDetail.routeName || 'Tuyến buýt ICTU Transit'}
+                          </span>
                         </div>
 
                         <div className="text-xs text-slate-500 flex items-center justify-center gap-1.5">
@@ -1387,8 +1394,8 @@ export function TicketManagementModal({
                           {/* Top Row: Route & Status */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                             <div className="flex items-center gap-2.5">
-                              <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs">
-                                CT-01
+                              <span className="rounded-xl bg-[#005A36] text-white px-2.5 py-1 text-xs font-black shadow-2xs shrink-0">
+                                {t.routeCode || t.busNumber || (t.routeName?.match(/CT-\d+/i)?.[0]) || 'CT-01'}
                               </span>
                               <div>
                                 <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">
@@ -1430,7 +1437,7 @@ export function TicketManagementModal({
                                 </span>
                               </div>
                               <span className="text-[11px] text-slate-600 font-medium block truncate max-w-[200px]">
-                                ĐH CNTT & TT (ICTU)
+                                {t.origin || 'ĐH CNTT & TT (ICTU)'}
                               </span>
                             </div>
 
@@ -1456,7 +1463,7 @@ export function TicketManagementModal({
                                 <span className="text-[10px] text-slate-500 font-medium">(Tầng 1)</span>
                               </div>
                               <span className="text-[11px] text-slate-600 font-medium block">
-                                Xe buýt điện ICTU Transit
+                                {t.vehiclePlate ? `Xe buýt điện (${t.vehiclePlate})` : 'Xe buýt điện ICTU Transit'}
                               </span>
                             </div>
 

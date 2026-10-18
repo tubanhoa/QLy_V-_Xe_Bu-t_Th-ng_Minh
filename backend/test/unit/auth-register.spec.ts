@@ -8,6 +8,7 @@ import { UserEntity } from '../../src/database/entities/user.entity.js';
 import { RoleEntity } from '../../src/database/entities/role.entity.js';
 import { UserStatus } from '../../src/common/constants/status.constant.js';
 import { Role } from '../../src/common/constants/roles.constant.js';
+import { AuditService } from '../../src/modules/audit/audit.service.js';
 
 // Mock bcrypt
 vi.mock('bcrypt', () => ({
@@ -75,6 +76,7 @@ describe('AuthService - Unit Tests', () => {
         { provide: getRepositoryToken(UserEntity), useValue: userRepository },
         { provide: getRepositoryToken(RoleEntity), useValue: roleRepository },
         { provide: JwtService, useValue: jwtService },
+        { provide: AuditService, useValue: { log: vi.fn().mockResolvedValue({}) } },
       ],
     }).compile();
 
@@ -158,6 +160,29 @@ describe('AuthService - Unit Tests', () => {
       await expect(service.register(validRegisterDto)).rejects.toThrow(ConflictException);
       await expect(service.register(validRegisterDto)).rejects.toThrow(
         'Email này đã được đăng ký trong hệ thống',
+      );
+    });
+
+    it('should throw BadRequestException when phoneNumber format is invalid', async () => {
+      const invalidPhoneDto = {
+        ...validRegisterDto,
+        phoneNumber: '0123456789', // Đầu số 012 không còn tồn tại
+      };
+      await expect(service.register(invalidPhoneDto)).rejects.toThrow(BadRequestException);
+      await expect(service.register(invalidPhoneDto)).rejects.toThrow(
+        'Số điện thoại không đúng định dạng quy định của Việt Nam',
+      );
+    });
+
+    it('should throw ConflictException when phoneNumber already exists', async () => {
+      userRepository.findOne.mockImplementation(async ({ where }: any) => {
+        if (where?.phoneNumber) return mockUser;
+        return null;
+      });
+
+      await expect(service.register(validRegisterDto)).rejects.toThrow(ConflictException);
+      await expect(service.register(validRegisterDto)).rejects.toThrow(
+        'đã được đăng ký trong hệ thống',
       );
     });
 

@@ -54,6 +54,27 @@ export class AuthService {
       }
     }
 
+    // 2. Ràng buộc và chuẩn hóa Số điện thoại người dùng:
+    let normalizedPhone: string | undefined = undefined;
+    if (dto.phoneNumber && dto.phoneNumber.trim()) {
+      let rawPhone = dto.phoneNumber.trim().replace(/[\s.-]/g, '');
+      if (rawPhone.startsWith('+84')) {
+        rawPhone = '0' + rawPhone.slice(3);
+      }
+      const phoneRegex = /^0[35789]\d{8}$/;
+      if (!phoneRegex.test(rawPhone)) {
+        throw new BadRequestException('Số điện thoại không đúng định dạng quy định của Việt Nam (10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)');
+      }
+      normalizedPhone = rawPhone;
+
+      const existingPhone = await this.userRepository.findOne({
+        where: { phoneNumber: normalizedPhone },
+      });
+      if (existingPhone) {
+        throw new ConflictException(`Số điện thoại ${normalizedPhone} đã được đăng ký trong hệ thống`);
+      }
+    }
+
     const existing = await this.userRepository.findOne({
       where: { email: dto.email.toLowerCase() },
     });
@@ -79,7 +100,7 @@ export class AuthService {
     const user = this.userRepository.create({
       fullName: dto.fullName,
       email: dto.email.toLowerCase(),
-      phoneNumber: dto.phoneNumber,
+      phoneNumber: normalizedPhone || dto.phoneNumber,
       passwordHash,
       roleId: passengerRole.id,
       studentId: normalizedStudentId || undefined,
@@ -98,7 +119,7 @@ export class AuthService {
       resourceName: 'auth',
       resourceId: savedUser.id,
       userId: savedUser.id,
-      changes: { email: savedUser.email, fullName: savedUser.fullName, studentId: savedUser.studentId },
+      changes: { email: savedUser.email, fullName: savedUser.fullName, studentId: savedUser.studentId, phoneNumber: savedUser.phoneNumber },
     }).catch(() => {});
 
     return {
@@ -108,6 +129,11 @@ export class AuthService {
         fullName: savedUser.fullName,
         role: passengerRole.name,
         studentId: savedUser.studentId,
+        phoneNumber: savedUser.phoneNumber || undefined,
+        faculty: savedUser.faculty || undefined,
+        idCardNumber: savedUser.idCardNumber || undefined,
+        priorityCategory: savedUser.priorityCategory || 'regular',
+        verificationStatus: savedUser.verificationStatus || 'unverified',
       },
       ...tokens,
     };
@@ -153,6 +179,10 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         studentId: user.studentId,
         faculty: user.faculty,
+        phoneNumber: user.phoneNumber || undefined,
+        idCardNumber: user.idCardNumber || undefined,
+        priorityCategory: user.priorityCategory || 'regular',
+        verificationStatus: user.verificationStatus || 'unverified',
       },
       ...tokens,
     };

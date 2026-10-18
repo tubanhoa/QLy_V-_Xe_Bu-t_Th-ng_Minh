@@ -315,11 +315,16 @@ class BookingService {
                 seatNumber: t.seatNumber,
                 seatType: 'Ghế tiêu chuẩn',
                 routeName:
+                  (data as any)?.trip?.routeName ||
                   payload.routeName ||
                   (payload.originStation && payload.destinationStation
                     ? `${payload.originStation} ➔ ${payload.destinationStation}`
-                    : 'Tuyến CT-01: ICTU ↔ Bến Xe Trung Tâm Thái Nguyên'),
-                routeCode: payload.routeCode || 'CT-01',
+                    : 'Tuyến buýt ICTU Transit'),
+                routeCode:
+                  (data as any)?.trip?.routeCode ||
+                  payload.routeCode ||
+                  payload.routeName?.match(/CT-\d+/i)?.[0] ||
+                  'CT-01',
                 origin: payload.originStation || 'ĐH CNTT & TT Thái Nguyên',
                 destination: payload.destinationStation || 'Bến Xe Trung Tâm Thái Nguyên',
                 departureTime:
@@ -327,11 +332,15 @@ class BookingService {
                   (data as any).departureTime ||
                   new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
                 passengerName: t.passengerName || payload.passengerName || 'Hành khách ICTU',
-                passengerPhone: t.passengerPhone || payload.passengerPhone || '0981234567',
+                passengerPhone: t.passengerPhone || payload.passengerPhone || authService.getUser()?.phoneNumber || '',
                 price: t.price || 5000,
                 status: 'PAID',
                 vehiclePlate: payload.vehiclePlate || (data as any).vehiclePlate || '20B-012.34',
-                busNumber: payload.routeCode || 'CT-01',
+                busNumber:
+                  (data as any)?.trip?.routeCode ||
+                  payload.routeCode ||
+                  payload.routeName?.match(/CT-\d+/i)?.[0] ||
+                  'CT-01',
                 qrData: t.qrCodeData || `ICTU-PASS:${t.ticketCode || t.id}`,
                 qrDataUrl: '',
                 bookingTime: new Date().toISOString(),
