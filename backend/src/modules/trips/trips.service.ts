@@ -188,6 +188,7 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       tripType,
       assignmentStatus,
       excludeDeparted,
+      search,
       page = 1,
       limit = 20,
       sortBy = 'departureTime',
@@ -213,7 +214,7 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
         start: startOfDay.toISOString(),
         end: endOfDay.toISOString(),
       });
-    } else {
+    } else if (!search) {
       // Default: Cửa sổ lập lịch trượt (Rolling Window: Hôm nay + 3 ngày tới)
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -222,6 +223,15 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
         start: startOfDay.toISOString(),
         end: endOfRollingWindow.toISOString(),
       });
+    }
+
+    // Filter by search keyword (biển số xe, mã tuyến, tên tuyến, điểm đón/trả, tài xế, phụ xe, ghi chú)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      qb.andWhere(
+        '(route.route_code ILIKE :search OR route.name ILIKE :search OR route.origin ILIKE :search OR route.destination ILIKE :search OR vehicle.license_plate ILIKE :search OR vehicle.model ILIKE :search OR driver.full_name ILIKE :search OR driver.phone_number ILIKE :search OR conductor.full_name ILIKE :search OR trip.note ILIKE :search OR CAST(trip.id AS TEXT) ILIKE :search)',
+        { search: searchTerm },
+      );
     }
 
     // Filter by routeId

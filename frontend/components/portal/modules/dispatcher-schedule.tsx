@@ -46,6 +46,17 @@ import type { TransitRoute } from '@/lib/types/transit'
 import { GanttTimelineChart } from './dispatcher-gantt-chart'
 import { RosterGroupedView } from './dispatcher-roster-view'
 
+/** Chuẩn hóa xâu tiếng Việt có dấu về không dấu để tìm kiếm thông minh */
+function removeVietnameseTones(str: string): string {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim()
+}
+
 export function DispatcherSchedule() {
   const [trips, setTrips] = useState<TripItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -159,7 +170,7 @@ export function DispatcherSchedule() {
     try {
       const res = await tripService.getTrips({
         page: 1,
-        limit: 100,
+        limit: 500,
         status: statusFilter === 'all' ? undefined : statusFilter,
         tripType: tripTypeFilter === 'all' ? undefined : tripTypeFilter,
         assignmentStatus: assignmentFilter === 'all' ? undefined : assignmentFilter,
@@ -720,7 +731,7 @@ export function DispatcherSchedule() {
     }
   }
 
-  // Lọc tìm kiếm phía Client (Tuyến xe, Ngày áp dụng, Trạng thái, Tìm kiếm)
+  // Lọc tìm kiếm phía Client (Tuyến xe, Ngày áp dụng, Trạng thái, Tìm kiếm thông minh)
   const filtered = trips.filter((s) => {
     // 1. Lọc theo tuyến đường
     if (routeFilter !== 'all') {
@@ -742,21 +753,55 @@ export function DispatcherSchedule() {
       }
     }
 
-    // 3. Tìm kiếm từ khóa text
+    // 3. Tìm kiếm từ khóa text (Hỗ trợ tiếng Việt có dấu/không dấu, biển số xe, điểm đón/trả, tài xế)
+    if (!search.trim()) return true
+
+    const qRaw = search.toLowerCase().trim()
+    const qClean = removeVietnameseTones(search)
+    const qNoPunct = qClean.replace(/[^a-z0-9]/g, '')
+
     const sId = (s.id || '').toLowerCase()
-    const rName = (s.route?.name || '').toLowerCase()
     const rCode = (s.route?.routeCode || '').toLowerCase()
+    const rName = (s.route?.name || '').toLowerCase()
+    const rNameClean = removeVietnameseTones(s.route?.name || '')
+    const rOrigin = (s.route?.origin || '').toLowerCase()
+    const rOriginClean = removeVietnameseTones(s.route?.origin || '')
+    const rDest = (s.route?.destination || '').toLowerCase()
+    const rDestClean = removeVietnameseTones(s.route?.destination || '')
+
     const vPlate = (s.vehicle?.licensePlate || '').toLowerCase()
+    const vPlateClean = vPlate.replace(/[^a-z0-9]/g, '')
+    const vModel = (s.vehicle?.model || '').toLowerCase()
+
     const dName = (s.driver?.fullName || '').toLowerCase()
+    const dNameClean = removeVietnameseTones(s.driver?.fullName || '')
+    const dPhone = (s.driver?.phoneNumber || '').toLowerCase()
+
+    const cName = (s.conductor?.fullName || '').toLowerCase()
+    const cNameClean = removeVietnameseTones(s.conductor?.fullName || '')
+
     const note = (s.note || '').toLowerCase()
-    const q = search.toLowerCase()
+    const noteClean = removeVietnameseTones(s.note || '')
+
     return (
-      sId.includes(q) ||
-      rName.includes(q) ||
-      rCode.includes(q) ||
-      vPlate.includes(q) ||
-      dName.includes(q) ||
-      note.includes(q)
+      sId.includes(qRaw) ||
+      rCode.includes(qRaw) ||
+      rName.includes(qRaw) ||
+      rNameClean.includes(qClean) ||
+      rOrigin.includes(qRaw) ||
+      rOriginClean.includes(qClean) ||
+      rDest.includes(qRaw) ||
+      rDestClean.includes(qClean) ||
+      vPlate.includes(qRaw) ||
+      (qNoPunct.length > 0 && vPlateClean.includes(qNoPunct)) ||
+      vModel.includes(qRaw) ||
+      dName.includes(qRaw) ||
+      dNameClean.includes(qClean) ||
+      dPhone.includes(qRaw) ||
+      cName.includes(qRaw) ||
+      cNameClean.includes(qClean) ||
+      note.includes(qRaw) ||
+      noteClean.includes(qClean)
     )
   })
 

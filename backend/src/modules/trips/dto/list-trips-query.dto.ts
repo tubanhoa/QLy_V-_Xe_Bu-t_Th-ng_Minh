@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsBoolean,
   IsInt,
+  IsString,
   Min,
   Max,
   IsIn,
@@ -78,12 +79,20 @@ export class ListTripsQueryDto {
   @Min(1, { message: 'page phải >= 1' })
   page?: number = 1;
 
-  @ApiPropertyOptional({ example: 20, description: 'Số item/trang (mặc định 20, tối đa 100)' })
+  @ApiPropertyOptional({ example: 20, description: 'Số item/trang (mặc định 20, tối đa 500)' })
   @IsOptional()
-  @IsInt({ message: 'limit phải là số nguyên' })
+  @IsInt({ message: 'page phải là số nguyên' })
   @Min(1, { message: 'limit phải >= 1' })
-  @Max(100, { message: 'limit không được vượt quá 100' })
+  @Max(500, { message: 'limit không được vượt quá 500' })
   limit?: number = 20;
+
+  @ApiPropertyOptional({
+    example: '20B-123.45',
+    description: 'Từ khóa tìm kiếm theo biển số xe, mã chuyến, tên tuyến, tài xế...',
+  })
+  @IsOptional()
+  @IsString({ message: 'search phải là chuỗi ký tự' })
+  search?: string;
 
   @ApiPropertyOptional({
     example: 'departureTime',
