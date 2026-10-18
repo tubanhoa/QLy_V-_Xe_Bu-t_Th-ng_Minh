@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
@@ -6,7 +7,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-be-vietnam-pro), 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Be Vietnam Pro', 'Inter', 'Plus Jakarta Sans', var(--font-be-vietnam-pro), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-brand-active: var(--brand-active);
@@ -92,17 +93,17 @@
   --cyber: #0a131c;
 
   --background: #f4f7f6;
-  --foreground: #0b1620;
+  --foreground: #09131a;
   --card: #ffffff;
-  --card-foreground: #0b1620;
+  --card-foreground: #09131a;
   --popover: #ffffff;
-  --popover-foreground: #0b1620;
+  --popover-foreground: #09131a;
   --primary: #005a36;
   --primary-foreground: #ffffff;
   --secondary: #e8f5ef;
   --secondary-foreground: #0b3a2a;
   --muted: #eef2f1;
-  --muted-foreground: #5b6b72;
+  --muted-foreground: #374151; /* Nâng độ tương phản từ #5b6b72 lên Slate-700 để chữ rõ nét, không mờ nhạt */
   --accent: #e6f7f1;
   --accent-foreground: #005a36;
   --destructive: #ef4444;
@@ -128,17 +129,17 @@
 .dark {
   color-scheme: dark;
   --background: #0a131c;
-  --foreground: #e6eef0;
+  --foreground: #f1f5f9;
   --card: #0f1c27;
-  --card-foreground: #e6eef0;
+  --card-foreground: #f1f5f9;
   --popover: #0f1c27;
-  --popover-foreground: #e6eef0;
+  --popover-foreground: #f1f5f9;
   --primary: #00c27d;
   --primary-foreground: #04140d;
   --secondary: #11261f;
   --secondary-foreground: #bff5dc;
   --muted: #142331;
-  --muted-foreground: #8ba0a8;
+  --muted-foreground: #94a3b8; /* Slate-400 dễ đọc trên nền tối */
   --accent: #0f2a22;
   --accent-foreground: #5ee6b0;
   --destructive: #f87171;
@@ -168,28 +169,35 @@
   }
   html {
     font-family: var(--font-sans);
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    font-feature-settings: normal;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    line-height: 1.55;
-    letter-spacing: normal;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
   }
-  /* Cân chỉnh khoảng cách chữ tiếng Việt để dấu thanh không bị đè hoặc dính chữ */
+  /* Cân chỉnh khoảng cách chữ tiếng Việt để dấu thanh thoáng, sắc nét */
   h1, h2, h3, h4, h5, h6,
   .font-bold, .font-extrabold, .font-black {
-    letter-spacing: normal !important;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+  }
+  .font-semibold {
+    font-weight: 600;
+  }
+  .font-medium {
+    font-weight: 500;
   }
   .tracking-tight,
   .tracking-tighter {
-    letter-spacing: -0.005em !important;
+    letter-spacing: -0.01em !important;
   }
 }
 
