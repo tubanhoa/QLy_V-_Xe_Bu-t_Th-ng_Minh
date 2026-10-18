@@ -56,7 +56,8 @@ import { TripSearchResult } from '@/lib/types/sprint1'
 import { useAuth } from '@/lib/auth-context'
 import { cn, isValidEmail } from '@/lib/utils'
 import { VoucherInput } from '@/components/portal/voucher-input'
-import type { VoucherValidationResult } from '@/lib/types/promotion'
+import { promotionService } from '@/lib/services/promotion.service'
+import type { MonthlyPass, VoucherValidationResult } from '@/lib/types/promotion'
 import { InvoicePreviewModal } from '@/components/invoice/invoice-preview-modal'
 import { CelebrationFx } from '@/components/ui/celebration-fx'
 import { haptic } from '@/lib/utils/haptics'
@@ -122,6 +123,27 @@ export function SeatPickerModal({
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [useVietQrImg, setUseVietQrImg] = useState<boolean>(true)
   const [walletSaved, setWalletSaved] = useState<boolean>(false)
+  const [userPasses, setUserPasses] = useState<MonthlyPass[]>([])
+  const [isLoadingPasses, setIsLoadingPasses] = useState<boolean>(false)
+  const [useMonthlyPass, setUseMonthlyPass] = useState<boolean>(true)
+
+  // Tải danh sách Thẻ vé tháng của người dùng nếu đã đăng nhập
+  useEffect(() => {
+    if (open && isAuthenticated) {
+      setIsLoadingPasses(true)
+      promotionService
+        .getMyPasses()
+        .then((res) => {
+          if (res.success && Array.isArray(res.data)) {
+            setUserPasses(res.data)
+          }
+        })
+        .catch((err) => console.warn('Lỗi tải vé tháng của tôi:', err))
+        .finally(() => setIsLoadingPasses(false))
+    } else if (!open) {
+      setUserPasses([])
+    }
+  }, [open, isAuthenticated])
 
   // Phát âm thanh chúc mừng chiến thắng khi hoàn tất vé
   useEffect(() => {
@@ -217,9 +239,40 @@ export function SeatPickerModal({
   const studentPrice = useMemo(() => (selectedTrip ? Number(selectedTrip.studentPrice) : 10000), [selectedTrip])
   const effectivePrice = isStudent ? studentPrice : basePrice
 
+  // Nhận diện Thẻ vé tháng còn hiệu lực trên tuyến xe buýt này
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const activeMonthlyPass = useMemo(() => {
+    if (!isAuthenticated || userPasses.length === 0) return null
+    return (
+      userPasses.find((p) => {
+        const isApproved = p.approvalStatus === 'approved'
+        const isPaid = !p.paymentStatus || p.paymentStatus === 'paid'
+        const notExpired = p.endDate >= todayStr
+        const routeMatches =
+          !p.route?.id ||
+          p.route.id === 'all-routes' ||
+          p.route.id === selectedTrip?.routeId
+        return isApproved && isPaid && notExpired && routeMatches
+      }) || null
+    )
+  }, [isAuthenticated, userPasses, todayStr, selectedTrip?.routeId])
+
+  const isMonthlyPassCovered = Boolean(activeMonthlyPass && useMonthlyPass)
+
   const { totalPrice, totalStandardPrice, totalSavings, voucherDiscount, finalPrice } = useMemo(() => {
-    const total = selectedSeats.length * effectivePrice
     const standard = selectedSeats.length * basePrice
+
+    if (isMonthlyPassCovered) {
+      return {
+        totalPrice: 0,
+        totalStandardPrice: standard,
+        totalSavings: standard,
+        voucherDiscount: 0,
+        finalPrice: 0,
+      }
+    }
+
+    const total = selectedSeats.length * effectivePrice
     const savings = standard - total
     const rawVoucher = voucherResult?.discountAmount || 0
     // Khống chế mức giảm giá (Cap Discount) để số tiền thanh toán không tụt dưới 10.000 VNĐ
@@ -234,7 +287,7 @@ export function SeatPickerModal({
       voucherDiscount: voucher,
       finalPrice: final,
     }
-  }, [selectedSeats.length, effectivePrice, basePrice, voucherResult?.discountAmount])
+  }, [selectedSeats.length, effectivePrice, basePrice, voucherResult?.discountAmount, isMonthlyPassCovered])
 
   const displaySeats = useMemo(() => {
     return seatMap?.seats && seatMap.seats.length > 0
@@ -396,8 +449,10 @@ export function SeatPickerModal({
           passengerName: passengerName.trim() || user?.fullName || user?.name || 'Hành khách ICTU',
           passengerPhone: phone.trim() || user?.phoneNumber || undefined,
         })),
-        voucherCode: voucherResult?.code,
-        paymentMethod: paymentMethod === 'ictupay' ? 'cash' : paymentMethod,
+        voucherCode: isMonthlyPassCovered ? undefined : voucherResult?.code,
+        paymentMethod: isMonthlyPassCovered ? 'monthly_pass' : (paymentMethod === 'ictupay' ? 'cash' : paymentMethod),
+        useMonthlyPass: isMonthlyPassCovered,
+        monthlyPassCode: isMonthlyPassCovered ? activeMonthlyPass?.passCode : undefined,
         totalAmount: finalPrice,
         originStation: originName,
         destinationStation: destinationName,
@@ -423,10 +478,10 @@ export function SeatPickerModal({
       setBookingResult(bookingData)
       refreshSeatMap()
 
-      // Nếu phương thức là Tiền mặt tại xe -> Trực tiếp xuất vé thành công và đồng bộ trạng thái PAID
-      if (paymentMethod === 'ictupay') {
+      // Nếu áp dụng Thẻ vé tháng (0 VNĐ) hoặc thanh toán Tiền mặt tại xe -> Trực tiếp hoàn tất và sang step 'success'
+      if (isMonthlyPassCovered || bookingData.isMonthlyPassApplied || finalPrice === 0 || paymentMethod === 'ictupay') {
         const bId = bookingData.id || bookingData.bookingId
-        if (bId) {
+        if (bId && !isMonthlyPassCovered && paymentMethod === 'ictupay') {
           await paymentService.mockConfirmPayment(bId).catch(() => {})
         }
         setStep('success')
@@ -742,6 +797,56 @@ export function SeatPickerModal({
                   )}
                 </div>
 
+                {/* Banner Nhận diện Thẻ vé tháng sinh viên */}
+                {activeMonthlyPass ? (
+                  <div className="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-emerald-50/20 p-3.5 sm:p-4 shadow-sm relative overflow-hidden animate-in fade-in duration-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="size-9 sm:size-10 rounded-xl bg-[#005A36] text-white flex items-center justify-center shrink-0 shadow-md">
+                          <Ticket size={20} className="text-emerald-200" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs sm:text-sm font-black text-emerald-950">
+                              Đã Nhận Diện Thẻ Vé Tháng
+                            </span>
+                            <span className="font-mono text-[11px] font-black px-2 py-0.5 rounded-full bg-[#005A36] text-white shadow-2xs">
+                              {activeMonthlyPass.passCode}
+                            </span>
+                            <span className="text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                              Hạn: {new Date(activeMonthlyPass.endDate).toLocaleDateString('vi-VN')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-emerald-800 mt-1 font-medium">
+                            {activeMonthlyPass.route?.name
+                              ? `Tuyến: ${activeMonthlyPass.route.name}`
+                              : 'Áp dụng liên tuyến toàn mạng xe buýt ICTU'}
+                            . Bạn được miễn phí 100% chi phí giữ chỗ ({selectedSeats.length > 0 ? `${selectedSeats.length} ghế = 0 VNĐ` : '0 VNĐ'}).
+                          </p>
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-1.5 cursor-pointer shrink-0 mt-0.5 bg-white/90 border border-emerald-300 rounded-lg px-2.5 py-1 shadow-2xs hover:bg-emerald-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={useMonthlyPass}
+                          onChange={(e) => setUseMonthlyPass(e.target.checked)}
+                          className="size-4 rounded text-[#005A36] focus:ring-[#005A36] accent-[#005A36] cursor-pointer"
+                        />
+                        <span className="text-xs font-black text-[#005A36]">
+                          Áp dụng
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                ) : !isAuthenticated ? (
+                  <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3 flex items-center justify-between text-xs text-emerald-900">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Ticket size={16} className="text-[#005A36] shrink-0" />
+                      <span>Đã có Thẻ vé tháng sinh viên? Đăng nhập tài khoản để giữ chỗ 0 VNĐ.</span>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Form thông tin hành khách */}
                 <div className="space-y-3 pt-1">
                   <div>
@@ -900,107 +1005,134 @@ export function SeatPickerModal({
                       Phương thức thanh toán
                     </label>
                     <span className="text-xs text-emerald-800 font-extrabold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Tự động giữ chỗ 10 phút
+                      {isMonthlyPassCovered ? 'Thẻ vé tháng sinh viên' : 'Tự động giữ chỗ 10 phút'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('vnpay')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'vnpay'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">VNPAY-QR</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Quét QR ngân hàng</span>
-                    </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('momo')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'momo'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">Ví MoMo</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Thanh toán 1s</span>
-                    </button>
+                  {isMonthlyPassCovered ? (
+                    <div className="rounded-2xl border-2 border-emerald-500/80 bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50/30 p-3.5 flex items-center justify-between shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="size-9 rounded-xl bg-[#005A36] text-white flex items-center justify-center font-bold shadow-xs">
+                          <Ticket size={18} className="text-emerald-200" />
+                        </div>
+                        <div>
+                          <div className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2">
+                            <span>Thẻ vé tháng ({activeMonthlyPass?.passCode})</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-700 text-white font-extrabold">
+                              Miễn phí 100%
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                            Bảo lãnh chi phí giữ chỗ · Xuất vé QR tức thì không cần chuyển khoản
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-[#005A36] bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-lg shrink-0">
+                        0 VNĐ
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('vnpay')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'vnpay'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">VNPAY-QR</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Quét QR ngân hàng</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('zalopay')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'zalopay'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">ZaloPay</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Mở app / Quét QR</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('momo')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'momo'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">Ví MoMo</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Thanh toán 1s</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('bank_card')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'bank_card'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">Thẻ ATM/Visa</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Nội địa & Quốc tế</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('zalopay')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'zalopay'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">ZaloPay</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Mở app / Quét QR</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('vietqr')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'vietqr'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">VietQR</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Chuyển khoản 24/7</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('bank_card')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'bank_card'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">Thẻ ATM/Visa</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Nội địa & Quốc tế</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('ictupay')}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
-                        paymentMethod === 'ictupay'
-                          ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="text-xs sm:text-sm font-extrabold block">Tiền mặt</span>
-                      <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Tại cửa xe buýt</span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('vietqr')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'vietqr'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">VietQR</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Chuyển khoản 24/7</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('ictupay')}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer',
+                          paymentMethod === 'ictupay'
+                            ? 'border-[#005A36] bg-emerald-50/70 text-[#005A36] font-black ring-2 ring-[#005A36]/15'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        <span className="text-xs sm:text-sm font-extrabold block">Tiền mặt</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-0.5">Tại cửa xe buýt</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Voucher / Khuyến mãi */}
-                <div className="pt-1">
-                  <VoucherInput
-                    orderAmount={totalPrice}
-                    onApplied={setVoucherResult}
-                    disabled={selectedSeats.length === 0 || isSubmitting}
-                    initialCode={initialVoucherCode}
-                    routeId={selectedTrip?.routeId}
-                    serviceType="single_ticket"
-                  />
-                </div>
+                {!isMonthlyPassCovered && (
+                  <div className="pt-1">
+                    <VoucherInput
+                      orderAmount={totalPrice}
+                      onApplied={setVoucherResult}
+                      disabled={selectedSeats.length === 0 || isSubmitting}
+                      initialCode={initialVoucherCode}
+                      routeId={selectedTrip?.routeId}
+                      serviceType="single_ticket"
+                    />
+                  </div>
+                )}
 
                 {/* Bảng tính chi phí */}
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 space-y-2 text-xs sm:text-sm">
@@ -1008,17 +1140,29 @@ export function SeatPickerModal({
                     <span>Đơn giá tiêu chuẩn ({selectedSeats.length} vé):</span>
                     <span className="font-mono font-bold">{totalStandardPrice.toLocaleString('vi-VN')}đ</span>
                   </div>
-                  {isStudent && (
-                    <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>Ưu đãi sinh viên ICTU (-50%):</span>
-                      <span className="font-mono font-bold">-{totalSavings.toLocaleString('vi-VN')}đ</span>
+                  {isMonthlyPassCovered ? (
+                    <div className="flex justify-between text-[#005A36] font-extrabold bg-emerald-100/80 p-2.5 rounded-xl border border-emerald-200">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-[#005A36]" />
+                        <span>Áp dụng Thẻ vé tháng ({activeMonthlyPass?.passCode}):</span>
+                      </span>
+                      <span className="font-mono font-black text-[#005A36]">-{totalStandardPrice.toLocaleString('vi-VN')}đ (Miễn phí 100%)</span>
                     </div>
-                  )}
-                  {voucherDiscount > 0 && (
-                    <div className="flex justify-between text-violet-700 font-bold">
-                      <span>Mã giảm giá ({voucherResult?.code}):</span>
-                      <span className="font-mono font-bold">-{voucherDiscount.toLocaleString('vi-VN')}đ</span>
-                    </div>
+                  ) : (
+                    <>
+                      {isStudent && (
+                        <div className="flex justify-between text-emerald-700 font-bold">
+                          <span>Ưu đãi sinh viên ICTU (-50%):</span>
+                          <span className="font-mono font-bold">-{totalSavings.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      )}
+                      {voucherDiscount > 0 && (
+                        <div className="flex justify-between text-violet-700 font-bold">
+                          <span>Mã giảm giá ({voucherResult?.code}):</span>
+                          <span className="font-mono font-bold">-{voucherDiscount.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="border-t border-slate-200/80 pt-2.5 flex justify-between items-center">
                     <span className="font-black text-slate-900 text-sm sm:text-base">Tổng thanh toán:</span>
@@ -1053,6 +1197,11 @@ export function SeatPickerModal({
                     <>
                       <span className="size-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                       <span>Đang xuất vé an toàn...</span>
+                    </>
+                  ) : isMonthlyPassCovered ? (
+                    <>
+                      <Ticket size={18} className="text-emerald-300" />
+                      <span>Xác Nhận Giữ Chỗ Miễn Phí (0đ)</span>
                     </>
                   ) : (
                     <>
@@ -1514,6 +1663,18 @@ export function SeatPickerModal({
                   </strong>{' '}
                   · Hành khách: <strong className="text-slate-800 font-bold">{passengerName}</strong>
                 </div>
+
+                {(bookingResult?.isMonthlyPassApplied || (bookingResult as any)?.appliedMonthlyPassCode || isMonthlyPassCovered) && (
+                  <div className="rounded-xl bg-emerald-100/90 border border-emerald-300 p-2.5 flex items-center justify-between text-xs text-emerald-950 font-bold mt-2">
+                    <span className="flex items-center gap-1.5">
+                      <Ticket size={15} className="text-[#005A36]" />
+                      <span>Được bảo lãnh theo Thẻ vé tháng</span>
+                    </span>
+                    <span className="font-mono bg-[#005A36] text-white px-2 py-0.5 rounded-full text-[11px]">
+                      {bookingResult?.appliedMonthlyPassCode || (bookingResult as any)?.appliedMonthlyPassCode || activeMonthlyPass?.passCode}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Thẻ hướng dẫn địa điểm đón xe & nhà xe vận hành */}
@@ -1729,6 +1890,11 @@ export function SeatPickerModal({
                   <>
                     <span className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                     <span>Đang xuất vé...</span>
+                  </>
+                ) : isMonthlyPassCovered ? (
+                  <>
+                    <Ticket size={15} className="text-emerald-300" />
+                    <span>Giữ chỗ 0đ</span>
                   </>
                 ) : (
                   <>

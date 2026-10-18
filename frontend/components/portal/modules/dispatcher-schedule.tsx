@@ -75,6 +75,7 @@ export function DispatcherSchedule() {
   const [selectedConductorId, setSelectedConductorId] = useState<string>('')
   const [isSubmittingDispatch, setIsSubmittingDispatch] = useState(false)
   const [isNotifyingCrew, setIsNotifyingCrew] = useState<string | null>(null)
+  const [isClosingPastTrips, setIsClosingPastTrips] = useState(false)
   const [recentlyDispatchedTripId, setRecentlyDispatchedTripId] = useState<string | null>(null)
 
   // Hệ thống Toast Notification thay thế triệt để alert
@@ -697,6 +698,28 @@ export function DispatcherSchedule() {
     }
   }
 
+  // Quét & Tự động đóng các chuyến quá hạn / kết thúc theo nghiệp vụ (Admin / Manager)
+  const handleAutoClosePastTrips = async () => {
+    try {
+      setIsClosingPastTrips(true)
+      const res = await tripService.autoClosePastTrips()
+      if (res.success) {
+        const count = (res.data as any)?.closedCount ?? (res as any)?.closedCount ?? 0
+        showToast(
+          res.message || `Đã quét và hoàn tất đóng ${count} chuyến xe quá hạn/kết thúc.`,
+          'success'
+        )
+        await loadTrips()
+      } else {
+        showToast(res.message || 'Không thể đóng các chuyến quá hạn', 'error')
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi khi quét đóng chuyến quá hạn', 'error')
+    } finally {
+      setIsClosingPastTrips(false)
+    }
+  }
+
   // Lọc tìm kiếm phía Client (Tuyến xe, Ngày áp dụng, Trạng thái, Tìm kiếm)
   const filtered = trips.filter((s) => {
     // 1. Lọc theo tuyến đường
@@ -749,6 +772,22 @@ export function DispatcherSchedule() {
   ).length
   const completedCount = trips.filter((t) => t.status === 'completed').length
 
+  // Đếm số chuyến quá hạn cần đóng nếu có
+  const overdueCount = useMemo(() => {
+    const now = new Date()
+    return trips.filter((t) => {
+      if (
+        t.status === 'scheduled' ||
+        t.status === 'in_progress' ||
+        t.status === 'boarding' ||
+        t.status === 'departed'
+      ) {
+        return new Date(t.departureTime) < now
+      }
+      return false
+    }).length
+  }, [trips])
+
   return (
     <div className="flex flex-col gap-6">
       {/* HEADER CHÍNH */}
@@ -799,6 +838,25 @@ export function DispatcherSchedule() {
             >
               <Sparkles size={14} className="shrink-0" />
               <span>Lập Lịch Khung Giờ</span>
+            </button>
+
+            {/* Nút Quét & Đóng Chuyến Quá Hạn (Auto-close Overdue) */}
+            <button
+              onClick={handleAutoClosePastTrips}
+              disabled={isClosingPastTrips || loading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-3.5 py-2 text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Quét và tự động chuyển các chuyến xe quá hạn / hết ngày sang trạng thái Hoàn thành (Completed)"
+            >
+              <CheckCheck
+                size={14}
+                className={isClosingPastTrips ? 'animate-bounce' : 'text-purple-600 dark:text-purple-400'}
+              />
+              <span>{isClosingPastTrips ? 'Đang quét...' : 'Đóng Chuyến Quá Hạn'}</span>
+              {overdueCount > 0 && (
+                <span className="rounded-full bg-purple-600 text-white px-1.5 py-0.2 text-[10px] font-bold">
+                  {overdueCount}
+                </span>
+              )}
             </button>
 
             {/* Nút Refresh */}
@@ -1392,6 +1450,12 @@ export function DispatcherSchedule() {
                         </span>
                       </div>
                     </div>
+                    {item.status === 'completed' && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
+                        <CheckCircle2 size={11} />
+                        Đã kết thúc
+                      </span>
+                    )}
                   </div>
 
                   {/* TÀI NGUYÊN ĐÃ GÁN (XE & TÀI XẾ & PHỤ XE) */}

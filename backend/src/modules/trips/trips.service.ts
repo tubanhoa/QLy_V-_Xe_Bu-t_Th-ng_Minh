@@ -8,6 +8,8 @@ import {
   forwardRef,
   Optional,
   Logger,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, Not } from 'typeorm';
@@ -47,8 +49,87 @@ const SORT_COLUMN_MAP: Record<string, string> = {
 };
 
 @Injectable()
-export class TripsService {
+export class TripsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TripsService.name);
+  private autoCloseInterval: NodeJS.Timeout | null = null;
+
+  async onModuleInit() {
+    // Tự động quét và hoàn thành các chuyến xe quá hạn ngay khi khởi động backend
+    await this.autoCloseCompletedTrips().catch(() => {});
+
+    // Định kỳ quét tự động mỗi 60 giây để đóng các chuyến xe khi đến bến cuối hoặc hết ngày
+    this.autoCloseInterval = setInterval(() => {
+      this.autoCloseCompletedTrips().catch(() => {});
+    }, 60000);
+  }
+
+  onModuleDestroy() {
+    if (this.autoCloseInterval) {
+      clearInterval(this.autoCloseInterval);
+      this.autoCloseInterval = null;
+    }
+  }
+
+  /**
+   * Tự động hoàn thành các chuyến xe đã kết thúc lộ trình hoặc trước ngày hôm nay
+   * Nghiệp vụ: Chuyến xe chỉ được phép chạy trong ngày, hết 1 ngày là chuyến xe phải đến bến cuối
+   * và tự động cập nhật trạng thái hoàn thành (COMPLETED).
+   */
+  async autoCloseCompletedTrips(): Promise<number> {
+    try {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+      const overdueTrips = await this.tripRepository
+        .createQueryBuilder('trip')
+        .where('trip.status NOT IN (:...finishedStatuses)', {
+          finishedStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
+        })
+        .andWhere('(trip.arrivalTime <= :now OR trip.departureTime < :startOfToday)', {
+          now,
+          startOfToday,
+        })
+        .getMany();
+
+      if (overdueTrips.length === 0) return 0;
+
+      const tripIds = overdueTrips.map((t) => t.id);
+
+      await this.tripRepository
+        .createQueryBuilder()
+        .update(TripEntity)
+        .set({
+          status: TripStatus.COMPLETED,
+          actualDeparture: () => 'COALESCE(actual_departure, departure_time)',
+          actualArrival: () => 'COALESCE(actual_arrival, arrival_time, departure_time + interval \'35 minutes\')',
+        })
+        .where('id IN (:...tripIds)', { tripIds })
+        .execute();
+
+      // Hết hạn các vé giữ chỗ chưa thanh toán (status = 'reserved') của các chuyến xe đã hoàn thành
+      if (this.ticketRepository) {
+        await this.ticketRepository
+          .createQueryBuilder()
+          .update(TicketEntity)
+          .set({ status: TicketStatus.EXPIRED })
+          .where('status = :status', { status: TicketStatus.RESERVED })
+          .andWhere(
+            'bookingId IN (SELECT b.id FROM bookings b WHERE b.trip_id IN (:...tripIds))',
+            { tripIds },
+          )
+          .execute()
+          .catch(() => {});
+      }
+
+      this.logger.log(
+        `[AutoCloseTrips] Đã tự động cập nhật trạng thái COMPLETED cho ${tripIds.length} chuyến xe đã kết thúc hành trình.`,
+      );
+      return tripIds.length;
+    } catch (error) {
+      this.logger.error('[AutoCloseTrips] Lỗi khi tự động đóng chuyến xe:', error);
+      return 0;
+    }
+  }
 
   constructor(
     @InjectRepository(TripEntity)
@@ -87,11 +168,19 @@ export class TripsService {
     private readonly activityLogRepository?: Repository<ActivityLogEntity>,
   ) {}
 
+  // Bộ nhớ đệm kiểm soát chống quẹt thẻ vé tháng liên tục (Anti-Passback: 15 phút trên cùng chuyến xe)
+  private readonly recentMonthlyPassCheckIns = new Map<
+    string,
+    { tripId?: string; timestamp: number; conductorId?: string; passengerName?: string }
+  >();
+
   /**
    * GET /api/v1/trips — Danh sách chuyến xe cho Admin/Manager
    * Hỗ trợ filter (date, routeId, status, excludeDeparted), pagination, sort
    */
   async findAll(query: ListTripsQueryDto) {
+    // Đảm bảo dữ liệu chuyến xe hiển thị cho Admin luôn cập nhật tự động các chuyến đã kết thúc
+    await this.autoCloseCompletedTrips().catch(() => {});
     const {
       date,
       routeId,
@@ -1458,6 +1547,64 @@ export class TripsService {
           };
         }
 
+        // KIỂM TRA CHỐNG QUẸT THẺ LIÊN TỤC (ANTI-PASSBACK: 15 PHÚT TRÊN CÙNG CHUYẾN XE)
+        const now = Date.now();
+        const ANTI_PASSBACK_WINDOW_MS = 15 * 60 * 1000;
+        const lastCheckIn = this.recentMonthlyPassCheckIns.get(monthlyPass.passCode);
+
+        if (
+          lastCheckIn &&
+          (!currentTrip || !lastCheckIn.tripId || lastCheckIn.tripId === currentTrip.id) &&
+          now - lastCheckIn.timestamp < ANTI_PASSBACK_WINDOW_MS
+        ) {
+          const elapsedMinutes = Math.max(1, Math.round((now - lastCheckIn.timestamp) / 60000));
+          return {
+            valid: false,
+            success: false,
+            alreadyCheckedIn: true,
+            isAntiPassback: true,
+            isMonthlyPass: true,
+            message: `CẢNH BÁO: Thẻ vé tháng ${monthlyPass.passCode} vừa được quẹt lên xe ${elapsedMinutes} phút trước! Nghi vấn hành khách quẹt thẻ hộ (Anti-Passback).`,
+            passenger: monthlyPass.user?.fullName || 'Hành khách vé tháng',
+            seat: 'Ghế tự do (Vé tháng HSSV)',
+            ticketCode: monthlyPass.passCode,
+            bookingCode: `PASS-${monthlyPass.passCode}`,
+            checkedInAt: new Date(lastCheckIn.timestamp).toISOString(),
+            checkedInBy: lastCheckIn.conductorId || 'DRIVER',
+          };
+        }
+
+        // Ghi nhận lần check-in hợp lệ vào bộ nhớ Anti-Passback
+        this.recentMonthlyPassCheckIns.set(monthlyPass.passCode, {
+          tripId: currentTrip?.id,
+          timestamp: now,
+          conductorId: conductorId || 'DRIVER',
+          passengerName: monthlyPass.user?.fullName || 'Hành khách vé tháng',
+        });
+
+        // Ghi nhận lịch sử kiểm toán vào CSDL Activity Log
+        if (this.activityLogRepository) {
+          this.activityLogRepository
+            .save(
+              this.activityLogRepository.create({
+                userId: monthlyPass.userId,
+                action: 'MONTHLY_PASS_CHECK_IN',
+                resourceName: 'monthly_pass',
+                resourceId: monthlyPass.passCode,
+                endpoint: `/trips/${dto.tripId || 'scan'}/validate-ticket`,
+                method: 'POST',
+                status: 'SUCCESS',
+                changes: {
+                  tripId: currentTrip?.id,
+                  routeName: monthlyPass.route?.name || currentTrip?.route?.name || 'Liên tuyến toàn mạng ICTU',
+                  passengerName: monthlyPass.user?.fullName,
+                  category: monthlyPass.category,
+                },
+              }),
+            )
+            .catch(() => {});
+        }
+
         // Thẻ vé tháng hợp lệ
         return {
           valid: true,
@@ -1512,6 +1659,39 @@ export class TripsService {
             `Thẻ vé tháng ${fallbackPass.passCode} chưa được duyệt (Trạng thái: ${fallbackPass.approvalStatus})`,
           );
         }
+        const now = Date.now();
+        const ANTI_PASSBACK_WINDOW_MS = 15 * 60 * 1000;
+        const lastCheckIn = this.recentMonthlyPassCheckIns.get(fallbackPass.passCode);
+
+        if (
+          lastCheckIn &&
+          (!currentTrip || !lastCheckIn.tripId || lastCheckIn.tripId === currentTrip.id) &&
+          now - lastCheckIn.timestamp < ANTI_PASSBACK_WINDOW_MS
+        ) {
+          const elapsedMinutes = Math.max(1, Math.round((now - lastCheckIn.timestamp) / 60000));
+          return {
+            valid: false,
+            success: false,
+            alreadyCheckedIn: true,
+            isAntiPassback: true,
+            isMonthlyPass: true,
+            message: `CẢNH BÁO: Thẻ vé tháng ${fallbackPass.passCode} vừa được quẹt lên xe ${elapsedMinutes} phút trước! Nghi vấn hành khách quẹt thẻ hộ (Anti-Passback).`,
+            passenger: fallbackPass.user?.fullName || 'Hành khách vé tháng',
+            seat: 'Ghế tự do (Vé tháng HSSV)',
+            ticketCode: fallbackPass.passCode,
+            bookingCode: `PASS-${fallbackPass.passCode}`,
+            checkedInAt: new Date(lastCheckIn.timestamp).toISOString(),
+            checkedInBy: lastCheckIn.conductorId || 'DRIVER',
+          };
+        }
+
+        this.recentMonthlyPassCheckIns.set(fallbackPass.passCode, {
+          tripId: currentTrip?.id,
+          timestamp: now,
+          conductorId: conductorId || 'DRIVER',
+          passengerName: fallbackPass.user?.fullName || 'Hành khách vé tháng',
+        });
+
         return {
           valid: true,
           success: true,

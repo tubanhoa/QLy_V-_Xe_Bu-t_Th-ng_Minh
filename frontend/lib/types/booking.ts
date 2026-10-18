@@ -67,6 +67,8 @@ export interface CreateBookingPayload {
   routeCode?: string
   routeName?: string
   vehiclePlate?: string
+  useMonthlyPass?: boolean
+  monthlyPassCode?: string
 }
 
 export interface TicketResultItem {
@@ -103,4 +105,6 @@ export interface BookingResultData {
   qrCodeUrl?: string
   qrDataUrl?: string
   message?: string
+  isMonthlyPassApplied?: boolean
+  appliedMonthlyPassCode?: string
 }

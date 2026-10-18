@@ -19,6 +19,7 @@ import { ApiTags, ApiOperation, ApiConsumes, ApiBearerAuth } from '@nestjs/swagg
 import { validateProofImage, saveUploadedFileLocally } from '../../common/utils/file-upload.util.js';
 import { UploadStudentCardDto } from './dto/upload.dto.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 
 interface UploadedMulterFile {
   buffer: Buffer;
@@ -30,7 +31,8 @@ interface UploadedMulterFile {
 @ApiTags('Uploads & Verification')
 @Controller()
 export class UploadController {
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
   @Post(['upload/student-card', 'users/upload-student-card', 'monthly-passes/upload-proof', 'priority-verifications/upload-proof', 'upload/feedback-proof', 'feedback/upload-proof'])
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
