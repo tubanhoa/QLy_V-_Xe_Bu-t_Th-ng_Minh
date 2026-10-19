@@ -52,6 +52,8 @@ export interface SendInvoiceEmailParams {
   departureTime?: Date | string;
   seatNumber?: string;
   vehiclePlate?: string;
+  driverName?: string;
+  driverPhone?: string;
   paymentMethod?: string;
 }
 
@@ -66,6 +68,8 @@ export interface SendTicketEmailParams {
   departureTime: Date | string;
   seatNumber: string;
   vehiclePlate?: string;
+  driverName?: string;
+  driverPhone?: string;
   price: number;
   qrDataUrl: string;
 }
@@ -335,9 +339,17 @@ export class NotificationService {
                 </tr>
                 ${params.vehiclePlate ? `
                 <tr>
-                  <td class="ticket-label">Biển số xe:</td>
-                  <td class="ticket-value">${params.vehiclePlate}</td>
-                </tr>` : ''}
+                  <td class="ticket-label">Xe buýt (Biển số):</td>
+                  <td class="ticket-value" style="font-weight: 700;">${params.vehiclePlate}</td>
+                </tr>` : `
+                <tr>
+                  <td class="ticket-label">Phương tiện:</td>
+                  <td class="ticket-value">Xe buýt ICTU Transit</td>
+                </tr>`}
+                <tr>
+                  <td class="ticket-label">Tài xế phụ trách:</td>
+                  <td class="ticket-value" style="color: #005A36; font-weight: 700;">${params.driverName || 'Tài xế SmartBus ICTU'}</td>
+                </tr>
                 <tr class="ticket-divider">
                   <td class="ticket-label" style="padding-top: 12px; font-weight: 700; color: #0f172a;">Giá vé đã thanh toán:</td>
                   <td class="ticket-value" style="padding-top: 12px; color: #16a34a; font-size: 17px; font-weight: 800;">${formattedPrice} VND</td>
@@ -347,17 +359,17 @@ export class NotificationService {
 
             <!-- Khối Mã QR Soát Vé Khi Lên Xe -->
             <div class="qr-section">
-              <div class="qr-title">MÃ QR SOÁT VÉ TỰ ĐỘNG</div>
-              <div class="qr-img-box">
-                <img class="qr-image" src="${qrImgSrc}" alt="Mã QR Vé Xe ${params.ticketCode}" width="210" height="210" />
+              <div class="qr-title">MÃ QR SOÁT VÉ TỰ ĐỘNG (WEBCAM / SCANNER)</div>
+              <div class="qr-img-box" style="background: #ffffff; padding: 14px; border-radius: 12px; border: 2px solid #059669; display: inline-block;">
+                <img class="qr-image" src="${qrImgSrc}" alt="Mã QR Vé Xe ${params.ticketCode}" width="220" height="220" style="display: block; margin: 0 auto; width: 220px; height: 220px;" />
               </div>
               <div class="qr-code-display">
                 MÃ VÉ: <span>${params.ticketCode}</span>
               </div>
               <div class="qr-instruction">
-                <strong>HƯỚNG DẪN LÊN XE:</strong><br/>
-                1. Xuất trình mã QR này trên điện thoại cho tài xế hoặc phụ xe khi bước lên xe để thực hiện quét mã tự động.<br/>
-                2. Nếu thiết bị không quét được mã QR, quý khách vui lòng đọc <strong>Mã vé: ${params.ticketCode}</strong> để nhân viên đối soát thủ công trên hệ thống.
+                <strong>HƯỚNG DẪN SOÁT VÉ XÁC NHẬN LÊN XE:</strong><br/>
+                1. Mở email này trên điện thoại và đưa mã QR đối diện Webcam của máy tính tài xế để hệ thống nhận diện tự động.<br/>
+                2. Nếu camera khó bắt nét hoặc màn hình chói, quý khách vui lòng đọc <strong>Mã vé: ${params.ticketCode}</strong> để tài xế xác nhận thủ công trên hệ thống.
               </div>
             </div>
           </div>
@@ -1021,11 +1033,14 @@ export class NotificationService {
                   <td class="t-lbl">Vị trí ghế:</td>
                   <td class="t-val"><span class="seat-pill">${seatNumber}</span></td>
                 </tr>
-                ${params.vehiclePlate ? `
                 <tr>
-                  <td class="t-lbl">Xe buýt:</td>
-                  <td class="t-val">${params.vehiclePlate}</td>
-                </tr>` : ''}
+                  <td class="t-lbl">Xe buýt (Biển số):</td>
+                  <td class="t-val" style="font-weight: 700;">${params.vehiclePlate || 'Xe buýt ICTU'}</td>
+                </tr>
+                <tr>
+                  <td class="t-lbl">Tài xế phụ trách:</td>
+                  <td class="t-val" style="color: #005A36; font-weight: 700;">${params.driverName || 'Tài xế SmartBus ICTU'}</td>
+                </tr>
                 <tr>
                   <td class="t-lbl">Hành khách:</td>
                   <td class="t-val">${passengerName}</td>

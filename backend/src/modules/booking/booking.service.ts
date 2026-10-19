@@ -117,6 +117,7 @@ export class BookingService {
       .createQueryBuilder('trip')
       .innerJoinAndSelect('trip.route', 'route')
       .leftJoinAndSelect('trip.vehicle', 'vehicle')
+      .leftJoinAndSelect('trip.driver', 'driver')
       .where('trip.departureTime BETWEEN :start AND :end', {
         start: startOfDay,
         end: endOfDay,
@@ -221,6 +222,11 @@ export class BookingService {
         availableSeats,
         vehiclePlate: trip.vehicle?.licensePlate,
         vehicleType: trip.vehicle?.vehicleType,
+        driverName: trip.driver?.fullName || 'Tài xế SmartBus ICTU',
+        driverPhone: trip.driver?.phoneNumber,
+        driver: trip.driver
+          ? { id: trip.driver.id, fullName: trip.driver.fullName, phoneNumber: trip.driver.phoneNumber }
+          : undefined,
         createdAt: trip.createdAt,
         routeCreatedAt: trip.route?.createdAt,
         isAdhoc,
@@ -391,7 +397,7 @@ export class BookingService {
 
     const trip = await this.tripRepository.findOne({
       where: { id: dto.tripId },
-      relations: { route: true, vehicle: true },
+      relations: { route: true, vehicle: true, driver: true },
     });
 
     if (!trip) {
@@ -684,12 +690,13 @@ export class BookingService {
       await this.seatLockService.releaseSeats(dto.tripId, seatIds, userId);
 
       // Gửi email xác nhận vé điện tử tới hành khách khi được miễn phí bằng Thẻ vé tháng
-      if (isMonthlyPassApplied && this.notificationService && user.email) {
+      const targetEmail = dto.passengerEmail?.trim() || dto.invoiceEmail?.trim() || user.email;
+      if (isMonthlyPassApplied && this.notificationService && targetEmail) {
         for (const t of savedTickets) {
           generateQrDataUrl(t.qrData)
             .then((qrDataUrl) => {
               return this.notificationService!.sendTicketConfirmationEmail({
-                recipientEmail: user.email,
+                recipientEmail: targetEmail,
                 passengerName: t.passengerName || user.fullName,
                 bookingCode: savedBooking.bookingCode,
                 ticketCode: t.ticketCode,
@@ -699,6 +706,8 @@ export class BookingService {
                 departureTime: trip.departureTime || new Date(),
                 seatNumber: seatMap.get(t.seatId)?.seatNumber || 'Ghế tiêu chuẩn',
                 vehiclePlate: trip.vehicle?.licensePlate,
+                driverName: trip.driver?.fullName || 'Tài xế SmartBus ICTU',
+                driverPhone: trip.driver?.phoneNumber,
                 price: 0,
                 qrDataUrl,
               });
@@ -1101,7 +1110,7 @@ export class BookingService {
     const relations = {
       booking: {
         user: true,
-        trip: { route: true, vehicle: true },
+        trip: { route: true, vehicle: true, driver: true },
       },
       seat: true,
     };
@@ -1159,6 +1168,8 @@ export class BookingService {
         departureTime: ticket.booking?.trip?.departureTime || new Date(),
         seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
         vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+        driverName: ticket.booking?.trip?.driver?.fullName || 'Tài xế SmartBus ICTU',
+        driverPhone: ticket.booking?.trip?.driver?.phoneNumber,
         price: ticket.originalPrice,
         qrDataUrl,
       });
@@ -1186,7 +1197,7 @@ export class BookingService {
     const ticketRelations = {
       booking: {
         user: true,
-        trip: { route: true, vehicle: true },
+        trip: { route: true, vehicle: true, driver: true },
       },
       seat: true,
     };
@@ -1211,7 +1222,7 @@ export class BookingService {
     if (!ticket) {
       const bookingRelations = {
         user: true,
-        trip: { route: true, vehicle: true },
+        trip: { route: true, vehicle: true, driver: true },
         tickets: { seat: true },
       };
 
@@ -1266,6 +1277,8 @@ export class BookingService {
         departureTime: ticket.booking?.trip?.departureTime || new Date(),
         seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
         vehiclePlate: ticket.booking?.trip?.vehicle?.licensePlate,
+        driverName: ticket.booking?.trip?.driver?.fullName || 'Tài xế SmartBus ICTU',
+        driverPhone: ticket.booking?.trip?.driver?.phoneNumber,
         price: ticket.originalPrice,
         qrDataUrl,
       });

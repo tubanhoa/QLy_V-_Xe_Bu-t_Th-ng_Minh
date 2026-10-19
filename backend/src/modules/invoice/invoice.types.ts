@@ -39,6 +39,7 @@ export interface InvoiceData {
   destination?: string;
   departureTime: Date;
   vehiclePlate?: string;
+  driverName?: string;
   paymentMethod: string;
   paymentTransactionId: string;
   items: InvoiceItem[];

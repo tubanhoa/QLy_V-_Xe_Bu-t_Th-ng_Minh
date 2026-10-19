@@ -106,6 +106,9 @@ export interface TripSearchResult {
   availableSeats: number
   vehiclePlate: string
   vehicleType?: string
+  driverName?: string
+  driverPhone?: string
+  driver?: { id?: string; fullName?: string; phoneNumber?: string } | any
   createdAt?: string
   routeCreatedAt?: string
   isAdhoc?: boolean

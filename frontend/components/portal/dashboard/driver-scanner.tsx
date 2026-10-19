@@ -220,26 +220,39 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
 
   // Xử lý xác thực mã vé QR / mã vé điện tử từ API Backend
   const handleVerifyTicketCode = async (rawCode: string) => {
-    const code = rawCode.trim().toUpperCase()
-    if (!code) return
+    const trimmedInput = rawCode.trim()
+    if (!trimmedInput) return
+
+    // Nếu là chuỗi JSON (từ camera webcam quét mã QR), giữ nguyên case để bảo vệ chữ ký HMAC và định dạng JSON
+    // Nếu là mã vé gõ tay (nhập trực tiếp như TKT-xxx), chuẩn hóa toUpperCase()
+    const code = trimmedInput.startsWith('{') ? trimmedInput : trimmedInput.toUpperCase()
+
+    // Khóa định danh vé dùng cho bộ nhớ đệm chống quét lặp
+    let historyKey = code
+    if (trimmedInput.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmedInput)
+        historyKey = (parsed.ticketCode || parsed.passCode || parsed.bookingCode || trimmedInput).toUpperCase()
+      } catch {}
+    }
 
     setIsVerifying(true)
     const nowStr = new Date().toLocaleTimeString('vi-VN')
 
     // 1. Kiểm tra lặp cục bộ trên máy tài xế
-    if (checkedInHistory[code]) {
-      const existing = checkedInHistory[code]
+    if (checkedInHistory[historyKey]) {
+      const existing = checkedInHistory[historyKey]
       const newCount = existing.count + 1
       setCheckedInHistory((prev) => ({
         ...prev,
-        [code]: { ...existing, count: newCount },
+        [historyKey]: { ...existing, count: newCount },
       }))
 
       if (soundEnabled) driverHardware.playCue('ticketDuplicate')
 
       setScanResult({
         status: 'duplicate',
-        ticketCode: code,
+        ticketCode: historyKey,
         passengerName: existing.passengerName,
         seatNumber: existing.seatNumber,
         firstScannedAt: existing.scannedAt,
@@ -262,9 +275,11 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
         res.data.ticket?.seatNumber ||
         (res.data.isMonthlyPass ? 'Ghế tự do (Vé tháng HSSV)' : 'Ghế tiêu chuẩn')
 
+      const finalTicketCode = res.data.ticketCode || historyKey
+
       setCheckedInHistory((prev) => ({
         ...prev,
-        [code]: { scannedAt: nowStr, passengerName: passenger, seatNumber: seat, count: 1 },
+        [historyKey]: { scannedAt: nowStr, passengerName: passenger, seatNumber: seat, count: 1 },
       }))
 
       if (soundEnabled) driverHardware.playCue('ticketSuccess')
@@ -272,7 +287,7 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
       setScanResult({
         status: 'valid',
         passengerName: passenger,
-        ticketCode: res.data.ticketCode || code,
+        ticketCode: finalTicketCode,
         bookingCode: res.data.bookingCode,
         seatNumber: seat,
         route: tripData

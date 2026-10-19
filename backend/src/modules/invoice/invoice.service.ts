@@ -68,7 +68,7 @@ export class InvoiceService {
       where: { paymentId },
       relations: {
         payment: true,
-        booking: { user: true, trip: { route: true, vehicle: true } },
+        booking: { user: true, trip: { route: true, vehicle: true, driver: true } },
       },
     });
 
@@ -85,6 +85,7 @@ export class InvoiceService {
           trip: {
             route: true,
             vehicle: true,
+            driver: true,
           },
         },
       },
@@ -123,7 +124,7 @@ export class InvoiceService {
     // Xây dựng thông tin Người mua
     const buyer: InvoiceBuyer = {
       fullName: booking.user?.fullName || tickets[0]?.passengerName || 'Hành khách SmartBus',
-      email: booking.user?.email || 'khachhang@smartbus.ictu.edu.vn',
+      email: (payment.paymentDetails as any)?.invoiceEmail || booking.user?.email || 'khachhang@smartbus.ictu.edu.vn',
       phone: booking.user?.phoneNumber || tickets[0]?.passengerPhone || undefined,
       studentId: (booking.user as any)?.studentId || undefined,
       faculty: (booking.user as any)?.faculty || undefined,
@@ -186,6 +187,7 @@ export class InvoiceService {
       destination: booking.trip?.route?.destination,
       departureTime: booking.trip?.departureTime || now,
       vehiclePlate: booking.trip?.vehicle?.licensePlate,
+      driverName: booking.trip?.driver?.fullName || 'Tài xế SmartBus ICTU',
       paymentMethod: payment.paymentMethod || 'Online Gateway',
       paymentTransactionId: payment.transactionId || 'TXN-DIRECT',
       items,
@@ -300,6 +302,7 @@ export class InvoiceService {
             destination: invData?.destination,
             departureTime: invData?.departureTime,
             vehiclePlate: invData?.vehiclePlate,
+            driverName: invData?.driverName || (invoice.booking?.trip as any)?.driver?.fullName || 'Tài xế SmartBus ICTU',
             paymentMethod: invData?.paymentMethod,
           });
           this.logger.log(`[InvoiceQueue] Tác vụ gửi hóa đơn ${invoice.invoiceNumber} qua email ${recipientEmail}: ${sent ? 'Thành công' : 'Đã lưu log'}`);
