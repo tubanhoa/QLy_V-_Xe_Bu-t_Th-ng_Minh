@@ -1288,13 +1288,27 @@ export class BookingService {
     const departureTime = new Date(trip.departureTime).getTime();
     const now = Date.now();
     const diffHours = (departureTime - now) / (1000 * 60 * 60);
+    const diffMinutes = Math.round((departureTime - now) / (1000 * 60));
     const originalPrice = Number(ticket.originalPrice) || 0;
 
+    // Định dạng thời gian trước giờ xe chạy thân thiện (VD: "12 phút", "1 giờ 30 phút")
+    let formattedTimeUntilDeparture = '';
+    if (diffMinutes <= 0) {
+      formattedTimeUntilDeparture = 'Xe đã xuất bến';
+    } else if (diffMinutes < 60) {
+      formattedTimeUntilDeparture = `${diffMinutes} phút`;
+    } else {
+      const h = Math.floor(diffMinutes / 60);
+      const m = diffMinutes % 60;
+      formattedTimeUntilDeparture = m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
+    }
+
     const policyRules = [
-      { condition: 'Trước giờ khởi hành >= 24h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
-      { condition: 'Trước giờ khởi hành từ 12h đến 24h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
-      { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
-      { condition: 'Trước giờ khởi hành < 2h hoặc đã chạy', canCancel: false, canExchange: false, refundPercent: 0 },
+      { condition: 'Trong vòng 30 phút sau khi đặt vé', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
+      { condition: 'Trước giờ khởi hành >= 12h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
+      { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
+      { condition: 'Trước giờ khởi hành từ 15 phút đến 2h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
+      { condition: 'Trước giờ khởi hành < 15 phút hoặc đã chạy', canCancel: false, canExchange: false, refundPercent: 0 },
     ];
 
     if (ticket.status === TicketStatus.CANCELLED) {
@@ -1302,6 +1316,7 @@ export class BookingService {
         canCancel: false,
         canExchange: false,
         hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        formattedTimeUntilDeparture,
         originalPrice,
         cancellationFeePercent: 0,
         cancellationFeeAmount: 0,
@@ -1318,6 +1333,7 @@ export class BookingService {
         canCancel: false,
         canExchange: false,
         hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        formattedTimeUntilDeparture,
         originalPrice,
         cancellationFeePercent: 0,
         cancellationFeeAmount: 0,
@@ -1334,6 +1350,7 @@ export class BookingService {
         canCancel: false,
         canExchange: false,
         hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        formattedTimeUntilDeparture,
         originalPrice,
         cancellationFeePercent: 0,
         cancellationFeeAmount: 0,
@@ -1350,6 +1367,7 @@ export class BookingService {
         canCancel: false,
         canExchange: false,
         hoursUntilDeparture: 0,
+        formattedTimeUntilDeparture: 'Chuyến xe đã kết thúc',
         originalPrice,
         cancellationFeePercent: 0,
         cancellationFeeAmount: 0,
@@ -1361,18 +1379,45 @@ export class BookingService {
       };
     }
 
-    if (diffHours < 2) {
+    // 1. Chính sách Hủy linh hoạt trong 30 phút sau khi đặt vé (Hỗ trợ demo và sinh viên đổi ý): Miễn 100% phí hủy
+    const ticketCreatedAt = ticket.createdAt
+      ? new Date(ticket.createdAt).getTime()
+      : (ticket.booking?.bookingTime ? new Date(ticket.booking.bookingTime).getTime() : 0);
+    const isWithinGracePeriod = ticketCreatedAt > 0 && (now - ticketCreatedAt) <= 30 * 60 * 1000;
+
+    if (isWithinGracePeriod) {
+      return {
+        canCancel: true,
+        canExchange: true,
+        hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        formattedTimeUntilDeparture,
+        originalPrice,
+        cancellationFeePercent: 0,
+        cancellationFeeAmount: 0,
+        refundAmount: originalPrice,
+        exchangeFeePercent: 0,
+        exchangeFeeAmount: 0,
+        reason: 'Đủ điều kiện hoàn 100% tiền vé theo chính sách hủy linh hoạt trong 30 phút sau khi đặt vé',
+        policyRules,
+      };
+    }
+
+    // 2. Chốt hủy vé tối thiểu 15 phút trước giờ xuất bến (0.25 giờ)
+    if (diffHours < 0.25) {
       return {
         canCancel: false,
         canExchange: false,
         hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+        formattedTimeUntilDeparture,
         originalPrice,
         cancellationFeePercent: 100,
         cancellationFeeAmount: originalPrice,
         refundAmount: 0,
         exchangeFeePercent: 100,
         exchangeFeeAmount: originalPrice,
-        reason: 'Chỉ được hủy hoặc đổi vé trước giờ khởi hành tối thiểu 2 tiếng theo quy định',
+        reason: diffMinutes <= 0
+          ? 'Chuyến xe đã khởi hành, không thể hủy vé'
+          : `Không thể hủy vé trước giờ khởi hành dưới 15 phút (chỉ còn ${diffMinutes} phút nữa xe chạy)`,
         policyRules,
       };
     }
@@ -1380,10 +1425,10 @@ export class BookingService {
     let cancellationFeePercent = 0;
     let exchangeFeePercent = 0;
 
-    if (diffHours >= 24) {
+    if (diffHours >= 12) {
       cancellationFeePercent = 0;
       exchangeFeePercent = 0;
-    } else if (diffHours >= 12) {
+    } else if (diffHours >= 2) {
       cancellationFeePercent = 10;
       exchangeFeePercent = 5;
     } else {
@@ -1399,6 +1444,7 @@ export class BookingService {
       canCancel: true,
       canExchange: true,
       hoursUntilDeparture: Math.max(0, Number(diffHours.toFixed(1))),
+      formattedTimeUntilDeparture,
       originalPrice,
       cancellationFeePercent,
       cancellationFeeAmount,

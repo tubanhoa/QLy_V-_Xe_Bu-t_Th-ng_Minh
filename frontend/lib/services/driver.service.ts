@@ -40,6 +40,11 @@ export interface DriverTripItem {
     capacity: number
     status?: string
   }
+  driver?: {
+    id: string
+    fullName?: string
+    phoneNumber?: string
+  }
 }
 
 export interface ManifestPassenger {
@@ -70,7 +75,40 @@ export interface VerifyQrResponse {
   passenger?: string
   seat?: string
   ticketCode?: string
+  bookingCode?: string
+  status?: string
   checkedInAt?: string
+  trip?: {
+    tripId?: string
+    routeCode?: string
+    routeName: string
+    origin?: string
+    destination?: string
+    departureTime?: string
+    vehiclePlate?: string
+    driverName?: string
+    pickupStation?: string
+    dropoffStation?: string
+  }
+  bookedTrip?: {
+    tripId?: string
+    routeCode?: string
+    routeName: string
+    origin?: string
+    destination?: string
+    departureTime?: string
+    vehiclePlate?: string
+    driverName?: string
+    pickupStation?: string
+    dropoffStation?: string
+  }
+  currentTrip?: {
+    tripId?: string
+    routeCode?: string
+    routeName?: string
+    vehiclePlate?: string
+    driverName?: string
+  }
   correctTrip?: {
     tripId?: string
     routeName: string
@@ -216,7 +254,11 @@ class DriverService {
             passenger: errPayload?.passenger,
             seat: errPayload?.seat,
             ticketCode: errPayload?.ticketCode,
-            correctTrip: errPayload?.correctTrip,
+            bookingCode: errPayload?.bookingCode,
+            bookedTrip: errPayload?.bookedTrip,
+            currentTrip: errPayload?.currentTrip,
+            correctTrip: errPayload?.correctTrip || errPayload?.bookedTrip,
+            trip: errPayload?.trip,
           },
         }
       }

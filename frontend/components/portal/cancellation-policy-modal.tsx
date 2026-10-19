@@ -287,15 +287,18 @@ export function CancellationPolicyModal({
                   <div className="font-extrabold text-xs flex items-center gap-2">
                     <span>Thời gian trước giờ khởi hành:</span>
                     <span className="font-mono text-sm underline font-black">
-                      {policy.hoursUntilDeparture} giờ
+                      {policy.formattedTimeUntilDeparture ||
+                        (policy.hoursUntilDeparture < 1
+                          ? `${Math.max(1, Math.round(policy.hoursUntilDeparture * 60))} phút`
+                          : `${policy.hoursUntilDeparture} giờ`)}
                     </span>
                   </div>
                   <p className="text-[11px] leading-relaxed">
                     {policy.canCancel
                       ? policy.cancellationFeePercent === 0
-                        ? 'Đủ điều kiện hoàn 100% tiền vé (miễn 100% phí hủy do trước giờ chạy ≥ 24 tiếng).'
-                        : `Áp dụng phí hủy vé ${policy.cancellationFeePercent}% theo quy định (do trước giờ chạy từ 2h đến 24h).`
-                      : policy.reason || 'Vé không đủ điều kiện để hủy do trước giờ khởi hành < 2 tiếng hoặc xe đã chạy.'}
+                        ? 'Đủ điều kiện hoàn 100% tiền vé (miễn 100% phí hủy theo chính sách hủy linh hoạt).'
+                        : `Áp dụng phí hủy vé ${policy.cancellationFeePercent}% theo quy định (do trước giờ chạy từ 15 phút đến 12h).`
+                      : policy.reason || 'Vé không đủ điều kiện để hủy do trước giờ khởi hành < 15 phút hoặc xe đã chạy.'}
                   </p>
                 </div>
               </div>

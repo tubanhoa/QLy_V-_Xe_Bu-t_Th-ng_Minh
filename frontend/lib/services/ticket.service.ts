@@ -384,7 +384,19 @@ class TicketService {
       const cached = offlineTicketCache.getTicket(ticketId)
       const depTime = cached?.departureTime ? new Date(cached.departureTime).getTime() : Date.now() + 25 * 3600 * 1000
       const diffHours = Math.max(0, (depTime - Date.now()) / (1000 * 60 * 60))
+      const diffMinutes = Math.round((depTime - Date.now()) / (1000 * 60))
       const originalPrice = Number(cached?.price) || 10000
+
+      let formattedTimeUntilDeparture = ''
+      if (diffMinutes <= 0) {
+        formattedTimeUntilDeparture = 'Xe đã xuất bến'
+      } else if (diffMinutes < 60) {
+        formattedTimeUntilDeparture = `${diffMinutes} phút`
+      } else {
+        const h = Math.floor(diffMinutes / 60)
+        const m = diffMinutes % 60
+        formattedTimeUntilDeparture = m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`
+      }
 
       let cancellationFeePercent = 0
       let exchangeFeePercent = 0
@@ -400,11 +412,17 @@ class TicketService {
         canCancel = false
         canExchange = false
         reason = 'Vé đã ở trạng thái đã hủy (CANCELLED)'
+      } else if (diffHours < 0.25) {
+        canCancel = false
+        canExchange = false
+        reason = diffMinutes <= 0
+          ? 'Chuyến xe đã khởi hành, không thể hủy vé'
+          : `Không thể hủy vé trước giờ khởi hành dưới 15 phút (chỉ còn ${diffMinutes} phút nữa xe chạy)`
       } else {
         canCancel = true
         canExchange = true
-        cancellationFeePercent = 0
-        exchangeFeePercent = 0
+        cancellationFeePercent = diffHours >= 12 ? 0 : diffHours >= 2 ? 10 : 20
+        exchangeFeePercent = diffHours >= 12 ? 0 : 5
       }
 
       const cancellationFeeAmount = Math.round((originalPrice * cancellationFeePercent) / 100)
@@ -423,6 +441,7 @@ class TicketService {
           canCancel,
           canExchange,
           hoursUntilDeparture: Number(diffHours.toFixed(1)),
+          formattedTimeUntilDeparture,
           originalPrice,
           cancellationFeePercent,
           cancellationFeeAmount,
@@ -431,10 +450,11 @@ class TicketService {
           exchangeFeeAmount,
           reason,
           policyRules: [
-            { condition: 'Trước giờ khởi hành >= 24h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
-            { condition: 'Trước giờ khởi hành từ 12h đến 24h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
-            { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
-            { condition: 'Trước giờ khởi hành dưới 2h', cancellationFeePercent: 30, refundPercent: 70, exchangeFeePercent: 15 },
+            { condition: 'Trong vòng 30 phút sau khi đặt vé', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
+            { condition: 'Trước giờ khởi hành >= 12h', cancellationFeePercent: 0, refundPercent: 100, exchangeFeePercent: 0 },
+            { condition: 'Trước giờ khởi hành từ 2h đến 12h', cancellationFeePercent: 10, refundPercent: 90, exchangeFeePercent: 5 },
+            { condition: 'Trước giờ khởi hành từ 15 phút đến 2h', cancellationFeePercent: 20, refundPercent: 80, exchangeFeePercent: 10 },
+            { condition: 'Trước giờ khởi hành < 15 phút', cancellationFeePercent: 100, refundPercent: 0, exchangeFeePercent: 100 },
           ],
         },
       }
