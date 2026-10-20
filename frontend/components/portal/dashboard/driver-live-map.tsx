@@ -391,18 +391,18 @@ export function DriverLiveMap({
                 Bản Đồ GPS Vị Trí Xe Buýt Thời Gian Thực
               </h3>
               <span
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                   sseActive
                     ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
                 }`}
               >
                 <span
                   className={`size-1.5 rounded-full ${
-                    sseActive ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'
+                    sseActive ? 'bg-emerald-500 animate-ping' : 'bg-emerald-500'
                   }`}
                 />
-                {sseActive ? 'Real-time SSE Live' : 'Đang kết nối'}
+                {sseActive ? 'Real-time SSE Live' : 'Định vị GPS Sẵn sàng'}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -418,7 +418,7 @@ export function DriverLiveMap({
             type="button"
             onClick={handleCenterBus}
             title="Định vị tâm xe buýt"
-            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            className={`px-3 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               followBus
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
@@ -433,7 +433,7 @@ export function DriverLiveMap({
             type="button"
             onClick={handleFitRoute}
             title="Xem toàn bộ tuyến đường"
-            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
             <Compass size={14} />
             <span className="hidden sm:inline">Toàn tuyến</span>

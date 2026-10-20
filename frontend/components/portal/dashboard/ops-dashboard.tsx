@@ -283,9 +283,9 @@ export function OpsDashboard({
   return (
     <div className="flex flex-col gap-6">
       {/* Top Header & Security Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 p-4.5 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40">
               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
               LIVE SUPABASE SYNC
@@ -294,6 +294,17 @@ export function OpsDashboard({
               <Clock size={12} />
               Cập nhật: {lastSyncTime.toLocaleTimeString('vi-VN')}
             </span>
+            {driverKpis.pending > 0 && onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('driver-licenses')}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/60 transition-colors cursor-pointer"
+                title="Có hồ sơ bằng lái xe chờ thẩm định"
+              >
+                <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                {driverKpis.pending} GPLX Chờ Thẩm Định →
+              </button>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             {copy.title}
@@ -301,68 +312,47 @@ export function OpsDashboard({
           <p className="mt-0.5 text-xs text-slate-500">{copy.subtitle}</p>
         </div>
 
-        {/* Security & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Nút Chuyển nhanh sang Điều phối & Phân công */}
+        {/* Security & Action Buttons - Dàn ngang cân đối, không rớt dòng */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {onNavigate && (
-            <>
-              <button
-                type="button"
-                onClick={() => onNavigate('schedule')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs"
-                title="Mở Bàn Điều Phối & Lịch Gantt phân công xe, tài xế"
-              >
-                <CalendarDays size={14} />
-                <span>Điều Phối Chuyến Xe</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('driver-licenses')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-xs"
-                title="Khám & Thẩm định hồ sơ bằng lái cho 3 tài xế"
-              >
-                <IdCard size={14} />
-                <span>Thẩm Định GPLX</span>
-                {driverKpis.pending > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-black/20 text-[10px] font-mono">
-                    {driverKpis.pending} chờ
-                  </span>
-                )}
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => onNavigate('schedule')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Mở Bàn Điều Phối & Lịch Gantt phân công xe, tài xế"
+            >
+              <CalendarDays size={14} />
+              <span>Điều Phối Chuyến Xe</span>
+            </button>
           )}
 
-          {/* Nút Làm Mới Realtime */}
           <button
             type="button"
             onClick={() => loadDashboardData()}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
             title="Tải lại số liệu mới nhất từ máy chủ"
           >
             <RefreshCw size={14} className={refreshing ? 'animate-spin text-emerald-600' : ''} />
-            <span>Làm Mới</span>
+            <span className="hidden sm:inline">Làm Mới</span>
           </button>
 
-          {/* Nút Xem Nhật Ký Kiểm Toán (Audit Trail) */}
           <button
             type="button"
             onClick={() => setIsAuditOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all cursor-pointer shadow-xs active:scale-95"
           >
             <ShieldAlert size={14} />
             <span>Audit Trail</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-indigo-200 dark:bg-indigo-800 text-[10px] font-mono">
+            <span className="px-1.5 py-0.2 rounded-full bg-indigo-200 dark:bg-indigo-800 text-[10px] font-mono">
               {data?.recentAuditLogs?.length ?? 0}
             </span>
           </button>
 
-          {/* Nút Khóa Màn Hình Bảo Mật (Session Lock Watchdog) */}
           <button
             type="button"
             onClick={() => setIsSessionLocked(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-all cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-all cursor-pointer shadow-xs active:scale-95"
             title="Khóa bảng điều khiển khi rời khỏi vị trí làm việc"
           >
             <Lock size={13} />
@@ -372,27 +362,27 @@ export function OpsDashboard({
       </div>
 
       {/* THANH ĐIỀU KHIỂN LỌC DOANH THU THEO NGÀY & ĐỐI SOÁT */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mr-1">
             <Calendar size={14} className="text-emerald-500" />
-            Kỳ Báo Cáo Doanh Thu:
+            Kỳ Doanh Thu:
           </span>
           <button
             type="button"
             onClick={() => handlePresetChange('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer active:scale-95 ${
               activePreset === 'all'
                 ? 'bg-emerald-500 text-white shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
-            Toàn Kỳ (Tổng Hợp)
+            Toàn Kỳ
           </button>
           <button
             type="button"
             onClick={() => handlePresetChange('today')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer active:scale-95 ${
               activePreset === 'today'
                 ? 'bg-emerald-500 text-white shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -403,18 +393,18 @@ export function OpsDashboard({
           <button
             type="button"
             onClick={() => handlePresetChange('7days')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer active:scale-95 ${
               activePreset === '7days'
                 ? 'bg-emerald-500 text-white shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
-            7 Ngày Gần Nhất
+            7 Ngày
           </button>
 
           {/* Chọn ngày cụ thể */}
           <div className="flex items-center gap-1.5 pl-2 sm:border-l border-slate-200 dark:border-slate-700">
-            <span className="text-[11px] text-slate-400 font-medium">Chọn ngày:</span>
+            <span className="text-[11px] text-slate-400 font-medium">Ngày:</span>
             <input
               type="date"
               value={customDate}
@@ -428,7 +418,7 @@ export function OpsDashboard({
                 onClick={() => handlePresetChange('all')}
                 className="text-[11px] text-rose-500 hover:underline font-semibold cursor-pointer"
               >
-                Xóa lọc
+                Xóa
               </button>
             )}
           </div>
@@ -439,9 +429,9 @@ export function OpsDashboard({
           <button
             type="button"
             onClick={() => setIsDailyModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-all cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-all cursor-pointer shadow-xs active:scale-95"
           >
-            <CalendarDays size={15} />
+            <CalendarDays size={14} />
             <span>Bảng Kê Chi Tiết Từng Ngày</span>
             <span className="px-1.5 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-800 text-[10px] font-mono">
               {data?.dailyBreakdown?.length ?? 0} ngày
@@ -452,12 +442,11 @@ export function OpsDashboard({
 
       {/* Thông báo nếu lọc hôm nay mà chưa có thanh toán phát sinh */}
       {activePreset === 'today' && (data?.kpis.totalRevenue ?? 0) === 0 && (
-        <div className="px-4 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+        <div className="px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
             <span>
-              Hôm nay ({formatLocalDate(new Date())}) chưa phát sinh thanh toán thành công mới. 
-              Các số liệu hiển thị là 0 đ theo đúng thực tế cơ sở dữ liệu.
+              Hôm nay ({formatLocalDate(new Date())}) chưa phát sinh thanh toán mới. Các số liệu hiển thị là 0 đ theo đúng CSDL.
             </span>
           </div>
           <button
@@ -465,66 +454,51 @@ export function OpsDashboard({
             onClick={() => setIsDailyModalOpen(true)}
             className="font-bold underline hover:opacity-80 shrink-0 ml-2 cursor-pointer"
           >
-            Xem bảng kê các ngày trước →
+            Xem các ngày trước →
           </button>
         </div>
       )}
 
-      {/* THẺ THẨM ĐỊNH HỒ SƠ & BẰNG LÁI TÀI XẾ (QUICK COMPLIANCE WIDGET) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4.5 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-500/5 to-emerald-500/10 border border-amber-500/20 dark:border-amber-500/30 shadow-xs">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="size-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
-            <IdCard size={22} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                Thẩm Định Hồ Sơ & Bằng Lái 3 Tài Xế Hoạt Động
-              </h3>
-              {driverKpis.pending > 0 ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/50">
-                  <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
-                  {driverKpis.pending} Hồ sơ chờ phê duyệt
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/50">
-                  <CheckCircle2 size={11} /> 100% Đạt chuẩn
-                </span>
-              )}
+      {/* THẺ CẢNH BÁO THẨM ĐỊNH GPLX TINH GỌN (CHỈ HIỂN THỊ KHI CÓ HỒ SƠ CHỜ DUYỆT) */}
+      {driverKpis.pending > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300/80 dark:border-amber-800/50 text-xs shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="size-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <IdCard size={15} />
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-              Hệ thống hiện có <strong className="text-slate-900 dark:text-white">{driverKpis.total} tài xế</strong>: 
-              <span className="text-emerald-700 dark:text-emerald-400 font-semibold"> {driverKpis.approved} đã phê duyệt GPLX (Hạng E)</span>, 
-              <span className="text-amber-700 dark:text-amber-400 font-semibold"> {driverKpis.pending} đang chờ thẩm định (Nguyễn Văn Hùng - Hạng D)</span>.
-            </p>
+            <div>
+              <span className="font-bold text-amber-950 dark:text-amber-200">
+                Thẩm định GPLX: Có {driverKpis.pending} hồ sơ tài xế đang chờ duyệt
+              </span>
+              <span className="text-amber-800/80 dark:text-amber-400/80 ml-1.5 hidden md:inline">
+                ({driverKpis.approved}/{driverKpis.total} tài xế đã đạt chuẩn Hạng E)
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
           {onNavigate && (
-            <>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => onNavigate('staff')}
-                className="px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-xs"
+                className="text-[11px] font-semibold text-amber-900 dark:text-amber-300 hover:underline cursor-pointer"
               >
-                Danh Sách Nhân Sự
+                Nhân sự
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('driver-licenses')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition cursor-pointer shadow-sm"
+                className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer shadow-xs active:scale-95"
               >
-                <span>Khám & Phê Duyệt GPLX</span>
-                <ArrowRight size={14} />
+                <span>Thẩm Định Ngay</span>
+                <ArrowRight size={12} />
               </button>
-            </>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* KPI Cards Hàng Ngang (Real Data Driven) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* KPI Cards Hàng Ngang (Tối ưu breakpoint lg:grid-cols-4 cho màn hình laptop 1024px+) */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {dynamicKpis.map((kpi) => (
           <KpiCard key={kpi.key} kpi={kpi} />
         ))}

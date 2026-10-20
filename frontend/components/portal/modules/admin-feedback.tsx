@@ -450,6 +450,15 @@ export function AdminFeedback() {
                           src={url.startsWith('http') ? url : `http://localhost:3001${url}`}
                           alt={`Minh chứng ${idx + 1}`}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.currentTarget
+                            if (target.src.includes('localhost:3001/uploads/')) {
+                              target.src = target.src.replace('http://localhost:3001', '')
+                              return
+                            }
+                            target.onerror = null
+                            target.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                          }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                           <Maximize2 size={16} />
@@ -702,6 +711,15 @@ export function AdminFeedback() {
               src={lightboxImage.startsWith('http') ? lightboxImage : `http://localhost:3001${lightboxImage}`}
               alt="Ảnh minh chứng phóng to"
               className="max-h-[80vh] w-auto object-contain mx-auto"
+              onError={(e) => {
+                const target = e.currentTarget
+                if (target.src.includes('localhost:3001/uploads/')) {
+                  target.src = target.src.replace('http://localhost:3001', '')
+                  return
+                }
+                target.onerror = null
+                target.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=1200&auto=format&fit=crop&q=80'
+              }}
             />
           </div>
         </div>

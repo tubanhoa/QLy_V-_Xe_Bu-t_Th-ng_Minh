@@ -25,6 +25,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Volume2,
+  Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { driverService, DriverTripItem } from '@/lib/services/driver.service'
@@ -89,20 +90,54 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
   const [stationNotice, setStationNotice] = useState<string | null>(null)
 
+  // Bộ lọc & tìm kiếm danh sách ca chạy bên cột phải
+  const [tripFilter, setTripFilter] = useState<'all' | 'active' | 'completed'>('all')
+  const [searchTripQuery, setSearchTripQuery] = useState('')
+
+  // Tab chuyển đổi Bản đồ GPS / Lộ trình trạm dừng bên cột trái
+  const [telematicsTab, setTelematicsTab] = useState<'map' | 'stations'>('map')
+
   // Thông tin người dùng đăng nhập hiện tại
   const currentUser = useMemo(() => authService.getUser(), [])
   const isConductor = currentUser?.role === 'conductor'
 
-  // Tải danh sách ca chạy từ API Backend
+  // Tải danh sách ca chạy từ API Backend với thuật toán chọn ca thông minh
   const loadTrips = useCallback(async () => {
     setIsLoading(true)
     const res = await driverService.getTodayTrips()
     if (res.success && res.data && res.data.length > 0) {
       setTrips(res.data)
-      const current =
-        res.data.find((t) => t.status === 'in_progress' || t.status === 'delayed') ||
-        res.data.find((t) => t.status === 'scheduled') ||
-        res.data[0]
+
+      const now = Date.now()
+      // 1. Ưu tiên chuyến đang chạy / đón khách
+      let current = res.data.find(
+        (t) => t.status === 'in_progress' || t.status === 'boarding' || t.status === 'delayed'
+      )
+
+      // 2. Ưu tiên chuyến sắp chạy gần nhất tính từ thời điểm hiện tại
+      if (!current) {
+        const scheduledTrips = res.data
+          .filter((t) => t.status === 'scheduled')
+          .sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime())
+
+        // Tìm chuyến có giờ xuất bến >= now - 15 phút
+        const nextTrip = scheduledTrips.find(
+          (t) => new Date(t.departureTime).getTime() >= now - 15 * 60 * 1000
+        )
+        current = nextTrip || scheduledTrips[0]
+      }
+
+      // 3. Nếu toàn bộ chuyến trong ngày đã hoàn thành, chọn chuyến vừa xong gần nhất
+      if (!current) {
+        const sortedByNearNow = [...res.data].sort((a, b) => {
+          return (
+            Math.abs(new Date(a.departureTime).getTime() - now) -
+            Math.abs(new Date(b.departureTime).getTime() - now)
+          )
+        })
+        current = sortedByNearNow[0] || res.data[0]
+      }
+
       setActiveTrip(current)
 
       // Tải số lượng hành khách đã đặt vé trong manifest
@@ -245,8 +280,70 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
     activeTrip?.vehicle?.plateNumber ||
     (activeTrip ? 'Chưa gán xe' : '---')
 
+  const greetingText = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour >= 5 && hour < 12) return 'Chào buổi sáng'
+    if (hour >= 12 && hour < 18) return 'Chào buổi chiều'
+    return 'Chào buổi tối'
+  }, [])
+
+  // Chuẩn hóa tên hiển thị: loại bỏ dính chữ và hậu tố vai trò trùng lặp như "(Tài Xế)"
+  const cleanDisplayName = useMemo(() => {
+    if (!currentUser?.fullName) return ''
+    return currentUser.fullName
+      .replace(/\s*\((tài xế|phụ xe|nhân viên|cán bộ|admin|quản trị|tài xế xe buýt)\)/gi, '')
+      .trim()
+  }, [currentUser?.fullName])
+
+  const scheduledCount = useMemo(() => {
+    return trips.filter(
+      (t) =>
+        t.status === 'scheduled' ||
+        t.status === 'in_progress' ||
+        t.status === 'boarding' ||
+        t.status === 'delayed'
+    ).length
+  }, [trips])
+
+  const completedCount = useMemo(() => {
+    return trips.filter((t) => t.status === 'completed').length
+  }, [trips])
+
+  const filteredTrips = useMemo(() => {
+    let list = trips
+    if (tripFilter === 'active') {
+      list = list.filter(
+        (t) =>
+          t.status === 'in_progress' ||
+          t.status === 'boarding' ||
+          t.status === 'scheduled' ||
+          t.status === 'delayed'
+      )
+    } else if (tripFilter === 'completed') {
+      list = list.filter((t) => t.status === 'completed')
+    }
+    if (searchTripQuery.trim()) {
+      const q = searchTripQuery.toLowerCase().trim()
+      list = list.filter((t) => {
+        const code = (t.route?.routeCode || '').toLowerCase()
+        const name = (t.route?.name || '').toLowerCase()
+        const plate = (
+          (t.vehicle as any)?.licensePlate ||
+          t.vehicle?.plateNumber ||
+          ''
+        ).toLowerCase()
+        const dep = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        return code.includes(q) || name.includes(q) || plate.includes(q) || dep.includes(q)
+      })
+    }
+    return list
+  }, [trips, tripFilter, searchTripQuery])
+
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pb-28 lg:pb-8">
       {/* ========================================================================= */}
       {/* 1. THANH HEADER ĐIỀU HÀNH RỘNG RÃI & CHUYỂN NHANH BUỒNG LÁI HUD           */}
       {/* ========================================================================= */}
@@ -258,8 +355,8 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
               {isConductor ? 'Soát Vé & Phụ Xe' : 'Tài Xế Trực Tuyến'}
             </span>
             <span className="text-xs sm:text-sm font-semibold text-muted-foreground">
-              {isConductor ? 'Chào ca trực, Phụ xe' : 'Chào buổi sáng, Bác tài'}
-              {currentUser?.fullName ? ` ${currentUser.fullName}` : ''}
+              {isConductor ? 'Chào ca trực, Phụ xe' : `${greetingText}, Bác tài`}
+              {cleanDisplayName ? ` ${cleanDisplayName}` : ''}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground mt-1.5">
@@ -304,10 +401,11 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
             <button
               type="button"
               onClick={onOpenCockpit}
-              className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-3 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:from-emerald-500 hover:to-teal-600 active:scale-95 transition-all cursor-pointer"
+              className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 sm:px-5 py-3 text-xs sm:text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:from-emerald-500 hover:to-teal-600 active:scale-95 transition-all cursor-pointer"
             >
-              <Radio className="size-4 sm:size-5 animate-pulse" />
-              <span>Vào Buồng Lái HUD (Táp-lô số)</span>
+              <Radio className="size-4 sm:size-5 animate-pulse shrink-0" />
+              <span className="hidden sm:inline whitespace-nowrap">Vào Buồng Lái HUD (Táp-lô số)</span>
+              <span className="sm:hidden whitespace-nowrap">Vào Buồng Lái HUD</span>
             </button>
           )}
         </div>
@@ -449,9 +547,37 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
           <p className="mt-2 font-mono text-xl sm:text-2xl font-black text-foreground">
             {activeTrip ? departureTimeString : '---'}
           </p>
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-0.5 flex items-center gap-1">
-            <span className={`size-1.5 rounded-full ${activeTrip ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
-            {activeTrip ? 'Đúng lịch trình' : 'Chưa xếp lịch'}
+          <p
+            className={cn(
+              'text-xs font-bold mt-0.5 flex items-center gap-1',
+              activeTrip?.status === 'completed'
+                ? 'text-slate-500 dark:text-slate-400'
+                : activeTrip?.status === 'delayed'
+                ? 'text-amber-600 dark:text-amber-400'
+                : activeTrip
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-muted-foreground'
+            )}
+          >
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                activeTrip?.status === 'completed'
+                  ? 'bg-slate-400'
+                  : activeTrip?.status === 'delayed'
+                  ? 'bg-amber-500 animate-ping'
+                  : activeTrip
+                  ? 'bg-emerald-500 animate-ping'
+                  : 'bg-slate-400'
+              )}
+            />
+            {activeTrip?.status === 'completed'
+              ? 'Đã hoàn thành ca'
+              : activeTrip?.status === 'delayed'
+              ? 'Chậm giờ xuất bến'
+              : activeTrip
+              ? 'Đúng lịch trình'
+              : 'Chưa xếp lịch'}
           </p>
         </div>
 
@@ -540,14 +666,30 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                     <Bus size={16} strokeWidth={2} aria-hidden="true" />
                     <span>Xe {vehicleLicensePlate}</span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500/20 px-3 py-1.5 text-xs font-black text-blue-300 uppercase tracking-wider border border-blue-400/30">
-                    <span className="size-2 rounded-full bg-blue-400 animate-ping" />
-                    {activeTrip?.status === 'in_progress'
-                      ? 'Đang chạy'
-                      : activeTrip?.status === 'delayed'
-                      ? 'Chậm chuyến'
-                      : 'Đã sẵn sàng'}
-                  </span>
+                  {activeTrip?.status === 'completed' ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-500/25 px-3 py-1.5 text-xs font-black text-slate-300 uppercase tracking-wider border border-slate-400/30">
+                      <CheckCircle2 size={14} className="text-emerald-400" />
+                      Đã hoàn thành ca
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black uppercase tracking-wider border',
+                        activeTrip?.status === 'in_progress'
+                          ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/30'
+                          : activeTrip?.status === 'delayed'
+                          ? 'bg-amber-500/25 text-amber-300 border-amber-400/30'
+                          : 'bg-blue-500/25 text-blue-300 border-blue-400/30'
+                      )}
+                    >
+                      <span className="size-2 rounded-full bg-current animate-ping" />
+                      {activeTrip?.status === 'in_progress'
+                        ? 'Đang chạy'
+                        : activeTrip?.status === 'delayed'
+                        ? 'Chậm chuyến'
+                        : 'Sẵn sàng khởi hành'}
+                    </span>
+                  )}
                 </div>
                 <span className="font-mono text-xs sm:text-sm font-bold text-white/60 bg-white/10 px-3 py-1 rounded-xl">
                   Tuyến {activeTrip?.route?.routeCode || 'CT-01'}
@@ -565,9 +707,20 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 <div>
                   <p className="flex items-center gap-2 text-xs sm:text-sm text-white/70 font-semibold mb-1">
                     <Timer size={16} strokeWidth={2} className="text-emerald-400" aria-hidden="true" />
-                    {activeTrip?.status === 'in_progress' ? 'Thời gian ca chạy đã diễn ra' : 'Đếm ngược giờ xuất bến'}
+                    {activeTrip?.status === 'completed'
+                      ? 'Trạng thái ca chạy'
+                      : activeTrip?.status === 'in_progress'
+                      ? 'Thời gian ca chạy đã diễn ra'
+                      : 'Đếm ngược giờ xuất bến'}
                   </p>
-                  <DepartureCountdown departureTime={activeTrip?.departureTime} />
+                  {activeTrip?.status === 'completed' ? (
+                    <div className="flex items-center gap-2 text-emerald-300 font-mono text-2xl sm:text-3xl font-black">
+                      <CheckCircle2 size={26} className="text-emerald-400 shrink-0" />
+                      <span>Ca chạy đã hoàn tất</span>
+                    </div>
+                  ) : (
+                    <DepartureCountdown departureTime={activeTrip?.departureTime} />
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-xs sm:text-sm text-white/70 font-semibold mb-1">Giờ xuất bến ấn định</p>
@@ -575,8 +728,34 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 </div>
               </div>
 
+              {/* NÚT HÀNH ĐỘNG TRỌNG TÂM: VÀO BUỒNG LÁI HUD CHO CA CHẠY NÀY */}
+              {onOpenCockpit && (
+                <div className="relative mt-6">
+                  <button
+                    type="button"
+                    onClick={onOpenCockpit}
+                    className="w-full flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-400 hover:to-teal-500 px-5 py-3.5 text-white shadow-xl shadow-emerald-950/40 transition-all active:scale-[0.99] cursor-pointer border border-emerald-400/40 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="size-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                        <Radio size={20} className="animate-pulse text-white" />
+                      </div>
+                      <div className="text-left">
+                        <span className="text-sm sm:text-base font-black tracking-wide uppercase block">
+                          VÀO BUỒNG LÁI HUD (TÁP-LÔ SỐ) CHO CA NÀY
+                        </span>
+                        <span className="text-xs text-emerald-100 font-medium">
+                          Mở giao diện vận hành thời gian thực, định vị GPS OSRM & chuông trạm dừng
+                        </span>
+                      </div>
+                    </div>
+                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform shrink-0" />
+                  </button>
+                </div>
+              )}
+
               {/* BỘ BA NÚT TÁC VỤ CỰC ĐẠI CHO TÀI XẾ & PHỤ XE */}
-              <div className="relative mt-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="relative mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Nút 1: Soát Vé QR */}
                 <button
                   type="button"
@@ -624,24 +803,36 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
               </div>
             </article>
 
-            {/* BẢN ĐỒ GPS MAP THẬT THỜI GIAN THỰC (LIVE INTERACTIVE MINI-MAP) */}
-            <DriverLiveMap activeTrip={activeTrip} onOpenCockpit={onOpenCockpit} />
-
-            {/* Lộ Trình Trạm Đón Thực Tế (Live Station Progression Stepper) */}
-            <section className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-6 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-border/80">
-                <div className="flex items-center gap-2.5">
-                  <div className="size-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <MapPin size={20} strokeWidth={2} />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-foreground">
-                      Lộ Trình Trạm Đón Thực Tế
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Tuyến {activeTrip?.route?.routeCode || 'CT-01'} • Gồm {routeStops.length} trạm dừng trên tuyến
-                    </p>
-                  </div>
+            {/* CONTAINER ĐIỀU HÀNH TELEMATICS: BẢN ĐỒ GPS HOẶC LỘ TRÌNH TRẠM DỪNG */}
+            <div className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-5 sm:p-6 shadow-xs flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/80">
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-muted/40 border border-slate-200 dark:border-border">
+                  <button
+                    type="button"
+                    onClick={() => setTelematicsTab('map')}
+                    className={cn(
+                      'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                      telematicsTab === 'map'
+                        ? 'bg-white dark:bg-card text-foreground shadow-xs border border-border/60'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Radio size={14} className={telematicsTab === 'map' ? 'text-emerald-600' : ''} />
+                    <span>Bản Đồ GPS Live</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTelematicsTab('stations')}
+                    className={cn(
+                      'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                      telematicsTab === 'stations'
+                        ? 'bg-white dark:bg-card text-foreground shadow-xs border border-border/60'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <MapPin size={14} className={telematicsTab === 'stations' ? 'text-emerald-600' : ''} />
+                    <span>Lộ Trình Trạm Dừng ({routeStops.length})</span>
+                  </button>
                 </div>
 
                 {stationNotice && (
@@ -652,68 +843,79 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 )}
               </div>
 
-              <ol className="mt-5 space-y-4">
-                {routeStops.map((stop, index) => {
-                  const isLast = index === routeStops.length - 1
-                  const current = stop.state === 'current'
-                  return (
-                    <li key={`${stop.name}-${index}`} className="relative flex items-start gap-4">
-                      {!isLast && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute left-[13px] top-6 h-[calc(100%+16px)] w-0.5 bg-slate-200 dark:bg-slate-800"
-                        />
-                      )}
-                      <span
-                        className={cn(
-                          'relative mt-1 size-7 shrink-0 rounded-full border-2 flex items-center justify-center font-mono text-xs font-black transition-all',
-                          current
-                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                            : 'border-slate-300 dark:border-slate-700 bg-background text-muted-foreground'
-                        )}
-                      >
-                        {current && (
-                          <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/40" />
-                        )}
-                        <span>{index + 1}</span>
-                      </span>
-
-                      <div className="flex flex-1 flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-muted/10 p-3.5 hover:bg-slate-50 dark:hover:bg-muted/20 transition-colors">
-                        <div>
-                          <p className={cn('text-sm font-bold', current ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground')}>
-                            {stop.name}
-                          </p>
-                          {current ? (
-                            <span className="inline-flex items-center gap-1.5 mt-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                              <span className="size-1.5 rounded-full bg-emerald-600 animate-ping" />
-                              Trạm hiện tại (Đang mở cửa đón khách)
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground mt-0.5 block">
-                              Dự kiến ghé trạm
-                            </span>
+              {telematicsTab === 'map' ? (
+                <DriverLiveMap activeTrip={activeTrip} onOpenCockpit={onOpenCockpit} className="!border-0 !p-0 !shadow-none" />
+              ) : (
+                <div className="max-h-[420px] overflow-y-auto pr-1">
+                  <ol className="space-y-3.5">
+                    {routeStops.map((stop, index) => {
+                      const isLast = index === routeStops.length - 1
+                      const current = stop.state === 'current'
+                      return (
+                        <li key={`${stop.name}-${index}`} className="relative flex items-start gap-4">
+                          {!isLast && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute left-[13px] top-6 h-[calc(100%+14px)] w-0.5 bg-slate-200 dark:bg-slate-800"
+                            />
                           )}
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold text-muted-foreground bg-white dark:bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                            {stop.time}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleChimeNextStation(stop.name)}
-                            title="Phát chuông thông báo trạm này"
-                            className="size-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 flex items-center justify-center transition-all cursor-pointer"
+                          <span
+                            className={cn(
+                              'relative mt-1 size-7 shrink-0 rounded-full border-2 flex items-center justify-center font-mono text-xs font-black transition-all',
+                              current
+                                ? 'border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                : 'border-slate-300 dark:border-slate-700 bg-background text-muted-foreground'
+                            )}
                           >
-                            <Volume2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ol>
-            </section>
+                            {current && (
+                              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/40" />
+                            )}
+                            <span>{index + 1}</span>
+                          </span>
+
+                          <div className="flex flex-1 flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-muted/10 p-3.5 hover:bg-slate-50 dark:hover:bg-muted/20 transition-colors">
+                            <div>
+                              <p
+                                className={cn(
+                                  'text-sm font-bold',
+                                  current ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'
+                                )}
+                              >
+                                {stop.name}
+                              </p>
+                              {current ? (
+                                <span className="inline-flex items-center gap-1.5 mt-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                                  <span className="size-1.5 rounded-full bg-emerald-600 animate-ping" />
+                                  Trạm hiện tại (Đang mở cửa đón khách)
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground mt-0.5 block">
+                                  Dự kiến ghé trạm
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-xs font-bold text-muted-foreground bg-white dark:bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                                {stop.time}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleChimeNextStation(stop.name)}
+                                title="Phát chuông thông báo trạm này"
+                                className="size-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 flex items-center justify-center transition-all cursor-pointer"
+                              >
+                                <Volume2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ======================================================== */}
@@ -721,7 +923,7 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
           {/* ======================================================== */}
           <div className="xl:col-span-5 flex flex-col gap-6">
             {/* Card 1: Tất Cả Ca Chạy Hôm Nay (Schedule Roster) */}
-            <section className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-6 shadow-xs">
+            <section className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-5 sm:p-6 shadow-xs flex flex-col">
               <div className="flex items-center justify-between pb-3 border-b border-border/80">
                 <div className="flex items-center gap-2">
                   <Calendar size={18} className="text-emerald-600 dark:text-emerald-400" />
@@ -734,84 +936,147 @@ export function DriverDashboard({ onNavigate, onOpenCockpit }: DriverDashboardPr
                 </span>
               </div>
 
-              <p className="text-xs text-muted-foreground mt-2 mb-3">
-                Chạm hoặc bấm vào chuyến xe bất kỳ để đổi ca chạy đang thao tác:
-              </p>
+              {/* Ô TÌM KIẾM NHANH */}
+              <div className="relative mt-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchTripQuery}
+                  onChange={(e) => setSearchTripQuery(e.target.value)}
+                  placeholder="Tìm theo tuyến, xe, giờ xuất bến..."
+                  className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-border bg-slate-50/50 dark:bg-muted/20 focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-muted-foreground transition-all"
+                />
+              </div>
 
-              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-                {trips.map((t) => {
-                  const isSelected = activeTrip?.id === t.id
-                  const depTime = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                  const isRunning = t.status === 'in_progress' || t.status === 'boarding'
+              {/* BỘ LỌC TRẠNG THÁI CA CHẠY */}
+              <div className="flex items-center gap-1.5 mt-2.5 mb-3 overflow-x-auto no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('all')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors',
+                    tripFilter === 'all'
+                      ? 'bg-foreground text-background shadow-2xs'
+                      : 'bg-muted/60 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Tất cả ({trips.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('active')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors',
+                    tripFilter === 'active'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-muted/60 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Chờ / Đang chạy ({scheduledCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('completed')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors',
+                    tripFilter === 'completed'
+                      ? 'bg-slate-700 text-white dark:bg-slate-600 shadow-2xs'
+                      : 'bg-muted/60 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Đã xong ({completedCount})
+                </button>
+              </div>
 
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveTrip(t)
-                        if (t.id) {
-                          driverService
-                            .getTripManifest(t.id)
-                            .then((mRes) => {
-                              if (mRes.success && mRes.data) {
-                                setManifestCount(mRes.data.totalPassengers || mRes.data.manifest?.length || 0)
-                              }
-                            })
-                            .catch(() => {})
-                        }
-                      }}
-                      className={cn(
-                        'w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer flex items-center justify-between gap-3',
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30 shadow-xs'
-                          : 'border-slate-200/80 dark:border-border bg-card hover:bg-muted/40 hover:border-slate-300'
-                      )}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn(
-                          'size-11 rounded-xl flex flex-col items-center justify-center font-mono shrink-0 font-black',
-                          isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-foreground'
-                        )}>
-                          <span className="text-xs leading-none">{depTime}</span>
-                          <span className="text-[9px] font-sans opacity-80 mt-0.5">XUẤT</span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black text-foreground">
-                              {t.route?.routeCode || 'Tuyến'}
-                            </span>
-                            <span className="text-[11px] font-mono text-muted-foreground">
-                              Xe: {(t.vehicle as any)?.licensePlate || t.vehicle?.plateNumber || '20B-012.34'}
-                            </span>
+              <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+                {filteredTrips.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-8">
+                    Không tìm thấy ca chạy nào phù hợp.
+                  </p>
+                ) : (
+                  filteredTrips.map((t) => {
+                    const isSelected = activeTrip?.id === t.id
+                    const depTime = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                    const isRunning = t.status === 'in_progress' || t.status === 'boarding'
+
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTrip(t)
+                          if (t.id) {
+                            driverService
+                              .getTripManifest(t.id)
+                              .then((mRes) => {
+                                if (mRes.success && mRes.data) {
+                                  setManifestCount(
+                                    mRes.data.totalPassengers || mRes.data.manifest?.length || 0
+                                  )
+                                }
+                              })
+                              .catch(() => {})
+                          }
+                        }}
+                        className={cn(
+                          'w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer flex items-center justify-between gap-3',
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30 shadow-xs'
+                            : 'border-slate-200/80 dark:border-border bg-card hover:bg-muted/40 hover:border-slate-300'
+                        )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={cn(
+                              'size-11 rounded-xl flex flex-col items-center justify-center font-mono shrink-0 font-black',
+                              isSelected
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-foreground'
+                            )}
+                          >
+                            <span className="text-xs leading-none">{depTime}</span>
+                            <span className="text-[9px] font-sans opacity-80 mt-0.5">XUẤT</span>
                           </div>
-                          <p className="text-xs font-medium text-muted-foreground truncate mt-0.5">
-                            {t.route?.name || t.route?.destination || 'Lộ trình'}
-                          </p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-foreground">
+                                {t.route?.routeCode || 'Tuyến'}
+                              </span>
+                              <span className="text-[11px] font-mono text-muted-foreground">
+                                Xe: {(t.vehicle as any)?.licensePlate || t.vehicle?.plateNumber || '20B-012.34'}
+                              </span>
+                            </div>
+                            <p className="text-xs font-medium text-muted-foreground truncate mt-0.5">
+                              {t.route?.name || t.route?.destination || 'Lộ trình'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="shrink-0 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider',
-                            isRunning
-                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-                              : t.status === 'completed'
-                              ? 'bg-gray-500/20 text-gray-600 dark:text-gray-300'
-                              : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                          )}
-                        >
-                          {isRunning ? 'Đang chạy' : t.status === 'completed' ? 'Đã xong' : 'Sẵn sàng'}
-                        </span>
-                        <ChevronRight size={16} className={cn(isSelected ? 'text-emerald-600' : 'text-muted-foreground/50')} />
-                      </div>
-                    </button>
-                  )
-                })}
+                        <div className="shrink-0 flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider',
+                              isRunning
+                                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                : t.status === 'completed'
+                                ? 'bg-gray-500/20 text-gray-600 dark:text-gray-300'
+                                : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                            )}
+                          >
+                            {isRunning ? 'Đang chạy' : t.status === 'completed' ? 'Đã xong' : 'Sẵn sàng'}
+                          </span>
+                          <ChevronRight
+                            size={16}
+                            className={cn(isSelected ? 'text-emerald-600' : 'text-muted-foreground/50')}
+                          />
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
               </div>
             </section>
 
