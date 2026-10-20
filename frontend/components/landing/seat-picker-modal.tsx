@@ -511,7 +511,7 @@ export function SeatPickerModal({
         bookingId: validBookingId,
         paymentMethod: paymentMethod as PaymentGateway,
         orderInfo: `Thanh toan ve xe buyt ICTU ${bookingData.bookingCode}`,
-        invoiceEmail: isInvoiceRequested && invoiceEmail.trim() ? invoiceEmail.trim() : undefined,
+        invoiceEmail: invoiceEmail.trim() || undefined,
       })
 
       if (payRes.success && payRes.data) {
@@ -914,10 +914,91 @@ export function SeatPickerModal({
                       />
                     </div>
                   </div>
+
+                  {/* Email nhận vé điện tử & Mã QR soát vé (Gmail) */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                        <Mail size={14} className="text-[#005A36]" />
+                        <span>Email nhận vé & mã QR (Gmail / Sinh viên)</span>
+                      </label>
+                      {user?.email && invoiceEmail !== user.email && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoiceEmail(user.email)
+                            setEmailTouched(true)
+                          }}
+                          className="text-xs font-bold text-[#005A36] hover:underline cursor-pointer"
+                        >
+                          Dùng email tài khoản
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="email"
+                        value={invoiceEmail}
+                        onChange={(e) => {
+                          setInvoiceEmail(e.target.value)
+                          setEmailTouched(true)
+                        }}
+                        onBlur={() => setEmailTouched(true)}
+                        placeholder="tenban@gmail.com"
+                        className={cn(
+                          'w-full rounded-xl border px-3.5 py-2.5 text-xs sm:text-sm font-bold outline-none transition-all pr-8',
+                          emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail)
+                            ? 'border-rose-400 bg-rose-50/30 text-rose-900 focus:border-rose-500'
+                            : isValidEmail(invoiceEmail) && invoiceEmail.length > 0
+                            ? 'border-emerald-400 bg-emerald-50/20 text-slate-900 focus:border-[#005A36]'
+                            : 'border-slate-200 bg-white text-slate-800 focus:border-[#005A36]',
+                        )}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {isValidEmail(invoiceEmail) && invoiceEmail.length > 0 ? (
+                          <CheckCircle2 size={16} className="text-emerald-600" />
+                        ) : emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail) ? (
+                          <AlertCircle size={16} className="text-rose-500" />
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail) ? (
+                      <p className="text-xs text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle size={13} className="shrink-0" />
+                        <span>Định dạng email chưa hợp lệ (Ví dụ: name@gmail.com)</span>
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                        <span className="text-[11px] text-slate-400 font-medium shrink-0">Gợi ý nhanh:</span>
+                        {['@gmail.com', '@ictu.edu.vn', '@tnu.edu.vn'].map((domain) => (
+                          <button
+                            key={domain}
+                            type="button"
+                            onClick={() => {
+                              const prefix = invoiceEmail.includes('@')
+                                ? invoiceEmail.split('@')[0]
+                                : invoiceEmail.trim()
+                              setInvoiceEmail(`${prefix || 'sinhvien'}${domain}`)
+                              setEmailTouched(true)
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:border-[#005A36] hover:text-[#005A36] transition-colors shrink-0 cursor-pointer active:scale-95 shadow-2xs"
+                          >
+                            +{domain}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                      <Check size={12} className="text-emerald-600 shrink-0" />
+                      <span>Thông tin tuyến, xe, giờ chạy, tài xế & mã QR sẽ được gửi về hòm thư này.</span>
+                    </p>
+                  </div>
                 </div>
 
                 {/* Mục Hóa đơn điện tử (E-Invoice) Mobile-Friendly */}
-                <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-white to-slate-50 p-4 space-y-3 shadow-2xs">
+                <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-white to-slate-50 p-4 space-y-2.5 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="size-7 rounded-lg bg-[#005A36] text-white flex items-center justify-center shadow-xs">
@@ -944,83 +1025,9 @@ export function SeatPickerModal({
                   </div>
 
                   {isInvoiceRequested && (
-                    <div className="space-y-2 pt-1">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                            <Mail size={14} className="text-[#005A36]" />
-                            <span>Email nhận Hóa đơn & Vé PDF</span>
-                          </label>
-                          {user?.email && invoiceEmail !== user.email && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setInvoiceEmail(user.email)
-                                setEmailTouched(true)
-                              }}
-                              className="text-xs font-bold text-[#005A36] hover:underline cursor-pointer"
-                            >
-                              Dùng email tài khoản
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="relative">
-                          <input
-                            type="email"
-                            value={invoiceEmail}
-                            onChange={(e) => {
-                              setInvoiceEmail(e.target.value)
-                              setEmailTouched(true)
-                            }}
-                            onBlur={() => setEmailTouched(true)}
-                            placeholder="tenban@gmail.com"
-                            className={cn(
-                              'w-full rounded-xl border px-3.5 py-2.5 text-xs sm:text-sm font-bold outline-none transition-all pr-8',
-                              isInvoiceRequested && emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail)
-                                ? 'border-rose-400 bg-rose-50/30 text-rose-900 focus:border-rose-500'
-                                : isValidEmail(invoiceEmail) && invoiceEmail.length > 0
-                                ? 'border-emerald-400 bg-emerald-50/20 text-slate-900 focus:border-[#005A36]'
-                                : 'border-slate-200 bg-white text-slate-800 focus:border-[#005A36]',
-                            )}
-                          />
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                            {isValidEmail(invoiceEmail) && invoiceEmail.length > 0 ? (
-                              <CheckCircle2 size={16} className="text-emerald-600" />
-                            ) : isInvoiceRequested && emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail) ? (
-                              <AlertCircle size={16} className="text-rose-500" />
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {isInvoiceRequested && emailTouched && invoiceEmail.length > 0 && !isValidEmail(invoiceEmail) && (
-                          <p className="text-xs text-rose-600 font-semibold mt-1 flex items-center gap-1">
-                            <AlertCircle size={13} className="shrink-0" />
-                            <span>Định dạng email chưa hợp lệ (Ví dụ: name@gmail.com)</span>
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Phím tắt Mobile Domain nhanh */}
-                      <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-                        <span className="text-xs text-slate-400 font-medium shrink-0">Gợi ý nhanh:</span>
-                        {['@gmail.com', '@ictu.edu.vn', '@tnu.edu.vn'].map((domain) => (
-                          <button
-                            key={domain}
-                            type="button"
-                            onClick={() => {
-                              const prefix = invoiceEmail.includes('@')
-                                ? invoiceEmail.split('@')[0]
-                                : invoiceEmail.trim()
-                              setInvoiceEmail(`${prefix || 'sinhvien'}${domain}`)
-                              setEmailTouched(true)
-                            }}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:border-[#005A36] hover:text-[#005A36] transition-colors shrink-0 cursor-pointer active:scale-95 shadow-2xs"
-                          >
-                            +{domain}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="text-xs text-emerald-800 bg-emerald-100/70 rounded-xl p-2.5 flex items-center gap-2">
+                      <CheckCircle2 size={15} className="text-[#005A36] shrink-0" />
+                      <span>Hóa đơn VAT và tệp PDF sẽ được gửi đính kèm vào email <strong>{invoiceEmail || 'của bạn'}</strong> sau khi thanh toán.</span>
                     </div>
                   )}
                 </div>
@@ -1689,6 +1696,26 @@ export function SeatPickerModal({
                     {selectedSeats.map((s) => s.seatNumber).join(', ')}
                   </strong>{' '}
                   · Hành khách: <strong className="text-slate-800 font-bold">{passengerName}</strong>
+                </div>
+                <div className="text-xs sm:text-sm text-slate-600">
+                  Xe buýt: <strong className="text-slate-900 font-bold">{vehiclePlate}</strong> · Tài xế:{' '}
+                  <strong className="text-[#005A36] font-bold">
+                    {selectedTrip?.driverName || (selectedTrip?.driver as any)?.fullName || 'Tài xế ICTU Transit'}
+                  </strong>
+                </div>
+
+                {/* Khối thông báo email gửi thành công */}
+                <div className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-3 text-xs text-left text-emerald-950 space-y-1 mt-2 shadow-2xs">
+                  <div className="flex items-center gap-2 font-bold text-[#005A36]">
+                    <Mail size={15} />
+                    <span>Đã gửi thông báo vé & Mã QR tới email:</span>
+                  </div>
+                  <div className="font-mono font-extrabold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 inline-block">
+                    {invoiceEmail || user?.email || 'Hòm thư của bạn'}
+                  </div>
+                  <p className="text-[11px] text-slate-600 pt-0.5">
+                    📲 Bạn có thể mở Gmail trên điện thoại và đưa mã QR đối diện Webcam máy tính của tài xế để quét xác nhận lên xe.
+                  </p>
                 </div>
 
                 {(bookingResult?.isMonthlyPassApplied || (bookingResult as any)?.appliedMonthlyPassCode || isMonthlyPassCovered) && (

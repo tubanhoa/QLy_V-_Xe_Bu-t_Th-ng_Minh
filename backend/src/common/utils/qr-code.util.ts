@@ -65,7 +65,8 @@ export function verifyQrData(
       .update(JSON.stringify(payload))
       .digest('hex');
 
-    if (sig !== expectedCanonical && sig !== expectedPlain) {
+    const sigClean = String(sig).trim().toLowerCase();
+    if (sigClean !== expectedCanonical.toLowerCase() && sigClean !== expectedPlain.toLowerCase()) {
       return { valid: false, reason: 'Chữ ký số không hợp lệ hoặc dữ liệu vé đã bị chỉnh sửa' };
     }
 

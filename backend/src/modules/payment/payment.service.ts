@@ -689,7 +689,7 @@ export class PaymentService {
       relations: {
         booking: {
           user: true,
-          trip: { route: true, vehicle: true },
+          trip: { route: true, vehicle: true, driver: true },
         },
       },
     });
@@ -848,7 +848,7 @@ export class PaymentService {
 
     payment.status = PaymentStatus.SUCCESS;
     payment.paymentTime = new Date();
-    payment.paymentDetails = details;
+    payment.paymentDetails = { ...(payment.paymentDetails || {}), ...(details || {}) };
     await this.paymentRepository.save(payment);
 
     // Update booking status to PAID
@@ -891,27 +891,32 @@ export class PaymentService {
       } catch (err: any) {
         this.logger.error(`[PaymentService] Lỗi khi tự động khởi tạo/gửi hóa đơn điện tử cho payment ${payment.id}: ${err?.message}`);
       }
-    } else if (this.notificationService && payment.booking?.user?.email) {
-      // Fallback: nếu invoiceService không khả dụng thì gửi email xác nhận vé
-      for (const ticket of tickets) {
-        let qrDataUrl = '';
-        if (ticket.qrData) {
-          qrDataUrl = await generateQrDataUrl(ticket.qrData);
+    } else {
+      const recipientEmail = (payment.paymentDetails as any)?.invoiceEmail || payment.booking?.user?.email;
+      if (this.notificationService && recipientEmail) {
+        // Fallback: nếu invoiceService không khả dụng thì gửi email xác nhận vé
+        for (const ticket of tickets) {
+          let qrDataUrl = '';
+          if (ticket.qrData) {
+            qrDataUrl = await generateQrDataUrl(ticket.qrData);
+          }
+          await this.notificationService.sendTicketConfirmationEmail({
+            recipientEmail,
+            passengerName: ticket.passengerName || payment.booking.user?.fullName,
+            bookingCode: payment.booking?.bookingCode,
+            ticketCode: ticket.ticketCode,
+            routeName: payment.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
+            origin: payment.booking.trip?.route?.origin,
+            destination: payment.booking.trip?.route?.destination,
+            departureTime: payment.booking.trip?.departureTime || new Date(),
+            seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
+            vehiclePlate: payment.booking.trip?.vehicle?.licensePlate,
+            driverName: payment.booking.trip?.driver?.fullName || 'Tài xế SmartBus ICTU',
+            driverPhone: payment.booking.trip?.driver?.phoneNumber,
+            price: ticket.originalPrice,
+            qrDataUrl,
+          });
         }
-        await this.notificationService.sendTicketConfirmationEmail({
-          recipientEmail: payment.booking.user.email,
-          passengerName: ticket.passengerName || payment.booking.user.fullName,
-          bookingCode: payment.booking.bookingCode,
-          ticketCode: ticket.ticketCode,
-          routeName: payment.booking.trip?.route?.name || 'Tuyến xe buýt thông minh ICTU',
-          origin: payment.booking.trip?.route?.origin,
-          destination: payment.booking.trip?.route?.destination,
-          departureTime: payment.booking.trip?.departureTime || new Date(),
-          seatNumber: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
-          vehiclePlate: payment.booking.trip?.vehicle?.licensePlate,
-          price: ticket.originalPrice,
-          qrDataUrl,
-        });
       }
     }
   }

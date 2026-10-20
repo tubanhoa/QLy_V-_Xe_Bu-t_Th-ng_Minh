@@ -23,6 +23,7 @@ export interface CancellationPolicyResponse {
   canCancel: boolean
   canExchange: boolean
   hoursUntilDeparture: number
+  formattedTimeUntilDeparture?: string
   originalPrice: number
   cancellationFeePercent: number
   cancellationFeeAmount: number

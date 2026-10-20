@@ -1,23 +1,26 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Camera,
+  CameraOff,
   CheckCircle2,
   Flashlight,
   QrCode,
-  RotateCcw,
   Search,
-  Sparkles,
   Volume2,
   VolumeX,
   XCircle,
   ArrowLeft,
   ScanLine,
   AlertTriangle,
-  ShieldAlert,
-  RefreshCw,
   Loader2,
+  Upload,
+  Bus,
+  User,
+  Clock,
+  MapPin,
+  FileCheck,
 } from 'lucide-react'
 import { driverService, DriverTripItem } from '@/lib/services/driver.service'
 import { driverHardware } from '@/lib/utils/driver-hardware'
@@ -31,20 +34,36 @@ interface ScanResult {
   status: 'valid' | 'invalid' | 'duplicate' | 'wrong_trip'
   passengerName?: string
   ticketCode: string
+  bookingCode?: string
   seatNumber?: string
   route?: string
   pickupStation?: string
+  dropoffStation?: string
+  vehiclePlate?: string
+  driverName?: string
+  departureTime?: string
   message: string
   timestamp: string
   firstScannedAt?: string
   scanCount?: number
   isMonthlyPass?: boolean
   category?: string
-  correctTrip?: {
+  bookedTrip?: {
     tripId?: string
+    routeCode?: string
     routeName?: string
+    origin?: string
+    destination?: string
     departureTime?: string
     vehiclePlate?: string
+    driverName?: string
+  }
+  currentTrip?: {
+    tripId?: string
+    routeCode?: string
+    routeName?: string
+    vehiclePlate?: string
+    driverName?: string
   }
 }
 
@@ -57,8 +76,17 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
   const [activeTrip, setActiveTrip] = useState<DriverTripItem | null>(null)
   const [availableTrips, setAvailableTrips] = useState<DriverTripItem[]>([])
 
-  // Bộ nhớ đệm cục bộ lưu các vé đã check-in trên chuyến xe (Chống Replay Attack / Quét trùng lặp)
-  const [checkedInHistory, setCheckedInHistory] = useState<Record<string, { scannedAt: string; passengerName: string; count: number }>>({})
+  // Quản lý Camera Scanner bằng html5-qrcode
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const html5QrCodeRef = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const lastScannedCodeRef = useRef<{ code: string; time: number } | null>(null)
+
+  // Bộ nhớ đệm cục bộ lưu các vé đã check-in trên ca chạy hiện tại
+  const [checkedInHistory, setCheckedInHistory] = useState<
+    Record<string, { scannedAt: string; passengerName: string; seatNumber?: string; count: number }>
+  >({})
 
   useEffect(() => {
     async function fetchTrip() {
@@ -82,29 +110,151 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
     fetchTrip()
   }, [tripId])
 
-  // Xử lý xác thực mã vé QR thực tế từ API Backend
+  // Lắng nghe sự kiện Paste (Ctrl+V) ảnh chụp mã QR từ clipboard
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) {
+            e.preventDefault()
+            await handleScanImageFile(file)
+            break
+          }
+        }
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [activeTrip])
+
+  // Dọn dẹp camera khi unmount
+  useEffect(() => {
+    return () => {
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current
+          .stop()
+          .catch(() => {})
+          .finally(() => {
+            html5QrCodeRef.current?.clear()
+          })
+      }
+    }
+  }, [])
+
+  // Bật/tắt Camera Scanner thời gian thực
+  const toggleCamera = async () => {
+    if (isCameraActive) {
+      if (html5QrCodeRef.current) {
+        try {
+          await html5QrCodeRef.current.stop()
+          html5QrCodeRef.current.clear()
+        } catch (err) {
+          console.warn('Lỗi dừng camera:', err)
+        }
+        html5QrCodeRef.current = null
+      }
+      setIsCameraActive(false)
+      setCameraError(null)
+    } else {
+      setCameraError(null)
+      try {
+        const { Html5Qrcode } = await import('html5-qrcode')
+        const html5Qr = new Html5Qrcode('qr-camera-viewport')
+        html5QrCodeRef.current = html5Qr
+
+        await html5Qr.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (decodedText: string) => {
+            const now = Date.now()
+            // Chống quét liên tục cùng 1 mã trong 3 giây
+            if (
+              lastScannedCodeRef.current &&
+              lastScannedCodeRef.current.code === decodedText &&
+              now - lastScannedCodeRef.current.time < 3000
+            ) {
+              return
+            }
+            lastScannedCodeRef.current = { code: decodedText, time: now }
+            handleVerifyTicketCode(decodedText)
+          },
+          () => {}
+        )
+        setIsCameraActive(true)
+      } catch (err: any) {
+        console.error('Không thể mở camera:', err)
+        setCameraError(
+          err?.message || 'Không thể truy cập camera. Vui lòng cấp quyền camera hoặc tải ảnh QR để soát vé.'
+        )
+        setIsCameraActive(false)
+      }
+    }
+  }
+
+  // Quét mã QR từ tệp ảnh hoặc ảnh dán Clipboard
+  const handleScanImageFile = async (file: File) => {
+    setIsVerifying(true)
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode')
+      const decoder = new Html5Qrcode('qr-file-decoder-temp')
+      const decodedText = await decoder.scanFile(file, true)
+      decoder.clear()
+      await handleVerifyTicketCode(decodedText)
+    } catch (err: any) {
+      if (soundEnabled) driverHardware.playCue('ticketInvalid')
+      setScanResult({
+        status: 'invalid',
+        ticketCode: 'FILE_SCAN',
+        message: 'Không thể giải mã mã QR từ ảnh tải lên. Vui lòng thử lại với ảnh rõ nét hơn hoặc nhập mã vé.',
+        timestamp: new Date().toLocaleTimeString('vi-VN'),
+      })
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Xử lý xác thực mã vé QR / mã vé điện tử từ API Backend
   const handleVerifyTicketCode = async (rawCode: string) => {
-    const code = rawCode.trim().toUpperCase()
-    if (!code) return
+    const trimmedInput = rawCode.trim()
+    if (!trimmedInput) return
+
+    // Nếu là chuỗi JSON (từ camera webcam quét mã QR), giữ nguyên case để bảo vệ chữ ký HMAC và định dạng JSON
+    // Nếu là mã vé gõ tay (nhập trực tiếp như TKT-xxx), chuẩn hóa toUpperCase()
+    const code = trimmedInput.startsWith('{') ? trimmedInput : trimmedInput.toUpperCase()
+
+    // Khóa định danh vé dùng cho bộ nhớ đệm chống quét lặp
+    let historyKey = code
+    if (trimmedInput.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmedInput)
+        historyKey = (parsed.ticketCode || parsed.passCode || parsed.bookingCode || trimmedInput).toUpperCase()
+      } catch {}
+    }
 
     setIsVerifying(true)
     const nowStr = new Date().toLocaleTimeString('vi-VN')
 
-    // 1. Kiểm tra lặp cục bộ (Client duplicate check)
-    if (checkedInHistory[code]) {
-      const existing = checkedInHistory[code]
+    // 1. Kiểm tra lặp cục bộ trên máy tài xế
+    if (checkedInHistory[historyKey]) {
+      const existing = checkedInHistory[historyKey]
       const newCount = existing.count + 1
       setCheckedInHistory((prev) => ({
         ...prev,
-        [code]: { ...existing, count: newCount },
+        [historyKey]: { ...existing, count: newCount },
       }))
 
       if (soundEnabled) driverHardware.playCue('ticketDuplicate')
 
       setScanResult({
         status: 'duplicate',
-        ticketCode: code,
+        ticketCode: historyKey,
         passengerName: existing.passengerName,
+        seatNumber: existing.seatNumber,
         firstScannedAt: existing.scannedAt,
         scanCount: newCount,
         message: `CẢNH BÁO: Vé này đã được check-in lúc ${existing.scannedAt}! Đã quét ${newCount} lần.`,
@@ -114,14 +264,22 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
       return
     }
 
-    // 2. Gọi API kiểm tra vé trực tuyến từ máy chủ
+    // 2. Gọi API kiểm tra vé trực tuyến từ máy chủ (đối chiếu Đúng chuyến, Đúng xe, Đúng tài xế)
     const res = await driverService.verifyQrTicket(code, tripId || activeTrip?.id)
 
     if (res.success && res.data && res.data.valid) {
       const passenger = res.data.passenger || res.data.ticket?.user?.fullName || 'Hành khách sinh viên'
+      const tripData = res.data.trip
+      const seat =
+        res.data.seat ||
+        res.data.ticket?.seatNumber ||
+        (res.data.isMonthlyPass ? 'Ghế tự do (Vé tháng HSSV)' : 'Ghế tiêu chuẩn')
+
+      const finalTicketCode = res.data.ticketCode || historyKey
+
       setCheckedInHistory((prev) => ({
         ...prev,
-        [code]: { scannedAt: nowStr, passengerName: passenger, count: 1 },
+        [historyKey]: { scannedAt: nowStr, passengerName: passenger, seatNumber: seat, count: 1 },
       }))
 
       if (soundEnabled) driverHardware.playCue('ticketSuccess')
@@ -129,11 +287,22 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
       setScanResult({
         status: 'valid',
         passengerName: passenger,
-        ticketCode: code,
-        seatNumber: res.data.seat || res.data.ticket?.seatNumber || (res.data.isMonthlyPass ? 'Ghế tự do (Vé tháng HSSV)' : 'Ghế tiêu chuẩn'),
-        route: activeTrip?.route?.name || 'Tuyến ICTU Transit',
-        pickupStation: res.data.ticket?.pickupStation?.name || 'Trạm đón đăng ký',
-        message: res.data.message || res.message || 'Vé hợp lệ - Đã ghi nhận check-in lên xe thành công',
+        ticketCode: finalTicketCode,
+        bookingCode: res.data.bookingCode,
+        seatNumber: seat,
+        route: tripData
+          ? `${tripData.routeCode ? tripData.routeCode + ' - ' : ''}${tripData.routeName}`
+          : activeTrip?.route?.name || 'Tuyến ICTU Transit',
+        pickupStation: tripData?.origin || tripData?.pickupStation || 'Trạm đón quy hoạch',
+        dropoffStation: tripData?.destination || tripData?.dropoffStation || 'Trạm kết thúc',
+        vehiclePlate:
+          tripData?.vehiclePlate ||
+          (activeTrip?.vehicle as any)?.licensePlate ||
+          activeTrip?.vehicle?.plateNumber ||
+          'Xe buýt ICTU',
+        driverName: tripData?.driverName || (activeTrip?.driver as any)?.fullName || 'Tài xế phụ trách',
+        departureTime: tripData?.departureTime,
+        message: res.data.message || 'Xác nhận lên xe thành công! Cho phép hành khách lên xe.',
         timestamp: nowStr,
         scanCount: 1,
         isMonthlyPass: res.data.isMonthlyPass,
@@ -146,21 +315,33 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
         status: 'duplicate',
         ticketCode: code,
         passengerName: res.data.passenger,
+        seatNumber: res.data.seat,
         message: res.data.message || 'Vé này đã được check-in trước đó!',
         timestamp: nowStr,
       })
     } else if (res.data?.isWrongTrip) {
       if (soundEnabled) driverHardware.playCue('ticketInvalid')
 
+      const booked = res.data.bookedTrip || (res.data.correctTrip as any)
       setScanResult({
         status: 'wrong_trip',
         ticketCode: code,
         passengerName: res.data.passenger,
         seatNumber: res.data.seat,
-        route: res.data.correctTrip?.routeName,
-        message: res.data.message || 'Vé hợp lệ nhưng KHÔNG THUỘC CHUYẾN XE NÀY!',
+        message: res.data.message || 'Vé không khớp với chuyến xe, phương tiện hoặc tài xế phụ trách ca này!',
         timestamp: nowStr,
-        correctTrip: res.data.correctTrip,
+        bookedTrip: booked,
+        currentTrip:
+          res.data.currentTrip ||
+          (activeTrip
+            ? {
+                tripId: activeTrip.id,
+                routeCode: activeTrip.route?.routeCode,
+                routeName: activeTrip.route?.name,
+                vehiclePlate: (activeTrip.vehicle as any)?.licensePlate || activeTrip.vehicle?.plateNumber,
+                driverName: (activeTrip.driver as any)?.fullName,
+              }
+            : undefined),
       })
     } else {
       if (soundEnabled) driverHardware.playCue('ticketInvalid')
@@ -189,42 +370,68 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
   }))
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
-      {/* Header bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-card p-5 rounded-3xl border border-slate-200/90 dark:border-border shadow-xs">
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-5">
+      {/* Container ẩn phục vụ giải mã tệp ảnh QR */}
+      <div id="qr-file-decoder-temp" className="hidden" />
+
+      {/* Input tệp ảnh ẩn */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) {
+            handleScanImageFile(file)
+            e.target.value = ''
+          }
+        }}
+      />
+
+      {/* Header bar: Ca chạy & điều khiển */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-card p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-border shadow-xs">
         <div className="flex items-center gap-3">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="flex size-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 cursor-pointer shadow-2xs"
+              className="flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 cursor-pointer shadow-2xs"
             >
-              <ArrowLeft size={18} strokeWidth={2} />
+              <ArrowLeft size={16} strokeWidth={2.5} />
             </button>
           )}
           <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
-              Máy Soát Vé QR Trực Tuyến
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">
+              Soát Vé Xe Buýt (QR & Mã Vé)
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Xe {activeTrip?.vehicle?.plateNumber || (activeTrip?.vehicle as any)?.licensePlate || 'Chưa gán xe'} • {activeTrip?.route?.name || 'Tuyến buýt ICTU'}
+            <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">
+              Xe:{' '}
+              <strong className="text-slate-800 dark:text-slate-200">
+                {(activeTrip?.vehicle as any)?.licensePlate || activeTrip?.vehicle?.plateNumber || 'Chưa gán xe'}
+              </strong>{' '}
+              • {activeTrip?.route?.name || 'Tuyến buýt ICTU'}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Lựa chọn ca chạy */}
           {availableTrips.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-emerald-500/10 dark:bg-emerald-950/30 px-3 py-1.5 rounded-2xl border border-emerald-500/30">
-              <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hidden sm:inline">
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-muted/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-border">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hidden sm:inline">
                 Ca chạy:
               </span>
               <select
                 value={activeTrip?.id || ''}
                 onChange={(e) => {
                   const sel = availableTrips.find((t) => t.id === e.target.value)
-                  if (sel) setActiveTrip(sel)
+                  if (sel) {
+                    setActiveTrip(sel)
+                    setScanResult(null)
+                  }
                 }}
-                className="bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200 focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer max-w-[200px] truncate"
               >
                 {availableTrips.map((t) => {
                   const depTime = new Date(t.departureTime).toLocaleTimeString('vi-VN', {
@@ -232,8 +439,9 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
                     minute: '2-digit',
                   })
                   return (
-                    <option key={t.id} value={t.id} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900">
-                      {depTime} • Tuyến {t.route?.routeCode || 'CT'} ({t.vehicle?.plateNumber || (t.vehicle as any)?.licensePlate || 'Xe buýt'})
+                    <option key={t.id} value={t.id} className="text-slate-900 bg-white dark:bg-slate-900">
+                      {depTime} • Tuyến {t.route?.routeCode || 'CT'} (
+                      {(t.vehicle as any)?.licensePlate || t.vehicle?.plateNumber || 'Xe buýt'})
                     </option>
                   )
                 })}
@@ -241,214 +449,323 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
             </div>
           )}
 
+          {/* Nút bật/tắt chuông */}
           <button
             type="button"
             onClick={() => setSoundEnabled((v) => !v)}
-            className={`flex size-11 items-center justify-center rounded-2xl border transition-colors cursor-pointer shadow-2xs ${
+            className={`flex size-10 items-center justify-center rounded-xl border transition-colors cursor-pointer shadow-2xs ${
               soundEnabled
-                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'border-border bg-card text-muted-foreground'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'border-slate-200 bg-white text-slate-400 dark:border-border dark:bg-card'
             }`}
             title={soundEnabled ? 'Đang bật chuông soát vé' : 'Đang tắt chuông'}
           >
-            {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFlashlight((v) => !v)}
-            className={`flex size-11 items-center justify-center rounded-2xl border transition-colors cursor-pointer shadow-2xs ${
-              flashlight
-                ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                : 'border-border bg-card text-muted-foreground'
-            }`}
-            title="Đèn flash hỗ trợ trời tối"
-          >
-            <Flashlight size={18} />
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         </div>
       </div>
 
-      {/* Grid 2 cột: Khung ngắm & Kết quả */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* CỘT TRÁI: CAMERA VIEWFINDER & NHẬP THỦ CÔNG */}
+      {/* Grid 2 cột: Quét Camera/Mã (Trái) & Kết quả xác thực (Phải) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* CỘT TRÁI: CAMERA SCANNER & NHẬP MÃ THỦ CÔNG */}
         <div className="lg:col-span-6 flex flex-col gap-4">
-          <div className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-2xl border border-slate-800">
-            <div className="relative mx-auto flex aspect-square w-full max-w-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-500/50 bg-black/40">
-              <div className="absolute inset-4 rounded-xl border-2 border-emerald-400/80">
-                <span className="absolute -left-1 -top-1 size-4 border-l-4 border-t-4 border-emerald-400" />
-                <span className="absolute -right-1 -top-1 size-4 border-r-4 border-t-4 border-emerald-400" />
-                <span className="absolute -bottom-1 -left-1 size-4 border-b-4 border-l-4 border-emerald-400" />
-                <span className="absolute -bottom-1 -right-1 size-4 border-b-4 border-r-4 border-emerald-400" />
+          <div className="rounded-2xl bg-white dark:bg-card p-4 sm:p-5 border border-slate-200/90 dark:border-border shadow-xs space-y-4">
+            {/* Viewport Camera Quét QR */}
+            <div className="relative overflow-hidden rounded-xl bg-slate-950 text-white border border-slate-800">
+              <div className="relative mx-auto flex aspect-square w-full max-w-[260px] flex-col items-center justify-center">
+                {/* Vùng gắn stream camera thật của html5-qrcode */}
+                <div
+                  id="qr-camera-viewport"
+                  className={`size-full ${isCameraActive ? 'block' : 'hidden'}`}
+                />
+
+                {/* Giao diện chờ khi camera tắt */}
+                {!isCameraActive && (
+                  <div className="flex flex-col items-center justify-center p-4 text-center">
+                    <div className="size-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400 mb-3">
+                      <QrCode size={32} />
+                    </div>
+                    <p className="text-xs font-bold text-slate-200">Camera Quét Mã QR</p>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+                      Bật camera webcam hoặc tải ảnh mã vé để hệ thống tự động quét
+                    </p>
+                  </div>
+                )}
+
+                {/* Khung ngắm ảo khi camera hoạt động */}
+                {isCameraActive && (
+                  <div className="pointer-events-none absolute inset-6 rounded-xl border border-emerald-400/50">
+                    <span className="absolute -left-1 -top-1 size-3.5 border-l-2 border-t-2 border-emerald-400" />
+                    <span className="absolute -right-1 -top-1 size-3.5 border-r-2 border-t-2 border-emerald-400" />
+                    <span className="absolute -bottom-1 -left-1 size-3.5 border-b-2 border-l-2 border-emerald-400" />
+                    <span className="absolute -bottom-1 -right-1 size-3.5 border-b-2 border-r-2 border-emerald-400" />
+                  </div>
+                )}
+
+                {/* Loading overlay khi đang xác thực vé */}
+                {isVerifying && (
+                  <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center gap-2 rounded-xl backdrop-blur-xs z-20">
+                    <Loader2 className="size-7 text-emerald-400 animate-spin" />
+                    <p className="text-xs font-bold text-emerald-300">Đang đối chiếu dữ liệu vé...</p>
+                  </div>
+                )}
               </div>
 
-              <ScanLine className="size-16 text-emerald-400/80 animate-pulse" />
-              <p className="mt-4 text-xs font-semibold text-emerald-300">
-                Hướng camera vào mã QR vé sinh viên
-              </p>
-              <p className="mt-1 text-[10px] text-white/50">
-                Xác thực chữ ký số thời gian thực
-              </p>
-
-              {isVerifying && (
-                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2 rounded-xl backdrop-blur-xs">
-                  <Loader2 className="size-8 text-emerald-400 animate-spin" />
-                  <p className="text-xs font-bold text-emerald-300">Đang kiểm tra vé...</p>
+              {/* Thông báo lỗi camera nếu có */}
+              {cameraError && (
+                <div className="p-2.5 bg-rose-950/90 border-t border-rose-800 text-[11px] text-rose-200 text-center">
+                  {cameraError}
                 </div>
               )}
             </div>
 
-            {/* Nhập mã vé thủ công */}
-            <form onSubmit={handleManualSearch} className="mt-5 flex gap-2">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                <input
-                  type="text"
-                  placeholder="Nhập mã vé (VD: TKT-ICTU-2026-NUJIO2)..."
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-xs sm:text-sm text-white placeholder:text-white/40 focus:border-emerald-400 focus:outline-none"
-                />
-              </div>
+            {/* Các nút hành động: Bật Camera & Tải ảnh QR */}
+            <div className="grid grid-cols-2 gap-2">
               <button
-                type="submit"
-                disabled={isVerifying || !manualCode.trim()}
-                className="flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-5 text-xs font-bold text-white transition-all hover:bg-emerald-400 disabled:opacity-50 cursor-pointer shadow-md"
+                type="button"
+                onClick={toggleCamera}
+                className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  isCameraActive
+                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
+                    : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow-xs'
+                }`}
               >
-                {isVerifying ? <Loader2 size={16} className="animate-spin" /> : 'Kiểm tra'}
+                {isCameraActive ? (
+                  <>
+                    <CameraOff size={14} />
+                    <span>Tắt Camera</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={14} />
+                    <span>Bật Camera Quét</span>
+                  </>
+                )}
               </button>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-muted dark:hover:bg-muted/80 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-border"
+                title="Tải tệp ảnh vé hoặc nhấn Ctrl+V để dán ảnh QR"
+              >
+                <Upload size={14} />
+                <span>Tải / Dán ảnh QR</span>
+              </button>
+            </div>
+
+            {/* Form nhập mã vé thủ công */}
+            <div className="pt-2 border-t border-slate-100 dark:border-border">
+              <form onSubmit={handleManualSearch} className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Nhập mã vé (VD: TKT-ICTU-...) hoặc mã thẻ..."
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-9 pr-3 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-600 focus:outline-none dark:border-border dark:bg-muted/30 dark:text-white"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isVerifying || !manualCode.trim()}
+                  className="h-10 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 text-xs font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50 cursor-pointer shadow-xs dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                >
+                  {isVerifying ? <Loader2 size={14} className="animate-spin" /> : 'Kiểm tra'}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
 
-        {/* CỘT PHẢI: KẾT QUẢ QUÉT & LỊCH SỬ KHÁCH LÊN XE */}
+        {/* CỘT PHẢI: KẾT QUẢ XÁC THỰC CHI TIẾT & LỊCH SỬ SOÁT */}
         <div className="lg:col-span-6 flex flex-col gap-4">
-          {/* Kết quả quét vé */}
           {scanResult ? (
             <div
-              className={`rounded-3xl border p-6 shadow-lg transition-all animate-in fade-in slide-in-from-bottom-2 ${
+              className={`rounded-2xl border p-4 sm:p-5 shadow-xs transition-all ${
                 scanResult.status === 'valid'
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100'
+                  ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/60 dark:bg-emerald-950/20'
                   : scanResult.status === 'wrong_trip'
-                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-950 dark:text-amber-100 ring-2 ring-amber-400/30'
+                  ? 'border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/20'
                   : scanResult.status === 'duplicate'
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
-                  : 'border-rose-500/30 bg-rose-500/10 text-rose-950 dark:text-rose-100'
+                  ? 'border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/20'
+                  : 'border-rose-200 bg-rose-50/40 dark:border-rose-900/60 dark:bg-rose-950/20'
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
+              {/* Header trạng thái */}
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-border">
+                <div className="flex items-center gap-2.5">
                   {scanResult.status === 'valid' && (
-                    <CheckCircle2 className="size-9 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="size-6 text-emerald-600 shrink-0" />
                   )}
                   {scanResult.status === 'wrong_trip' && (
-                    <AlertTriangle className="size-9 text-amber-500 shrink-0 animate-bounce" />
+                    <AlertTriangle className="size-6 text-amber-600 shrink-0" />
                   )}
                   {scanResult.status === 'duplicate' && (
-                    <AlertTriangle className="size-9 text-amber-500 shrink-0" />
+                    <AlertTriangle className="size-6 text-amber-600 shrink-0" />
                   )}
                   {scanResult.status === 'invalid' && (
-                    <XCircle className="size-9 text-rose-500 shrink-0" />
+                    <XCircle className="size-6 text-rose-600 shrink-0" />
                   )}
                   <div>
-                    <h3 className="text-base sm:text-lg font-bold">
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
                       {scanResult.status === 'valid'
-                        ? 'Vé Hợp Lệ - Đã Check-in'
+                        ? 'Xác Nhận Lên Xe Thành Công'
                         : scanResult.status === 'wrong_trip'
-                        ? 'CẢNH BÁO: KHÁCH ĐI NHẦM CHUYẾN XE!'
+                        ? 'Cảnh Báo: Vé Không Khớp Với Xe Này'
                         : scanResult.status === 'duplicate'
-                        ? 'Vé Đã Quét Trước Đó'
+                        ? 'Vé Đã Được Quét Trước Đó'
                         : 'Vé Không Hợp Lệ'}
                     </h3>
-                    <p className="text-xs opacity-90 font-medium mt-0.5">{scanResult.message}</p>
-                  </div>
-                </div>
-                <span className="font-mono text-xs opacity-60 shrink-0">{scanResult.timestamp}</span>
-              </div>
-
-              {scanResult.passengerName && (
-                <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl border border-black/5 dark:border-white/10 bg-white/60 dark:bg-black/20 p-4 text-xs">
-                  {scanResult.isMonthlyPass && (
-                    <div className="col-span-2 py-2 px-3 rounded-xl bg-teal-500/20 text-teal-800 dark:text-teal-200 font-extrabold text-xs flex items-center justify-between border border-teal-500/30">
-                      <span>🎓 THẺ VÉ THÁNG HSSV HỢP LỆ</span>
-                      <span className="uppercase text-[10px] tracking-wider opacity-80">{scanResult.category || 'Sinh viên ICTU'}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-[11px] opacity-70">Hành khách:</span>
-                    <p className="font-bold text-sm text-foreground">{scanResult.passengerName}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] opacity-70">Mã vé:</span>
-                    <p className="font-mono font-bold text-sm text-foreground">{scanResult.ticketCode}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] opacity-70">Vị trí ghế:</span>
-                    <p className="font-bold text-sm text-foreground">{scanResult.seatNumber || 'Ghế tự do'}</p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] opacity-70">Trạng thái:</span>
-                    <p
-                      className={`font-bold text-sm ${
-                        scanResult.status === 'valid'
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : scanResult.status === 'wrong_trip'
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-rose-600 dark:text-rose-400'
-                      }`}
-                    >
-                      {scanResult.status === 'valid'
-                        ? 'Đã lên xe'
-                        : scanResult.status === 'wrong_trip'
-                        ? 'Sai chuyến xe'
-                        : 'Chưa hợp lệ'}
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium mt-0.5">
+                      {scanResult.message}
                     </p>
                   </div>
-                  {scanResult.correctTrip && (
-                    <div className="col-span-2 pt-2 mt-1 border-t border-amber-300/40 dark:border-amber-700/40 text-amber-900 dark:text-amber-200">
-                      <p className="text-[11px] font-bold">👉 Thông tin chuyến đúng của khách:</p>
-                      <p className="font-medium text-xs mt-0.5">
-                        • Tuyến: <strong>{scanResult.correctTrip.routeName || 'Tuyến ICTU'}</strong>
-                      </p>
-                      {scanResult.correctTrip.departureTime && (
-                        <p className="font-medium text-xs">
-                          • Giờ chạy: <strong>{new Date(scanResult.correctTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
-                        </p>
+                </div>
+                <span className="font-mono text-[11px] text-slate-400 shrink-0">{scanResult.timestamp}</span>
+              </div>
+
+              {/* Chi tiết khi xác thực thành công (Đúng chuyến, đúng xe, đúng tài xế) */}
+              {scanResult.status === 'valid' && (
+                <div className="mt-3.5 space-y-3">
+                  <div className="grid grid-cols-2 gap-2.5 rounded-xl bg-white dark:bg-card p-3 border border-slate-200/80 dark:border-border text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Hành khách</span>
+                      <strong className="text-slate-900 dark:text-white text-xs block truncate">
+                        {scanResult.passengerName}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Vị trí ghế</span>
+                      <strong className="text-emerald-700 dark:text-emerald-400 text-xs block">
+                        {scanResult.seatNumber || 'Ghế tiêu chuẩn'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Mã vé điện tử</span>
+                      <strong className="font-mono text-slate-800 dark:text-slate-200 text-xs block">
+                        {scanResult.ticketCode}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Phương tiện</span>
+                      <strong className="text-slate-900 dark:text-white text-xs block truncate">
+                        {scanResult.vehiclePlate || 'Xe buýt ICTU'}
+                      </strong>
+                    </div>
+
+                    <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-border">
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Tuyến xe</span>
+                      <strong className="text-slate-900 dark:text-white text-xs block">
+                        {scanResult.route}
+                      </strong>
+                    </div>
+
+                    <div className="col-span-2 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 pt-1">
+                      <span>Điểm đón: <strong>{scanResult.pickupStation}</strong></span>
+                      <span>Điểm trả: <strong>{scanResult.dropoffStation}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chi tiết khi SAI chuyến / SAI xe / SAI tài xế (Bảng so sánh trực quan) */}
+              {scanResult.status === 'wrong_trip' && scanResult.bookedTrip && (
+                <div className="mt-3.5 space-y-2.5 text-xs">
+                  {/* Hộp thông tin vé sinh viên đã đặt */}
+                  <div className="rounded-xl bg-white dark:bg-card p-3 border border-amber-200 dark:border-amber-900/60">
+                    <span className="text-[10px] text-amber-800 dark:text-amber-400 font-extrabold uppercase tracking-wider block mb-1">
+                      👉 Thông tin chuyến xe sinh viên đã đặt:
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Tuyến xe:</span>
+                        <strong className="text-slate-900 dark:text-white block truncate">
+                          {scanResult.bookedTrip.routeCode ? `${scanResult.bookedTrip.routeCode} - ` : ''}
+                          {scanResult.bookedTrip.routeName}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Xe buýt phân công:</span>
+                        <strong className="text-slate-900 dark:text-white block">
+                          {scanResult.bookedTrip.vehiclePlate || 'Chưa gán xe'}
+                        </strong>
+                      </div>
+                      {scanResult.bookedTrip.departureTime && (
+                        <div>
+                          <span className="text-slate-400 text-[10px] block">Giờ xuất bến:</span>
+                          <strong className="text-slate-900 dark:text-white block">
+                            {new Date(scanResult.bookedTrip.departureTime).toLocaleTimeString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </strong>
+                        </div>
                       )}
-                      {scanResult.correctTrip.vehiclePlate && (
-                        <p className="font-medium text-xs">
-                          • Biển số xe: <strong>{scanResult.correctTrip.vehiclePlate}</strong>
-                        </p>
+                      {scanResult.bookedTrip.driverName && (
+                        <div>
+                          <span className="text-slate-400 text-[10px] block">Tài xế phụ trách:</span>
+                          <strong className="text-slate-900 dark:text-white block truncate">
+                            {scanResult.bookedTrip.driverName}
+                          </strong>
+                        </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Xe hiện tại của tài xế */}
+                  {scanResult.currentTrip && (
+                    <div className="rounded-xl bg-slate-100/80 dark:bg-muted/40 p-2.5 border border-slate-200 dark:border-border text-[11px] text-slate-600 dark:text-slate-300">
+                      <span>
+                        Xe hiện tại của bạn: <strong>{scanResult.currentTrip.vehiclePlate || 'Xe buýt'}</strong> (
+                        {scanResult.currentTrip.routeName || 'Tuyến này'})
+                      </span>
                     </div>
                   )}
                 </div>
               )}
             </div>
           ) : (
-            <div className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-6 shadow-xs text-center space-y-2">
-              <QrCode size={40} className="mx-auto text-emerald-500 opacity-60" />
-              <h3 className="text-base font-bold text-foreground">Sẵn Sàng Soát Vé</h3>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Đưa mã QR vé sinh viên vào khung camera bên trái hoặc nhập mã vé để hệ thống xác thực tức thì.
+            <div className="rounded-2xl border border-slate-200/90 dark:border-border bg-white dark:bg-card p-6 shadow-xs text-center space-y-2">
+              <QrCode size={36} className="mx-auto text-emerald-600 opacity-60" />
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Sẵn Sàng Soát Vé</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Bật camera quét mã QR trên điện thoại sinh viên hoặc nhập mã vé để xác nhận lên xe.
               </p>
             </div>
           )}
 
-          {/* Lịch sử vé đã soát gần nhất */}
+          {/* Danh sách vé vừa soát thành công trong ca */}
           {historyList.length > 0 && (
-            <div className="rounded-3xl border border-slate-200/90 dark:border-border/90 bg-white dark:bg-card p-5 shadow-xs space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                <span>Vé vừa soát trên ca này ({historyList.length})</span>
-                <span className="text-[10px] text-emerald-600 font-bold">Thời gian thực</span>
-              </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div className="rounded-2xl border border-slate-200/90 dark:border-border bg-white dark:bg-card p-4 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200">
+                  Khách vừa lên xe ca này ({historyList.length})
+                </h4>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  Đã ghi nhận
+                </span>
+              </div>
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {historyList.map((item) => (
-                  <div key={item.code} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-muted/20 border border-slate-100 dark:border-slate-800">
+                  <div
+                    key={item.code}
+                    className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-muted/30 border border-slate-100 dark:border-border/60"
+                  >
                     <div>
-                      <p className="font-bold text-foreground">{item.passengerName}</p>
-                      <p className="font-mono text-[10px] text-muted-foreground">{item.code}</p>
+                      <p className="font-bold text-slate-900 dark:text-white">
+                        {item.passengerName}{' '}
+                        {item.seatNumber && <span className="text-slate-400 font-normal">({item.seatNumber})</span>}
+                      </p>
+                      <p className="font-mono text-[10px] text-slate-500">{item.code}</p>
                     </div>
-                    <span className="font-mono text-[11px] text-emerald-600 font-bold">{item.scannedAt}</span>
+                    <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">
+                      {item.scannedAt}
+                    </span>
                   </div>
                 ))}
               </div>
