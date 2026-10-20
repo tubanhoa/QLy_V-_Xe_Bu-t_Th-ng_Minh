@@ -1,14 +1,11 @@
 'use client'
 
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  CalendarCheck,
   Compass,
   Gift,
   GraduationCap,
-  Megaphone,
   QrCode,
-  Search,
-  Sparkles,
   Ticket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,6 +24,19 @@ export function QuickAccessBar({
   onOpenTicketModal,
   onOpenVoucherVault,
 }: QuickAccessBarProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const rafId = useRef<number | null>(null)
+
+  // Sliding pill indicator coordinates
+  const [indicator, setIndicator] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+    opacity: number
+  }>({ x: 0, y: 0, width: 0, height: 0, opacity: 0 })
+
   const items = [
     {
       id: 'suggest',
@@ -87,32 +97,147 @@ export function QuickAccessBar({
     },
   ]
 
+  // Move the glass sliding indicator to active/hovered/focused card
+  const updateIndicator = useCallback((index: number) => {
+    if (typeof window === 'undefined') return
+    if (window.matchMedia('(max-width: 767px)').matches) return
+
+    const container = containerRef.current
+    const item = itemRefs.current[index]
+    if (!container || !item) return
+
+    const containerRect = container.getBoundingClientRect()
+    const itemRect = item.getBoundingClientRect()
+
+    setIndicator({
+      x: itemRect.left - containerRect.left,
+      y: itemRect.top - containerRect.top,
+      width: itemRect.width,
+      height: itemRect.height,
+      opacity: 1,
+    })
+  }, [])
+
+  // Pointer spotlight tracking
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (typeof window === 'undefined') return
+    if (window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    if (rafId.current) cancelAnimationFrame(rafId.current)
+    rafId.current = requestAnimationFrame(() => {
+      container.style.setProperty('--x', `${x}px`)
+      container.style.setProperty('--y', `${y}px`)
+      container.style.setProperty('--mouse-opacity', '1')
+    })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => {
+    if (containerRef.current) {
+      containerRef.current.style.setProperty('--mouse-opacity', '0')
+      const activeEl = document.activeElement
+      if (!containerRef.current.contains(activeEl)) {
+        setIndicator((prev) => ({ ...prev, opacity: 0 }))
+      }
+    }
+  }, [])
+
+  // Window resize handler to reset pill indicator position
+  useEffect(() => {
+    const handleResize = () => {
+      setIndicator((prev) => ({ ...prev, opacity: 0 }))
+    }
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (rafId.current) cancelAnimationFrame(rafId.current)
+    }
+  }, [])
+
   return (
     <section
       aria-label="Thanh truy cập nhanh"
-      className="hidden md:block relative z-20 shrink-0 px-4 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none"
+      className="relative z-20 shrink-0 px-3 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none w-full"
     >
+      {/* Progressive Enhancement: SVG Lens Displacement Refraction Filter */}
+      <svg
+        className="sr-only pointer-events-none absolute -top-[9999px] -left-[9999px]"
+        width="0"
+        height="0"
+        aria-hidden="true"
+      >
+        <defs>
+          <filter id="lens" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="28" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+          </filter>
+        </defs>
+      </svg>
+
       <div className="mx-auto max-w-5xl">
-        {/* Apple VisionOS & macOS Liquid Glassmorphism Dock */}
-        <div className="animate-hero-4 dock-glass-liquid p-2.5 sm:p-3 shadow-2xl">
-          <div className="grid grid-cols-5 gap-2.5 lg:gap-3.5 items-stretch">
-            {items.map((item) => {
+        {/* iOS 26/27 Ultra-Clean Liquid Glassmorphism Dock */}
+        <div
+          ref={containerRef}
+          onPointerMove={handlePointerMove}
+          onPointerLeave={handleMouseLeave}
+          className="animate-hero-4 dock-glass-liquid lens-supported p-2 sm:p-2.5 shadow-2xl relative"
+        >
+          {/* Mouse Spotlight Glow */}
+          <div className="dock-glass-spotlight" />
+
+          {/* Sliding Pill Indicator for iOS Fluid Spring Animation */}
+          <div
+            className="dock-glass-slider"
+            style={{
+              transform: `translate3d(${indicator.x}px, ${indicator.y}px, 0)`,
+              width: `${indicator.width}px`,
+              height: `${indicator.height}px`,
+              opacity: indicator.opacity,
+            }}
+            aria-hidden="true"
+          />
+
+          {/* 5 Cards Container: Horizontal Scroll on Mobile, 5-col Grid on Desktop */}
+          <div className="flex md:grid md:grid-cols-5 gap-2 lg:gap-3 items-stretch overflow-x-auto md:overflow-visible no-scrollbar py-1 px-1">
+            {items.map((item, idx) => {
               const Icon = item.icon
               return (
                 <button
                   key={item.id}
+                  ref={(el) => {
+                    itemRefs.current[idx] = el
+                  }}
                   type="button"
+                  onPointerEnter={() => updateIndicator(idx)}
+                  onFocus={() => updateIndicator(idx)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      if (
+                        containerRef.current &&
+                        !containerRef.current.contains(document.activeElement)
+                      ) {
+                        setIndicator((prev) => ({ ...prev, opacity: 0 }))
+                      }
+                    }, 50)
+                  }}
                   onClick={() => {
                     haptic.play('tap')
                     item.onClick()
                   }}
-                  className="group relative flex flex-col items-center justify-between rounded-2xl py-2.5 px-2 text-center dock-tile-glass cursor-pointer touch-press touch-manipulation min-h-[96px]"
+                  className="group relative flex flex-col items-center justify-between rounded-2xl py-2.5 px-2 text-center dock-tile-glass cursor-pointer touch-press touch-manipulation min-h-[96px] min-w-[136px] md:min-w-0 shrink-0 snap-center"
                 >
                   {/* Floating Pill Badge with Micro Glow */}
                   {item.badge && (
                     <span
                       className={cn(
-                        'absolute -top-2.5 z-10 rounded-full px-2.5 py-0.5 text-[9px] font-black tracking-tight shadow-md ring-1 ring-white/95 transition-transform duration-200 group-hover:scale-105',
+                        'absolute -top-2.5 z-20 rounded-full px-2.5 py-0.5 text-[9.5px] font-black tracking-tight shadow-md ring-1 ring-white/95 transition-transform duration-200 group-hover:scale-105 pointer-events-none',
                         item.badgeColor,
                       )}
                     >
@@ -121,16 +246,16 @@ export function QuickAccessBar({
                   )}
 
                   {/* Icon Staging Container: Subtle Gradient Frosted Pill */}
-                  <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-b from-white/90 to-emerald-50/70 text-[#005A36] border border-emerald-200/50 shadow-xs transition-all duration-300 group-hover:bg-[#005A36] group-hover:text-white group-hover:scale-110 group-hover:shadow-md group-hover:shadow-[#005A36]/25 mt-0.5">
+                  <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-b from-white/95 to-emerald-50/80 text-[#005a36] border border-emerald-200/50 shadow-xs transition-all duration-300 group-hover:bg-[#005a36] group-hover:text-white group-hover:scale-110 group-hover:shadow-md group-hover:shadow-[#005a36]/25 mt-0.5 pointer-events-none">
                     <Icon size={20} strokeWidth={2.3} className="transition-transform duration-300 group-hover:scale-105" />
                   </div>
 
-                  {/* Clean Typography Hierarchy: No blurry text shadows */}
-                  <div className="w-full mt-1.5 flex flex-col items-center">
-                    <span className="text-[12.5px] font-black text-slate-800 group-hover:text-[#005A36] transition-colors line-clamp-1 leading-tight tracking-tight">
+                  {/* Clean Typography Hierarchy: Dark Forest Green Title & High Contrast Subtitle */}
+                  <div className="w-full mt-1.5 flex flex-col items-center pointer-events-none">
+                    <span className="text-[13px] font-bold text-[#0b2e1c] group-hover:text-[#005a36] transition-colors line-clamp-1 leading-tight tracking-tight">
                       {item.label}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-700 mt-0.5 line-clamp-1 group-hover:text-slate-900 transition-colors">
+                    <span className="text-[12.5px] font-medium text-[rgba(11,46,28,0.75)] mt-0.5 line-clamp-1 group-hover:text-[#0b2e1c] transition-colors">
                       {item.sublabel}
                     </span>
                   </div>
@@ -143,4 +268,3 @@ export function QuickAccessBar({
     </section>
   )
 }
-
