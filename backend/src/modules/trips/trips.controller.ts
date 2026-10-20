@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -55,6 +56,15 @@ export class TripsController {
       message: `Đã tự động đóng hoàn thành ${closedCount} chuyến xe quá hạn / kết thúc theo nghiệp vụ.`,
       closedCount,
     };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Post('admin/clean-orphan-trips')
+  @ApiOperation({ summary: 'Dọn dẹp triệt để các chuyến xe mồ côi của các tuyến đã bị xóa (Admin, Manager)' })
+  async cleanOrphanTrips() {
+    return this.tripsService.cleanOrphanTrips();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -153,5 +163,18 @@ export class TripsController {
   @ApiOperation({ summary: 'Cập nhật trạng thái chuyến xe (Driver, Manager)' })
   async updateStatus(@Param('id') id: string, @Body() dto: UpdateTripStatusDto) {
     return this.tripsService.updateStatus(id, dto.status);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
+  @Delete(':id')
+  @ApiOperation({ summary: 'Xóa một chuyến xe cụ thể (Manager, Admin)' })
+  async deleteTrip(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query('force') force?: string,
+  ) {
+    const isForce = force === 'true' || force === '1';
+    return this.tripsService.deleteTrip(id, isForce);
   }
 }

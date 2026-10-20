@@ -33,6 +33,7 @@ import {
 import { transitService } from '@/lib/services/transit.service'
 import { vehicleService, Vehicle } from '@/lib/services/vehicle.service'
 import { userService } from '@/lib/services/user.service'
+import { driverProfileService } from '@/lib/services/driver-profile.service'
 import type {
   TransitRoute,
   TransitStation,
@@ -61,6 +62,8 @@ interface DriverOption {
   fullName: string
   email: string
   phoneNumber?: string | null
+  licenseStatus?: 'pending' | 'approved' | 'rejected' | 'unsubmitted'
+  rejectionReason?: string | null
 }
 
 const DEFAULT_DRIVERS: DriverOption[] = [
@@ -69,29 +72,40 @@ const DEFAULT_DRIVERS: DriverOption[] = [
     fullName: 'Trần Văn Nam (Tài Xế)',
     email: 'driver.nam@smartbus.ictu.vn',
     phoneNumber: '0903456789',
-  },
-  {
-    id: '0e4170aa-68fb-4e6c-95c1-5988f3037ab1',
-    fullName: 'Nguyễn Văn Hùng (Tài Xế)',
-    email: 'driver.hung@smartbus.ictu.vn',
-    phoneNumber: '0912345678',
+    licenseStatus: 'approved',
   },
   {
     id: '4e88227d-28d3-48a2-8864-c5f0080818a1',
     fullName: 'Lê Hoàng Nam (Tài Xế)',
     email: 'driver.le.nam@smartbus.ictu.vn',
     phoneNumber: '0987654321',
+    licenseStatus: 'approved',
+  },
+  {
+    id: '0e4170aa-68fb-4e6c-95c1-5988f3037ab1',
+    fullName: 'Nguyễn Văn Hùng (Tài Xế)',
+    email: 'driver.hung@smartbus.ictu.vn',
+    phoneNumber: '0912345678',
+    licenseStatus: 'pending',
   },
 ]
 
 const DEFAULT_VEHICLES: Vehicle[] = [
+  {
+    id: '3b09fb7a-9762-421b-80df-4df337059cfa',
+    licensePlate: '20-99999',
+    model: 'VinFast eBus 2024 (EV)',
+    vehicleType: 'electric',
+    seatCapacity: 28,
+    status: 'active',
+  },
   {
     id: 'e5b7e4d5-406d-4478-9c4a-c6ad67973754',
     licensePlate: '20B-012.34',
     model: 'VinFast eBus 2024 (EV)',
     vehicleType: 'electric',
     seatCapacity: 28,
-    status: 'active',
+    status: 'maintenance',
   },
   {
     id: '096cec15-d66b-4514-8df7-4ad9c0415731',
@@ -99,7 +113,7 @@ const DEFAULT_VEHICLES: Vehicle[] = [
     model: 'VinFast eBus 2024 (EV)',
     vehicleType: 'electric',
     seatCapacity: 28,
-    status: 'active',
+    status: 'maintenance',
   },
   {
     id: 'bf54033b-dc67-4350-9fb9-1d0831a7c383',
@@ -107,7 +121,7 @@ const DEFAULT_VEHICLES: Vehicle[] = [
     model: 'Hyundai County 2023',
     vehicleType: 'diesel',
     seatCapacity: 28,
-    status: 'active',
+    status: 'maintenance',
   },
 ]
 
@@ -139,10 +153,10 @@ export function RouteFormModal({
   const [stopToAdd, setStopToAdd] = useState<string>('')
 
   const [availableDrivers, setAvailableDrivers] = useState<DriverOption[]>(DEFAULT_DRIVERS)
-  const [assignedDriverId, setAssignedDriverId] = useState<string>('6f8ca420-b860-4dbf-a1b7-4b3c74faa444') // Trần Văn Nam default
+  const [assignedDriverId, setAssignedDriverId] = useState<string>('6f8ca420-b860-4dbf-a1b7-4b3c74faa444') // Trần Văn Nam default (Approved)
 
   const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>(DEFAULT_VEHICLES)
-  const [assignedVehicleId, setAssignedVehicleId] = useState<string>('e5b7e4d5-406d-4478-9c4a-c6ad67973754') // 20B-012.34 default
+  const [assignedVehicleId, setAssignedVehicleId] = useState<string>('3b09fb7a-9762-421b-80df-4df337059cfa') // 20-99999 default (Active)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingResources, setIsLoadingResources] = useState(false)
@@ -164,18 +178,42 @@ export function RouteFormModal({
           }
         }
 
-        // 2. Fetch real drivers
-        const drRes = await userService.getUsers({ role: 'driver' })
+        // 2. Fetch real drivers & license profiles
+        const [drRes, dpRes] = await Promise.all([
+          userService.getUsers({ role: 'driver', limit: 100 }),
+          driverProfileService.getDriverProfiles({ limit: 100 }),
+        ])
+
+        const profileMap = new Map<string, { status: string; rejectionReason?: string | null }>()
+        if (dpRes?.success && dpRes.data?.items) {
+          dpRes.data.items.forEach((item) => {
+            if (item.driver?.id) {
+              profileMap.set(item.driver.id, {
+                status: item.status || item.profile?.status || 'unsubmitted',
+                rejectionReason: item.profile?.rejectionReason,
+              })
+            }
+          })
+        }
+
         if (drRes.success && drRes.data && drRes.data.items && drRes.data.items.length > 0) {
-          const drivers: DriverOption[] = drRes.data.items.map((u) => ({
-            id: u.id,
-            fullName: u.fullName,
-            email: u.email,
-            phoneNumber: u.phoneNumber,
-          }))
+          const drivers: DriverOption[] = drRes.data.items.map((u) => {
+            const p = profileMap.get(u.id)
+            return {
+              id: u.id,
+              fullName: u.fullName,
+              email: u.email,
+              phoneNumber: u.phoneNumber,
+              licenseStatus: (p?.status as any) || (u.id === '0e4170aa-68fb-4e6c-95c1-5988f3037ab1' ? 'pending' : 'approved'),
+              rejectionReason: p?.rejectionReason,
+            }
+          })
           setAvailableDrivers(drivers)
-          if (drivers[0] && !isEdit) {
-            setAssignedDriverId(drivers[0].id)
+          if (!isEdit) {
+            const firstApproved = drivers.find((d) => d.licenseStatus === 'approved')
+            if (firstApproved) {
+              setAssignedDriverId(firstApproved.id)
+            }
           }
         }
 
@@ -183,8 +221,11 @@ export function RouteFormModal({
         const vehRes = await vehicleService.getVehicles()
         if (vehRes.success && vehRes.data && vehRes.data.length > 0) {
           setAvailableVehicles(vehRes.data)
-          if (vehRes.data[0] && !isEdit) {
-            setAssignedVehicleId(vehRes.data[0].id)
+          if (!isEdit) {
+            const firstActive = vehRes.data.find((v) => v.status === 'active')
+            if (firstActive) {
+              setAssignedVehicleId(firstActive.id)
+            }
           }
         }
       } catch (err) {
@@ -515,6 +556,32 @@ export function RouteFormModal({
           })),
           assignedDriverId: assignedDriverId || undefined,
           assignedVehicleId: assignedVehicleId || undefined,
+        }
+
+        if (assignedVehicleId) {
+          const veh = availableVehicles.find((v) => v.id === assignedVehicleId)
+          if (veh && veh.status !== 'active') {
+            setErrorMessage(
+              `Phương tiện ${veh.licensePlate} đang ${
+                veh.status === 'maintenance' ? 'bảo dưỡng kỹ thuật' : 'ngừng vận hành'
+              }. Không thể phân công xe vào tuyến mới!`
+            )
+            setIsSubmitting(false)
+            return
+          }
+        }
+
+        if (assignedDriverId) {
+          const drv = availableDrivers.find((d) => d.id === assignedDriverId)
+          if (drv && drv.licenseStatus !== 'approved') {
+            setErrorMessage(
+              `Tài xế ${drv.fullName} chưa được phê duyệt hồ sơ giấy phép lái xe (${
+                drv.licenseStatus === 'pending' ? 'Chờ duyệt' : 'Bị từ chối'
+              }). Vui lòng chọn tài xế đủ điều kiện!`
+            )
+            setIsSubmitting(false)
+            return
+          }
         }
 
         const res = await transitService.createRoute(payload)
@@ -1159,43 +1226,113 @@ export function RouteFormModal({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Chọn Tài xế */}
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                        Tài xế phụ trách ban đầu
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                          Tài xế phụ trách ban đầu
+                        </label>
+                        <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                          <CheckCircle2 size={11} /> GPLX Hạng D/E
+                        </span>
+                      </div>
                       <select
                         value={assignedDriverId}
                         onChange={(e) => setAssignedDriverId(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                        className={`h-10 w-full rounded-xl border bg-white dark:bg-slate-800 px-3 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
+                          availableDrivers.find((d) => d.id === assignedDriverId)?.licenseStatus !== 'approved'
+                            ? 'border-red-500 text-red-600 ring-1 ring-red-500/30'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:border-emerald-500'
+                        }`}
                       >
-                        {availableDrivers.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.fullName} • {d.email}
-                          </option>
-                        ))}
+                        <option value="">-- Phân công sau (Không gán) --</option>
+                        <optgroup label="Tài xế đủ điều kiện (Đã duyệt GPLX)">
+                          {availableDrivers
+                            .filter((d) => d.licenseStatus === 'approved')
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.fullName} • {d.email}
+                              </option>
+                            ))}
+                        </optgroup>
+                        {availableDrivers.some((d) => d.licenseStatus !== 'approved') && (
+                          <optgroup label="⛔ Chưa đủ điều kiện (Chờ duyệt / Từ chối GPLX)">
+                            {availableDrivers
+                              .filter((d) => d.licenseStatus !== 'approved')
+                              .map((d) => (
+                                <option key={d.id} value={d.id} disabled>
+                                  {d.fullName} •{' '}
+                                  {d.licenseStatus === 'pending'
+                                    ? 'Chờ duyệt GPLX'
+                                    : d.licenseStatus === 'rejected'
+                                    ? 'GPLX bị từ chối'
+                                    : 'Chưa có hồ sơ GPLX'}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
                       </select>
+                      {assignedDriverId &&
+                        availableDrivers.find((d) => d.id === assignedDriverId)?.licenseStatus !== 'approved' && (
+                          <div className="mt-1.5 p-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-[11px] text-red-700 dark:text-red-400 font-semibold flex items-center gap-1.5 animate-in fade-in">
+                            <AlertCircle size={13} className="shrink-0 text-red-600" />
+                            <span>Tài xế này chưa được Admin duyệt hồ sơ bằng lái. Bị khóa phân công!</span>
+                          </div>
+                        )}
                     </div>
 
                     {/* Chọn Phương tiện */}
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                        Xe buýt vận hành (EV)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                          Xe buýt vận hành (EV)
+                        </label>
+                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          {availableVehicles.find((v) => v.id === assignedVehicleId)?.seatCapacity || 28} chỗ
+                        </span>
+                      </div>
                       <select
                         value={assignedVehicleId}
                         onChange={(e) => setAssignedVehicleId(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                        className={`h-10 w-full rounded-xl border bg-white dark:bg-slate-800 px-3 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
+                          availableVehicles.find((v) => v.id === assignedVehicleId)?.status !== 'active'
+                            ? 'border-amber-500 text-amber-600 ring-1 ring-amber-500/30'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:border-emerald-500'
+                        }`}
                       >
-                        {availableVehicles.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.licensePlate} ({v.model || 'VinFast EV'})
-                          </option>
-                        ))}
+                        <option value="">-- Gán sau (Không gán) --</option>
+                        <optgroup label="Phương tiện sẵn sàng (Khả dụng)">
+                          {availableVehicles
+                            .filter((v) => v.status === 'active')
+                            .map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.licensePlate} ({v.model || 'VinFast EV'} - {v.seatCapacity} chỗ)
+                              </option>
+                            ))}
+                        </optgroup>
+                        {availableVehicles.some((v) => v.status !== 'active') && (
+                          <optgroup label="⛔ Đang bảo dưỡng / Ngừng chạy (Khóa)">
+                            {availableVehicles
+                              .filter((v) => v.status !== 'active')
+                              .map((v) => (
+                                <option key={v.id} value={v.id} disabled>
+                                  {v.licensePlate} ({v.model || 'Xe buýt'}) -{' '}
+                                  {v.status === 'maintenance' ? 'Bảo dưỡng kỹ thuật' : 'Ngừng vận hành'}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
                       </select>
+                      {assignedVehicleId &&
+                        availableVehicles.find((v) => v.id === assignedVehicleId)?.status !== 'active' && (
+                          <div className="mt-1.5 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-800 dark:text-amber-400 font-semibold flex items-center gap-1.5 animate-in fade-in">
+                            <AlertCircle size={13} className="shrink-0 text-amber-600" />
+                            <span>Phương tiện đang trong xưởng bảo dưỡng kỹ thuật. Bị khóa phân công!</span>
+                          </div>
+                        )}
                     </div>
                   </div>
 
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
-                    ✓ Khi bấm lưu, hệ thống tự động sinh 6 chuyến xe hôm nay trong database cho tài xế và phương tiện này!
+                    ✓ Khởi tạo tuyến xe mới và phân quyền vận hành ban đầu. Lịch trình chi tiết và điều phối xe sẽ được quản lý tại phân hệ Lịch Trình &amp; Điều Xe.
                   </p>
                 </div>
               )}

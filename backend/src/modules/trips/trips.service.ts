@@ -202,6 +202,11 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       .leftJoinAndSelect('trip.driver', 'driver')
       .leftJoinAndSelect('trip.conductor', 'conductor');
 
+    // Loại bỏ triệt để các chuyến xe mồ côi hoặc chuyến của các tuyến đã bị xóa (soft-deleted)
+    qb.andWhere('(route.id IS NOT NULL AND route.status != :deletedRouteStatus)', {
+      deletedRouteStatus: 'deleted',
+    });
+
     // Filter by date or Rolling Window (T+3 days)
     if (date) {
       const parsedDate = new Date(date);
@@ -339,8 +344,8 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
 
   async generateSchedule(dto: GenerateTripsDto) {
     const route = await this.routeRepository.findOne({ where: { id: dto.routeId } });
-    if (!route) {
-      throw new NotFoundException(`Không tìm thấy tuyến xe với ID ${dto.routeId}`);
+    if (!route || route.status === 'deleted') {
+      throw new NotFoundException(`Tuyến xe không tồn tại hoặc đã bị xóa`);
     }
 
     const startTimeStr = dto.startTime || route.operatingStart || '06:00:00';
@@ -470,6 +475,11 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       if (!vehicle) {
         throw new NotFoundException('Phương tiện xe buýt không tồn tại');
       }
+      if (vehicle.status !== VehicleStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Xe buýt ${vehicle.licensePlate} đang trong trạng thái bảo dưỡng hoặc ngừng hoạt động (${vehicle.status}), không thể tạo chuyến!`,
+        );
+      }
       const conflict = await this.checkScheduleConflict('vehicle', vehicle.id, null, departure, arrival);
       if (conflict) {
         const timeStr = new Date(conflict.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -480,10 +490,63 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (dto.driverId) {
-      const driver = await this.userRepository.findOne({ where: { id: dto.driverId } });
+      const driver = await this.userRepository.findOne({
+        where: { id: dto.driverId },
+        relations: { role: true },
+      });
       if (!driver) {
         throw new NotFoundException('Tài xế không tồn tại');
       }
+      if (driver.status !== UserStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Tài xế ${driver.fullName} đang bị khóa hoặc chưa kích hoạt (${driver.status}), không thể phân công!`,
+        );
+      }
+
+      // Kiểm tra bằng lái hợp lệ từ bảng driver_profiles
+      let profile: DriverProfileEntity | null = null;
+      if (this.driverProfileRepository) {
+        profile = await this.driverProfileRepository.findOne({ where: { userId: driver.id } });
+      }
+
+      if (!profile) {
+        const legacyLicense = (driver.faculty || '').toUpperCase().trim();
+        const hasLegacyValid =
+          /\b(D|E|FD|FE)\b/i.test(legacyLicense) ||
+          legacyLicense.includes('HẠNG D') ||
+          legacyLicense.includes('HẠNG E') ||
+          legacyLicense.includes('BẰNG D') ||
+          legacyLicense.includes('BẰNG E') ||
+          legacyLicense.includes('GPLX D') ||
+          legacyLicense.includes('GPLX E');
+
+        if (!hasLegacyValid) {
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} chưa có hồ sơ bằng lái trong hệ thống. Vui lòng thẩm định và phê duyệt GPLX trước khi phân công!`,
+          );
+        }
+      } else {
+        if (profile.status !== DriverLicenseStatus.APPROVED) {
+          const statusText =
+            profile.status === DriverLicenseStatus.PENDING
+              ? 'Chờ duyệt'
+              : profile.status === DriverLicenseStatus.REJECTED
+                ? `Đã bị từ chối (${profile.rejectionReason || 'Không hợp lệ'})`
+                : profile.status;
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} chưa đủ điều kiện giấy phép lái xe để điều khiển xe buýt chở khách (Trạng thái hồ sơ: "${statusText}"). Vui lòng phê duyệt GPLX trước khi phân công!`,
+          );
+        }
+
+        const validClasses = ['D', 'E', 'FD', 'FE'];
+        const cleanClass = (profile.licenseClass || '').toUpperCase().trim();
+        if (!validClasses.includes(cleanClass)) {
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} sở hữu GPLX Hạng ${profile.licenseClass}, không đủ điều kiện điều khiển xe buýt chở khách (Yêu cầu tối thiểu Hạng D hoặc Hạng E)!`,
+          );
+        }
+      }
+
       const conflict = await this.checkScheduleConflict('driver', driver.id, null, departure, arrival);
       if (conflict) {
         const timeStr = new Date(conflict.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -1834,5 +1897,111 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
 
     await this.tripRepository.save(trip);
     return trip;
+  }
+
+  /**
+   * Xóa một chuyến xe cụ thể (Hỗ trợ Admin xóa chuyến tạo tự động hoặc thao tác nhầm)
+   */
+  async deleteTrip(tripId: string, force = false): Promise<{ success: boolean; message: string }> {
+    const trip = await this.tripRepository.findOne({
+      where: { id: tripId },
+      relations: { route: true },
+    });
+
+    if (!trip) {
+      throw new NotFoundException(`Không tìm thấy chuyến xe có ID: ${tripId}`);
+    }
+
+    // Kiểm tra ràng buộc vé nếu không force
+    const activeTicketsCount = await this.ticketRepository
+      .createQueryBuilder('ticket')
+      .innerJoin('ticket.booking', 'booking')
+      .where('booking.tripId = :tripId', { tripId })
+      .andWhere('ticket.status NOT IN (:...cancelledStatuses)', {
+        cancelledStatuses: [TicketStatus.CANCELLED, TicketStatus.REFUNDED],
+      })
+      .getCount();
+
+    if (activeTicketsCount > 0 && !force) {
+      throw new ConflictException(
+        'Chuyến xe này đã phát sinh vé của hành khách. Bạn chỉ có thể hủy chuyến hoặc dùng xóa cưỡng chế nếu là dữ liệu thử nghiệm.',
+      );
+    }
+
+    // Xóa liên kết an toàn theo thứ tự FK:
+    if (this.seatHoldRepository) {
+      await this.seatHoldRepository.delete({ tripId }).catch(() => {});
+    }
+    await this.tripRepository.query('DELETE FROM vehicle_tracking WHERE trip_id = $1', [tripId]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM trip_incidents WHERE trip_id = $1', [tripId]).catch(() => {});
+    await this.tripRepository.query('UPDATE feedback SET trip_id = NULL WHERE trip_id = $1', [tripId]).catch(() => {});
+
+    // Dọn dẹp bookings test của chuyến xe này
+    const bookings = await this.tripRepository.query('SELECT id FROM bookings WHERE trip_id = $1', [tripId]);
+    if (bookings && bookings.length > 0) {
+      const bIds = bookings.map((b: any) => b.id);
+      await this.tripRepository.query('DELETE FROM refund_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payment_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM invoices WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payments WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM tickets WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM bookings WHERE trip_id = $1', [tripId]).catch(() => {});
+    }
+
+    await this.tripRepository.delete(tripId);
+
+    return {
+      success: true,
+      message: `Đã xóa thành công chuyến xe (${trip.route?.routeCode || ''} khởi hành lúc ${new Date(trip.departureTime).toLocaleTimeString('vi-VN')})`,
+    };
+  }
+
+  /**
+   * Dọn dẹp toàn bộ chuyến xe mồ côi thuộc các tuyến đã bị xóa (Soft-deleted)
+   */
+  async cleanOrphanTrips(): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    const deletedRouteTrips = await this.tripRepository.query(`
+      SELECT t.id 
+      FROM trips t
+      JOIN routes r ON t.route_id = r.id
+      WHERE r.status = 'deleted'
+    `);
+
+    if (!deletedRouteTrips || deletedRouteTrips.length === 0) {
+      return {
+        success: true,
+        deletedCount: 0,
+        message: 'Không có chuyến xe mồ côi nào của các tuyến đã xóa.',
+      };
+    }
+
+    const tripIds = deletedRouteTrips.map((t: any) => t.id);
+
+    // Xóa an toàn các phụ thuộc theo cascade
+    await this.tripRepository.query('UPDATE feedback SET trip_id = NULL WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM seat_holds WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM vehicle_tracking WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM trip_incidents WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+
+    // Dọn dẹp bookings test của các chuyến này
+    const bookings = await this.tripRepository.query('SELECT id FROM bookings WHERE trip_id = ANY($1)', [tripIds]);
+    if (bookings && bookings.length > 0) {
+      const bIds = bookings.map((b: any) => b.id);
+      await this.tripRepository.query('DELETE FROM refund_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payment_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM invoices WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payments WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM tickets WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM bookings WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    }
+
+    // Xóa các chuyến xe
+    await this.tripRepository.query('DELETE FROM trips WHERE id = ANY($1)', [tripIds]);
+
+    return {
+      success: true,
+      deletedCount: tripIds.length,
+      message: `Đã dọn dẹp triệt để ${tripIds.length} chuyến xe tự động thuộc các tuyến đã xóa khỏi cơ sở dữ liệu.`,
+    };
   }
 }

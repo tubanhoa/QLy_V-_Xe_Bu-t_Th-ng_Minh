@@ -35,6 +35,7 @@ import {
   Layers,
   PowerOff,
   Check,
+  X,
 } from 'lucide-react'
 import { transitService } from '@/lib/services/transit.service'
 import type { TransitRoute, TransitStation } from '@/lib/types/transit'
@@ -74,6 +75,10 @@ export function AdminRoutes() {
     message: '',
   })
   const [isDeactivating, setIsDeactivating] = useState(false)
+  const [isForceDeleting, setIsForceDeleting] = useState(false)
+  const [deleteModalRoute, setDeleteModalRoute] = useState<TransitRoute | null>(null)
+  const [isForceDeleteChecked, setIsForceDeleteChecked] = useState(true)
+  const [isDeletingRoute, setIsDeletingRoute] = useState(false)
 
   // Toast Notification
   const [toast, setToast] = useState<{
@@ -122,22 +127,27 @@ export function AdminRoutes() {
   // =========================================================================
   // XÓA TUYẾN & XỬ LÝ RÀNG BUỘC TOÀN VẸN (HTTP 409)
   // =========================================================================
-  const handleDeleteRoute = async (route: TransitRoute) => {
-    const confirmed = window.confirm(
-      `Bạn có chắc chắn muốn xóa tuyến "${route.routeCode} - ${route.name}"?`,
-    )
-    if (!confirmed) return
+  const handleOpenDeleteModal = (route: TransitRoute) => {
+    setDeleteModalRoute(route)
+    setIsForceDeleteChecked(true)
+  }
 
-    const res = await transitService.deleteRoute(route.id)
+  const handleConfirmDelete = async () => {
+    if (!deleteModalRoute) return
+    setIsDeletingRoute(true)
+
+    const res = await transitService.deleteRoute(deleteModalRoute.id, isForceDeleteChecked)
 
     if (res.success) {
-      showToast('success', res.message || `Đã xóa tuyến ${route.routeCode} thành công!`)
+      showToast('success', res.message || `Đã xóa tuyến ${deleteModalRoute.routeCode} thành công!`)
+      setDeleteModalRoute(null)
       loadRoutes()
     } else if (res.isIntegrityConflict || res.statusCode === 409) {
-      // BẮT LỖI RÀNG BUỘC TOÀN VẸN DỮ LIỆU: Mở DataIntegrityModal
+      const conflictedRoute = deleteModalRoute
+      setDeleteModalRoute(null)
       setIntegrityConflict({
         isOpen: true,
-        route,
+        route: conflictedRoute,
         message:
           res.message ||
           'Không thể xóa tuyến xe này do đang có chuyến xe hoạt động hoặc đã phát sinh giao dịch vé của hành khách.',
@@ -145,6 +155,7 @@ export function AdminRoutes() {
     } else {
       showToast('error', res.message || 'Lỗi khi xóa tuyến xe!')
     }
+    setIsDeletingRoute(false)
   }
 
   // Chuyển sang Inactive khi bị chặn xóa
@@ -164,6 +175,26 @@ export function AdminRoutes() {
       showToast('error', res.message || 'Không thể chuyển trạng thái tuyến xe!')
     }
     setIsDeactivating(false)
+  }
+
+  // Xóa Cưỡng Chế khi bị xung đột toàn vẹn dữ liệu test
+  const handleForceDeleteRoute = async () => {
+    if (!integrityConflict.route) return
+    const route = integrityConflict.route
+    setIsForceDeleting(true)
+
+    const res = await transitService.deleteRoute(route.id, true)
+    if (res.success) {
+      showToast(
+        'success',
+        res.message || `Đã xóa cưỡng chế tuyến ${route.routeCode} và dữ liệu test thành công!`,
+      )
+      setIntegrityConflict({ isOpen: false, route: null, message: '' })
+      loadRoutes()
+    } else {
+      showToast('error', res.message || 'Không thể xóa cưỡng chế tuyến xe!')
+    }
+    setIsForceDeleting(false)
   }
 
   // =========================================================================
@@ -463,9 +494,9 @@ export function AdminRoutes() {
                   {/* Nút xóa tuyến */}
                   <button
                     type="button"
-                    onClick={() => handleDeleteRoute(route)}
-                    title="Xóa tuyến (Kiểm tra ràng buộc chuyến & vé)"
-                    className="h-9 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-600 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                    onClick={() => handleOpenDeleteModal(route)}
+                    title="Xóa tuyến xe"
+                    className="h-9 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
                   >
                     <Trash2 size={13} />
                     <span>Xóa</span>
@@ -520,7 +551,96 @@ export function AdminRoutes() {
         }}
       />
 
-      {/* 5. Modal Xử lý Ràng buộc Toàn vẹn Dữ liệu (HTTP 409 Conflict) */}
+      {/* 5. Modal Xác Nhận Xóa Tuyến Hiện Đại (Thay thế hoàn toàn window.confirm) */}
+      {deleteModalRoute && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-7 space-y-5 animate-in zoom-in-95 duration-200"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Header */}
+            <div className="flex items-start gap-4">
+              <div className="size-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 shadow-xs">
+                <Trash2 size={24} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px] uppercase tracking-wider">
+                  Xác Nhận Xóa Tuyến
+                </span>
+                <h3 className="mt-1 text-base sm:text-lg font-black text-slate-900 dark:text-white leading-snug">
+                  {deleteModalRoute.routeCode}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                  {deleteModalRoute.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalRoute(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-xl transition-all cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Cảnh báo & Tuỳ chọn Xóa cưỡng chế */}
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                Bạn có chắc chắn muốn xóa tuyến xe này khỏi hệ thống vận hành không?
+              </p>
+              <label className="flex items-center gap-2.5 p-2 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-900/40 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isForceDeleteChecked}
+                  onChange={(e) => setIsForceDeleteChecked(e.target.checked)}
+                  className="size-4 rounded accent-rose-600 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="font-extrabold text-rose-700 dark:text-rose-300">
+                    Xóa cưỡng chế (Dọn dẹp dữ liệu test)
+                  </span>
+                  <p className="text-[10px] text-rose-600/80 dark:text-rose-400/80">
+                    Tự động hủy các vé và chuyến xe thử nghiệm liên quan để xóa sạch tuyến.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteModalRoute(null)}
+                disabled={isDeletingRoute}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingRoute}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-white font-black text-xs shadow-md shadow-rose-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+              >
+                {isDeletingRoute ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Xác Nhận Xóa</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Modal Xử lý Ràng buộc Toàn vẹn Dữ liệu (HTTP 409 Conflict) */}
       <DataIntegrityModal
         isOpen={integrityConflict.isOpen}
         onClose={() =>
@@ -531,6 +651,8 @@ export function AdminRoutes() {
         conflictMessage={integrityConflict.message}
         onDeactivateRoute={handleDeactivateConflictedRoute}
         isDeactivating={isDeactivating}
+        onForceDeleteRoute={handleForceDeleteRoute}
+        isForceDeleting={isForceDeleting}
       />
     </div>
   )

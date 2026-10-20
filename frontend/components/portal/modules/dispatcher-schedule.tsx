@@ -39,6 +39,7 @@ import {
 import { tripService, type TripItem } from '@/lib/services/trip.service'
 import { vehicleService, type Vehicle } from '@/lib/services/vehicle.service'
 import { userService, type BackendUser } from '@/lib/services/user.service'
+import { driverProfileService } from '@/lib/services/driver-profile.service'
 import { transitService } from '@/lib/services/transit.service'
 import { bookingService } from '@/lib/services/booking.service'
 import type { SeatMapData } from '@/lib/types/booking'
@@ -76,6 +77,9 @@ export function DispatcherSchedule() {
   // Dữ liệu tài nguyên xe, tài xế, phụ xe & tuyến đường
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [drivers, setDrivers] = useState<BackendUser[]>([])
+  const [driverProfilesMap, setDriverProfilesMap] = useState<
+    Record<string, { status: string; licenseClass?: string; rejectionReason?: string }>
+  >({})
   const [conductors, setConductors] = useState<BackendUser[]>([])
   const [routes, setRoutes] = useState<TransitRoute[]>([])
 
@@ -187,28 +191,43 @@ export function DispatcherSchedule() {
     }
   }, [statusFilter, tripTypeFilter, assignmentFilter])
 
-  // Tải tài nguyên phục vụ điều phối (Xe, Tài xế, Phụ xe, Tuyến)
+  // Tải tài nguyên phục vụ điều phối (Xe, Tài xế, Phụ xe, Tuyến, Hồ sơ bằng lái)
   const loadDispatchResources = useCallback(async () => {
     try {
-      const [vRes, dRes, rRes, cRes] = await Promise.all([
+      const [vRes, dRes, rRes, cRes, dpRes] = await Promise.all([
         vehicleService.getVehicles(),
         userService.getUsers({ role: 'driver', limit: 100 }),
         transitService.getRoutes(),
         userService.getUsers({ limit: 100 }),
+        driverProfileService.getDriverProfiles({ limit: 100 }),
       ])
       if (vRes.success && Array.isArray(vRes.data)) {
-        setVehicles(vRes.data.filter((v) => v.status === 'active'))
+        // Lưu toàn bộ danh sách xe (kể cả bảo dưỡng để phân loại rõ ràng trên giao diện)
+        setVehicles(vRes.data)
       }
       if (dRes?.success && dRes.data?.items && Array.isArray(dRes.data.items)) {
         setDrivers(dRes.data.items)
       }
       if (rRes?.success && Array.isArray(rRes.data)) {
-        setRoutes(rRes.data.filter((r) => r.status === 'active'))
+        setRoutes(rRes.data.filter((r) => r.status !== 'deleted'))
       }
       if (cRes?.success && cRes.data?.items && Array.isArray(cRes.data.items)) {
         const activeUsers = cRes.data.items.filter((u) => u.status === 'active')
         const dedicatedConductors = activeUsers.filter((u) => u.role?.name === 'conductor')
         setConductors(dedicatedConductors.length > 0 ? dedicatedConductors : activeUsers)
+      }
+      if (dpRes?.success && dpRes.data?.items && Array.isArray(dpRes.data.items)) {
+        const profileMap: Record<string, { status: string; licenseClass?: string; rejectionReason?: string }> = {}
+        dpRes.data.items.forEach((item) => {
+          if (item.driver?.id) {
+            profileMap[item.driver.id] = {
+              status: item.status || item.profile?.status || 'unsubmitted',
+              licenseClass: item.profile?.licenseClass,
+              rejectionReason: item.profile?.rejectionReason || undefined,
+            }
+          }
+        })
+        setDriverProfilesMap(profileMap)
       }
     } catch (err) {
       console.error('Error loading dispatch resources:', err)
@@ -268,7 +287,11 @@ export function DispatcherSchedule() {
 
     vehicles.forEach((v) => {
       if (v.status === 'maintenance') {
-        busyVehicles.push({ v, reason: 'Đang bảo dưỡng kỹ thuật' })
+        busyVehicles.push({ v, reason: 'Đang bảo dưỡng kỹ thuật (Khóa điều phối)' })
+        return
+      }
+      if (v.status === 'retired') {
+        busyVehicles.push({ v, reason: 'Ngừng vận hành (Khóa)' })
         return
       }
       const conflictTrip = trips.find(
@@ -302,6 +325,45 @@ export function DispatcherSchedule() {
         busyDrivers.push({ d, reason: 'Tài khoản đang tạm khóa' })
         return
       }
+
+      // Kiểm tra hồ sơ bằng lái từ driverProfilesMap
+      const profileInfo = driverProfilesMap[d.id]
+      const profileStatus = profileInfo?.status
+
+      if (profileStatus === 'pending') {
+        busyDrivers.push({ d, reason: 'Hồ sơ GPLX đang chờ Admin duyệt' })
+        return
+      }
+      if (profileStatus === 'rejected') {
+        busyDrivers.push({ d, reason: `GPLX bị từ chối (${profileInfo?.rejectionReason || 'Không hợp lệ'})` })
+        return
+      }
+      if (profileStatus === 'unsubmitted' || !profileStatus) {
+        // Fallback kiểm tra driver.faculty nếu hệ thống legacy
+        const legacyLicense = (d.faculty || '').toUpperCase().trim()
+        const hasLegacyValid =
+          /\b(D|E|FD|FE)\b/i.test(legacyLicense) ||
+          legacyLicense.includes('HẠNG D') ||
+          legacyLicense.includes('HẠNG E') ||
+          legacyLicense.includes('BẰNG D') ||
+          legacyLicense.includes('BẰNG E') ||
+          legacyLicense.includes('GPLX D') ||
+          legacyLicense.includes('GPLX E')
+        if (!hasLegacyValid) {
+          busyDrivers.push({ d, reason: 'Chưa có hồ sơ GPLX được duyệt' })
+          return
+        }
+      }
+
+      // Kiểm tra hạng bằng lái (phải là D, E, FD, FE)
+      if (profileInfo?.licenseClass) {
+        const validClasses = ['D', 'E', 'FD', 'FE']
+        if (!validClasses.includes(profileInfo.licenseClass.toUpperCase().trim())) {
+          busyDrivers.push({ d, reason: `GPLX Hạng ${profileInfo.licenseClass} (Yêu cầu D/E)` })
+          return
+        }
+      }
+
       const conflictTrip = trips.find(
         (t) =>
           t.id !== dispatchingTrip.id &&
@@ -363,7 +425,7 @@ export function DispatcherSchedule() {
       availableConductors,
       busyConductors,
     }
-  }, [dispatchingTrip, vehicles, drivers, conductors, trips])
+  }, [dispatchingTrip, vehicles, drivers, conductors, trips, driverProfilesMap])
 
   // Tính năng Gợi ý Tự Động (Smart Suggest)
   const handleSmartSuggest = () => {
@@ -404,8 +466,25 @@ export function DispatcherSchedule() {
       showToast('Vui lòng chọn xe buýt phục vụ chuyến này!', 'warning')
       return
     }
+    const assignedVehicle = vehicles.find((v) => v.id === selectedVehicleId)
+    if (assignedVehicle && assignedVehicle.status !== 'active') {
+      showToast(
+        `Xe buýt ${assignedVehicle.licensePlate} đang ${assignedVehicle.status === 'maintenance' ? 'bảo dưỡng kỹ thuật' : 'ngừng vận hành'}, không thể phân công!`,
+        'error'
+      )
+      return
+    }
+
     if (!selectedDriverId) {
       showToast('Vui lòng phân công tài xế cầm lái!', 'warning')
+      return
+    }
+    const driverLicense = driverProfilesMap[selectedDriverId]
+    if (driverLicense && driverLicense.status !== 'approved') {
+      showToast(
+        `Tài xế chưa đủ điều kiện vận hành (${driverLicense.status === 'pending' ? 'Hồ sơ GPLX đang chờ Admin duyệt' : 'GPLX bị từ chối'}), không thể phân công!`,
+        'error'
+      )
       return
     }
 
@@ -594,6 +673,27 @@ export function DispatcherSchedule() {
       return
     }
 
+    if (adhocVehicleId) {
+      const assignedVehicle = vehicles.find((v) => v.id === adhocVehicleId)
+      if (assignedVehicle && assignedVehicle.status !== 'active') {
+        showToast(
+          `Xe buýt ${assignedVehicle.licensePlate} đang ${assignedVehicle.status === 'maintenance' ? 'bảo dưỡng kỹ thuật' : 'ngừng vận hành'}, không thể tạo chuyến!`,
+          'error'
+        )
+        return
+      }
+    }
+    if (adhocDriverId) {
+      const driverLicense = driverProfilesMap[adhocDriverId]
+      if (driverLicense && driverLicense.status !== 'approved') {
+        showToast(
+          `Tài xế chưa đủ điều kiện vận hành (${driverLicense.status === 'pending' ? 'Hồ sơ GPLX đang chờ Admin duyệt' : 'GPLX bị từ chối'}), không thể tạo chuyến!`,
+          'error'
+        )
+        return
+      }
+    }
+
     setIsSubmittingAdhoc(true)
     try {
       const departureDate = new Date(adhocDepTime)
@@ -729,6 +829,66 @@ export function DispatcherSchedule() {
     } finally {
       setIsClosingPastTrips(false)
     }
+  }
+
+  const [isCleaningOrphanTrips, setIsCleaningOrphanTrips] = useState(false)
+
+  // Xử lý dọn dẹp toàn bộ chuyến xe mồ côi của các tuyến đã xóa
+  const handleCleanOrphanTrips = () => {
+    setConfirmDialog({
+      title: 'Dọn dẹp chuyến xe của tuyến đã xóa',
+      message:
+        'Hệ thống sẽ quét và dọn dẹp triệt để các chuyến xe tự động thuộc các tuyến đã bị xóa khỏi hệ thống. Thao tác này giúp làm sạch cơ sở dữ liệu và bảng điều phối.',
+      confirmText: 'Dọn dẹp ngay',
+      cancelText: 'Hủy bỏ',
+      variant: 'warning',
+      onConfirm: async () => {
+        setIsCleaningOrphanTrips(true)
+        try {
+          const res = await tripService.cleanOrphanTrips()
+          if (res.success) {
+            showToast(
+              res.message || 'Đã dọn dẹp thành công các chuyến xe của tuyến đã xóa!',
+              'success'
+            )
+            await loadTrips()
+          } else {
+            showToast(res.message || 'Không thể dọn dẹp các chuyến xe mồ côi', 'error')
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi khi dọn dẹp chuyến xe mồ côi', 'error')
+        } finally {
+          setIsCleaningOrphanTrips(false)
+        }
+      },
+    })
+  }
+
+  // Xử lý xóa một chuyến xe cụ thể
+  const handleDeleteTrip = (trip: TripItem) => {
+    const timeStr = trip.departureTime
+      ? new Date(trip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      : ''
+    setConfirmDialog({
+      title: 'Xác nhận xóa chuyến xe',
+      message: `Bạn có chắc chắn muốn xóa chuyến xe tuyến ${trip.route?.routeCode || ''} (${trip.route?.name || ''}) xuất bến lúc ${timeStr}? Thao tác này không thể hoàn tác.`,
+      confirmText: 'Xóa chuyến',
+      cancelText: 'Giữ lại',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const res = await tripService.deleteTrip(trip.id, true)
+          if (res.success) {
+            showToast(res.message || 'Đã xóa chuyến xe thành công!', 'success')
+            await loadTrips()
+          } else {
+            showToast(res.message || 'Không thể xóa chuyến xe này', 'error')
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi khi xóa chuyến xe', 'error')
+        }
+      },
+    })
   }
 
   // Lọc tìm kiếm phía Client (Tuyến xe, Ngày áp dụng, Trạng thái, Tìm kiếm thông minh)
@@ -904,6 +1064,20 @@ export function DispatcherSchedule() {
               )}
             </button>
 
+            {/* Nút Dọn Chuyến Tuyến Đã Xóa */}
+            <button
+              onClick={handleCleanOrphanTrips}
+              disabled={isCleaningOrphanTrips || loading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-3 py-2 text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Dọn dẹp triệt để toàn bộ các chuyến xe tự động thuộc các tuyến đã bị xóa"
+            >
+              <Trash2
+                size={13}
+                className={isCleaningOrphanTrips ? 'animate-bounce' : 'text-rose-600 dark:text-rose-400'}
+              />
+              <span>{isCleaningOrphanTrips ? 'Đang dọn dẹp...' : 'Dọn Chuyến Tuyến Đã Xóa'}</span>
+            </button>
+
             {/* Nút Refresh */}
             <button
               onClick={loadTrips}
@@ -919,11 +1093,11 @@ export function DispatcherSchedule() {
 
         {/* THANH CHUYỂN ĐỔI CHẾ ĐỘ XEM (VIEW MODE SWITCHER) */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 rounded-2xl bg-muted/40 border border-border">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto py-0.5">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 sm:px-3.5 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                 viewMode === 'grid'
                   ? 'bg-card text-foreground shadow-sm border border-border'
                   : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
@@ -936,15 +1110,16 @@ export function DispatcherSchedule() {
             <button
               type="button"
               onClick={() => setViewMode('gantt')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 sm:px-3.5 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                 viewMode === 'gantt'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
               }`}
             >
               <Calendar size={14} />
-              <span>Lịch Gantt (Timeline)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'gantt' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600'}`}>
+              <span>Lịch Gantt</span>
+              <span className="hidden sm:inline-block text-[11px] opacity-80">(Timeline)</span>
+              <span className={`hidden md:inline-flex text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'gantt' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600'}`}>
                 Trực quan
               </span>
             </button>
@@ -952,15 +1127,16 @@ export function DispatcherSchedule() {
             <button
               type="button"
               onClick={() => setViewMode('roster')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 sm:px-3.5 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                 viewMode === 'roster'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
               }`}
             >
               <Users size={14} />
-              <span>Bảng Phân Công (Roster)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'roster' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600'}`}>
+              <span>Bảng Phân Công</span>
+              <span className="hidden sm:inline-block text-[11px] opacity-80">(Roster)</span>
+              <span className={`hidden md:inline-flex text-[10px] px-1.5 py-0.2 rounded-full ${viewMode === 'roster' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600'}`}>
                 Theo Xe / Tài xế
               </span>
             </button>
@@ -980,7 +1156,7 @@ export function DispatcherSchedule() {
       )}
 
       {/* BANNER ĐIỀU HÀNH & KIỂM SOÁT CƠ CHẾ LẬP LỊCH TỰ ĐỘNG (ROLLING WINDOW SCHEDULER) */}
-      <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/30 p-5 shadow-sm">
+      <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card to-muted/30 p-4 sm:p-5 shadow-sm">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
@@ -991,11 +1167,8 @@ export function DispatcherSchedule() {
                 Cơ Chế Rolling Window Scheduler & Phân Loại Vận Hành Thực Tế
               </h2>
             </div>
-            <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed">
-              Hệ thống tự động duy trì lịch trình trượt động <strong>3 ngày tới (T+3)</strong> với trạng thái{' '}
-              <span className="text-amber-600 dark:text-amber-400 font-semibold">Chờ gán xe (Unassigned)</span>{' '}
-              giúp điều độ viên linh hoạt điều phối xe & tài xế theo thực tế. Các chuyến tăng cường (Ad-hoc) phục vụ
-              giải tỏa ùn ứ hoặc sự kiện phát sinh được tách biệt rõ ràng để quản trị và đối soát minh bạch.
+            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+              Lịch trình tự động duy trì <strong>3 ngày tới (T+3)</strong> với trạng thái chờ gán tổ xe. Chọn các bộ lọc nhanh bên cạnh để phân nhóm định kỳ hoặc chuyến tăng cường.
             </p>
           </div>
 
@@ -1637,6 +1810,16 @@ export function DispatcherSchedule() {
                         Về bến
                       </button>
                     )}
+                    {!isRunning && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTrip(item)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Xóa chuyến xe này"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1785,15 +1968,27 @@ export function DispatcherSchedule() {
                     ))}
                   </optgroup>
                   {resourceAvailability.busyVehicles.length > 0 && (
-                    <optgroup label="Đang bận / Trùng ca / Bảo dưỡng">
+                    <optgroup label="⛔ Không khả dụng (Đang bảo dưỡng / Trùng ca / Khóa)">
                       {resourceAvailability.busyVehicles.map((item) => (
-                        <option key={item.v.id} value={item.v.id}>
+                        <option
+                          key={item.v.id}
+                          value={item.v.id}
+                          disabled={item.v.id !== dispatchingTrip?.vehicleId}
+                        >
                           {item.v.licensePlate} ({item.v.model}) - {item.reason}
                         </option>
                       ))}
                     </optgroup>
                   )}
                 </select>
+                {selectedVehicleId && vehicles.find((v) => v.id === selectedVehicleId)?.status === 'maintenance' && (
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                    <span>
+                      <strong>Phương tiện đang bảo dưỡng:</strong> Xe buýt này đang trong xưởng kỹ thuật, bị khóa điều phối theo quy chuẩn an toàn!
+                    </span>
+                  </div>
+                )}
                 {dispatchConflict?.vehicleConflictTrip && (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
                     Xe đang trùng lịch chạy ở chuyến khác!
@@ -1823,7 +2018,7 @@ export function DispatcherSchedule() {
                   required
                 >
                   <option value="">-- Chọn tài xế đủ điều kiện --</option>
-                  <optgroup label="Tài xế sẵn sàng (Khả dụng)">
+                  <optgroup label="Tài xế sẵn sàng (Khả dụng & Đã duyệt GPLX)">
                     {resourceAvailability.availableDrivers.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.fullName} (SĐT: {d.phoneNumber || 'N/A'}) - Sẵn sàng
@@ -1831,22 +2026,40 @@ export function DispatcherSchedule() {
                     ))}
                   </optgroup>
                   {resourceAvailability.busyDrivers.length > 0 && (
-                    <optgroup label="Đang bận / Trùng ca / Khóa">
+                    <optgroup label="⛔ Không đủ điều kiện (Chờ duyệt GPLX / Trùng ca / Khóa)">
                       {resourceAvailability.busyDrivers.map((item) => (
-                        <option key={item.d.id} value={item.d.id}>
+                        <option
+                          key={item.d.id}
+                          value={item.d.id}
+                          disabled={item.d.id !== dispatchingTrip?.driverId}
+                        >
                           {item.d.fullName} - {item.reason}
                         </option>
                       ))}
                     </optgroup>
                   )}
                 </select>
+                {selectedDriverId && driverProfilesMap[selectedDriverId]?.status !== 'approved' && (
+                  <div className="mt-2 rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300 flex items-center gap-2">
+                    <ShieldAlert size={14} className="text-red-600 shrink-0" />
+                    <span>
+                      <strong>Hồ sơ GPLX chưa được duyệt:</strong> Tài xế này{' '}
+                      {driverProfilesMap[selectedDriverId]?.status === 'pending'
+                        ? 'đang chờ Admin thẩm định bằng lái'
+                        : driverProfilesMap[selectedDriverId]?.status === 'rejected'
+                        ? `đã bị từ chối bằng lái (${driverProfilesMap[selectedDriverId]?.rejectionReason || 'Không hợp lệ'})`
+                        : 'chưa nộp hồ sơ bằng lái'}
+                      . Bị khóa điều phối theo quy chuẩn an toàn vận tải!
+                    </span>
+                  </div>
+                )}
                 {dispatchConflict?.driverConflictTrip ? (
                   <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1 block">
                     Tài xế đang có ca chạy trùng khung giờ này!
                   </span>
                 ) : (
                   <span className="text-[11px] text-muted-foreground mt-1 block">
-                    Đã kiểm tra chứng chỉ hành nghề và thời hạn GPLX hợp lệ
+                    Hệ thống tự động đối chiếu cơ sở dữ liệu GPLX và kiểm tra trùng ca
                   </span>
                 )}
               </div>
@@ -2065,11 +2278,26 @@ export function DispatcherSchedule() {
                     className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-amber-500 focus:outline-none"
                   >
                     <option value="">-- Gán sau --</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.licensePlate} ({v.seatCapacity} chỗ)
-                      </option>
-                    ))}
+                    <optgroup label="Phương tiện sẵn sàng (Khả dụng)">
+                      {vehicles
+                        .filter((v) => v.status === 'active')
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.licensePlate} ({v.model} - {v.seatCapacity} chỗ)
+                          </option>
+                        ))}
+                    </optgroup>
+                    {vehicles.some((v) => v.status !== 'active') && (
+                      <optgroup label="⛔ Đang bảo dưỡng / Ngừng chạy (Khóa)">
+                        {vehicles
+                          .filter((v) => v.status !== 'active')
+                          .map((v) => (
+                            <option key={v.id} value={v.id} disabled>
+                              {v.licensePlate} ({v.model}) - {v.status === 'maintenance' ? 'Bảo dưỡng kỹ thuật' : 'Ngừng vận hành'}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
 
@@ -2083,11 +2311,35 @@ export function DispatcherSchedule() {
                     className="mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground focus:border-amber-500 focus:outline-none"
                   >
                     <option value="">-- Phân công sau --</option>
-                    {drivers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.fullName}
-                      </option>
-                    ))}
+                    <optgroup label="Tài xế đủ điều kiện (Đã duyệt GPLX)">
+                      {drivers
+                        .filter((d) => driverProfilesMap[d.id]?.status === 'approved')
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.fullName} (SĐT: {d.phoneNumber || 'N/A'})
+                          </option>
+                        ))}
+                    </optgroup>
+                    {drivers.some((d) => driverProfilesMap[d.id]?.status !== 'approved') && (
+                      <optgroup label="⛔ Chưa đủ điều kiện (Chờ duyệt / Từ chối GPLX)">
+                        {drivers
+                          .filter((d) => driverProfilesMap[d.id]?.status !== 'approved')
+                          .map((d) => {
+                            const status = driverProfilesMap[d.id]?.status
+                            const reason =
+                              status === 'pending'
+                                ? 'Chờ duyệt GPLX'
+                                : status === 'rejected'
+                                ? 'GPLX bị từ chối'
+                                : 'Chưa nộp GPLX'
+                            return (
+                              <option key={d.id} value={d.id} disabled>
+                                {d.fullName} - {reason}
+                              </option>
+                            )
+                          })}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               </div>

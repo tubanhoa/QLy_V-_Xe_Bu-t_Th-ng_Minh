@@ -201,9 +201,11 @@ class TransitService {
    */
   async deleteRoute(
     id: string,
+    force = false,
   ): Promise<TransitApiResponse<{ message: string }>> {
     try {
-      const res = await fetch(`${this.baseUrl}/routes/${id}`, {
+      const url = force ? `${this.baseUrl}/routes/${id}?force=true` : `${this.baseUrl}/routes/${id}`
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: this.getAuthHeaders(),
       })

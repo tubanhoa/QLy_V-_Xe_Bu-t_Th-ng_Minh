@@ -8,6 +8,7 @@ import {
   PowerOff,
   X,
   Info,
+  Trash2,
 } from 'lucide-react'
 
 interface DataIntegrityModalProps {
@@ -18,6 +19,8 @@ interface DataIntegrityModalProps {
   conflictMessage: string
   onDeactivateRoute?: () => void
   isDeactivating?: boolean
+  onForceDeleteRoute?: () => void
+  isForceDeleting?: boolean
 }
 
 export function DataIntegrityModal({
@@ -28,6 +31,8 @@ export function DataIntegrityModal({
   conflictMessage,
   onDeactivateRoute,
   isDeactivating = false,
+  onForceDeleteRoute,
+  isForceDeleting = false,
 }: DataIntegrityModalProps) {
   if (!isOpen) return null
 
@@ -89,14 +94,30 @@ export function DataIntegrityModal({
 
         {/* Action Buttons */}
         <div className="space-y-2 pt-1">
+          {entityType === 'route' && onForceDeleteRoute && (
+            <button
+              type="button"
+              onClick={onForceDeleteRoute}
+              disabled={isForceDeleting}
+              className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-white font-black text-xs shadow-md shadow-rose-900/10 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+            >
+              <Trash2 size={16} />
+              <span>
+                {isForceDeleting
+                  ? 'Đang xóa cưỡng chế dữ liệu test...'
+                  : 'Xóa Cưỡng Chế (Dọn dẹp cả vé & chuyến test)'}
+              </span>
+            </button>
+          )}
+
           {entityType === 'route' && onDeactivateRoute && (
             <button
               type="button"
               onClick={onDeactivateRoute}
               disabled={isDeactivating}
-              className="w-full py-3 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-98 text-white font-black text-xs shadow-md shadow-amber-900/10 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+              className="w-full py-2.5 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-98 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
             >
-              <PowerOff size={16} />
+              <PowerOff size={15} />
               <span>
                 {isDeactivating
                   ? 'Đang chuyển trạng thái...'

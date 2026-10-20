@@ -19,6 +19,7 @@ import {
   Fuel,
   Calendar,
   Layers,
+  Ban,
 } from 'lucide-react'
 import {
   vehicleService,
@@ -424,9 +425,19 @@ export function AdminFleet() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Trạng thái ghế:</span>
-                      <p className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mt-0.5">
-                        <Layers size={13} /> Sẵn sàng gán
-                      </p>
+                      {item.status === 'active' ? (
+                        <p className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                          <Layers size={13} /> Sẵn sàng gán
+                        </p>
+                      ) : item.status === 'maintenance' ? (
+                        <p className="font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-0.5" title="Phương tiện đang bảo dưỡng, tạm khóa gán lịch">
+                          <Wrench size={13} /> Khóa điều phối (Bảo dưỡng)
+                        </p>
+                      ) : (
+                        <p className="font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                          <Ban size={13} /> Ngừng vận hành
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -625,6 +636,23 @@ export function AdminFleet() {
                 <X size={18} />
               </button>
             </div>
+
+            {viewingSeatsVehicle.status === 'maintenance' && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
+                <Wrench size={14} className="text-amber-600 shrink-0" />
+                <span>
+                  <strong>Xe đang bảo dưỡng kỹ thuật:</strong> Toàn bộ 28 vị trí ghế tạm thời bị khóa gán điều phối cho đến khi hoàn tất bảo trì và chuyển lại &quot;Đang hoạt động&quot;.
+                </span>
+              </div>
+            )}
+            {viewingSeatsVehicle.status === 'retired' && (
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300 flex items-center gap-2">
+                <Ban size={14} className="text-slate-600 shrink-0" />
+                <span>
+                  <strong>Xe đã ngừng vận hành:</strong> Không khả dụng cho bất kỳ hoạt động điều phối nào.
+                </span>
+              </div>
+            )}
 
             <div className="my-4 flex items-center justify-center gap-4 text-xs">
               <span className="flex items-center gap-1.5">
