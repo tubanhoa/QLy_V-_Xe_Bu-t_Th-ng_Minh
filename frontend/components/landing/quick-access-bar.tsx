@@ -118,6 +118,7 @@ export function QuickAccessBar({
   }, [])
 
   // Move the glass sliding indicator to active/hovered/focused card
+  // Uses offsetLeft, offsetTop, offsetWidth, offsetHeight + uniform 4px padding
   const updateIndicator = useCallback((index: number) => {
     if (typeof window === 'undefined') return
     if (window.matchMedia('(max-width: 767px)').matches) {
@@ -125,37 +126,37 @@ export function QuickAccessBar({
       return
     }
 
-    const container = containerRef.current
+    const scrollContainer = scrollRef.current
     const item = itemRefs.current[index]
-    if (!container || !item) return
+    if (!scrollContainer || !item) return
 
-    const containerRect = container.getBoundingClientRect()
-    const itemRect = item.getBoundingClientRect()
-
-    // Position relative to container, inherently accounting for any horizontal scroll offset
-    const x = itemRect.left - containerRect.left
-    const y = itemRect.top - containerRect.top
+    // Position relative to scrollRef (offsetParent), unaffected by CSS transforms
+    const padding = 4
+    const x = item.offsetLeft - padding
+    const y = item.offsetTop - padding
+    const width = item.offsetWidth + padding * 2
+    const height = item.offsetHeight + padding * 2
 
     setIndicator({
       x,
       y,
-      width: itemRect.width,
-      height: itemRect.height,
+      width,
+      height,
       opacity: 1,
     })
   }, [])
 
   // Listen to container resize using ResizeObserver
   useEffect(() => {
-    const container = containerRef.current
-    if (!container || typeof ResizeObserver === 'undefined') return
+    const scrollEl = scrollRef.current
+    if (!scrollEl || typeof ResizeObserver === 'undefined') return
 
     const ro = new ResizeObserver(() => {
       if (activeIndexRef.current !== null) {
         updateIndicator(activeIndexRef.current)
       }
     })
-    ro.observe(container)
+    ro.observe(scrollEl)
     return () => ro.disconnect()
   }, [updateIndicator])
 
@@ -277,28 +278,29 @@ export function QuickAccessBar({
           {/* Mouse Spotlight Glow */}
           <div className="dock-glass-spotlight" />
 
-          {/* Sliding Pill Indicator for iOS Fluid Spring Animation (transform animated) */}
-          <div
-            className="dock-glass-slider"
-            style={{
-              transform: `translate3d(${indicator.x}px, ${indicator.y}px, 0)`,
-              width: `${indicator.width}px`,
-              height: `${indicator.height}px`,
-              opacity: indicator.opacity,
-            }}
-            aria-hidden="true"
-          />
-
-          {/* 5 Cards Container: Horizontal Scroll on Mobile with Top Headroom (pt-4) to prevent badge clipping */}
+          {/* Relative Wrapper for Cards & Sliding Pill */}
           <div
             ref={scrollRef}
-            className="flex md:grid md:grid-cols-5 gap-2 lg:gap-3 items-stretch overflow-x-auto md:overflow-visible no-scrollbar pt-4 pb-1 px-1"
+            className="relative flex md:grid md:grid-cols-5 gap-2 lg:gap-3 items-stretch overflow-x-auto md:overflow-visible no-scrollbar p-1"
           >
+            {/* Sliding Pill Indicator: perfectly covers card from top of badge to bottom of subtitle + 4px padding */}
+            <div
+              className="dock-glass-slider"
+              style={{
+                transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+                width: `${indicator.width}px`,
+                height: `${indicator.height}px`,
+                opacity: indicator.opacity,
+              }}
+              aria-hidden="true"
+            />
+
             {items.map((item, idx) => {
               const Icon = item.icon
               return (
                 <button
                   key={item.id}
+                  data-dock-card={item.id}
                   ref={(el) => {
                     itemRefs.current[idx] = el
                   }}
@@ -306,6 +308,16 @@ export function QuickAccessBar({
                   onPointerEnter={() => {
                     activeIndexRef.current = idx
                     updateIndicator(idx)
+                  }}
+                  onMouseEnter={() => {
+                    activeIndexRef.current = idx
+                    updateIndicator(idx)
+                  }}
+                  onMouseMove={() => {
+                    if (activeIndexRef.current !== idx || indicator.opacity === 0) {
+                      activeIndexRef.current = idx
+                      updateIndicator(idx)
+                    }
                   }}
                   onFocus={() => {
                     activeIndexRef.current = idx
@@ -327,26 +339,30 @@ export function QuickAccessBar({
                     haptic.play('tap')
                     item.onClick()
                   }}
-                  className="group relative flex flex-col items-center justify-between rounded-2xl pt-3 pb-2.5 px-2 text-center dock-tile-glass cursor-pointer touch-press touch-manipulation min-h-[98px] min-w-[136px] md:min-w-0 shrink-0 snap-center"
+                  className="group relative flex flex-col items-center justify-between rounded-2xl pt-2 pb-2 px-2 text-center dock-tile-glass cursor-pointer min-h-[110px] min-w-[136px] md:min-w-0 shrink-0 snap-center"
                 >
-                  {/* Floating Pill Badge with Micro Glow (fully contained within pt-4 headroom) */}
-                  {item.badge && (
-                    <span
-                      className={cn(
-                        'absolute -top-2.5 left-1/2 -translate-x-1/2 z-20 rounded-full px-2.5 py-0.5 text-[9.5px] font-black tracking-tight shadow-md ring-1 ring-white/95 transition-transform duration-200 group-hover:scale-105 pointer-events-none whitespace-nowrap',
-                        item.badgeColor,
-                      )}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-
-                  {/* Icon Staging Container: Crisp Pill in normal state, Deep Forest Green on Hover */}
-                  <div className="dock-icon-box">
-                    <Icon size={20} strokeWidth={2.3} className="transition-transform duration-300" />
+                  {/* Badge Row (Uniform 22px height: badge is completely inside the card and pill) */}
+                  <div className="w-full h-[22px] flex items-center justify-center pointer-events-none">
+                    {item.badge ? (
+                      <span
+                        className={cn(
+                          'rounded-full px-2.5 py-0.5 text-[9.5px] font-black tracking-tight shadow-xs ring-1 ring-white/95 whitespace-nowrap',
+                          item.badgeColor,
+                        )}
+                      >
+                        {item.badge}
+                      </span>
+                    ) : (
+                      <div className="h-[18px]" />
+                    )}
                   </div>
 
-                  {/* Clean Typography Hierarchy: Dark Forest Green Title & High Contrast Subtitle */}
+                  {/* Dedicated Icon Container: Crisp White Pill in normal state, Deep Forest Green on Hover */}
+                  <div className="dock-icon-box">
+                    <Icon size={20} strokeWidth={2.3} />
+                  </div>
+
+                  {/* Clean Typography Hierarchy: No text-shadow, antialiased and optimizeLegibility */}
                   <div className="w-full mt-1.5 flex flex-col items-center pointer-events-none">
                     <span className="dock-card-title line-clamp-1">
                       {item.label}
