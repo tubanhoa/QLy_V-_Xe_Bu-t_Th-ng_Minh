@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
 import { AmbientTransitFx } from './ambient-transit-fx'
@@ -88,6 +88,26 @@ export function LandingPage() {
     isNotificationCenterOpen ||
     activeModal !== null
 
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  // Dynamically synchronize header height to CSS variable --header-height
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const updateHeaderHeight = () => {
+      const h = el.offsetHeight
+      if (h > 0) {
+        document.documentElement.style.setProperty('--header-height', `${h}px`)
+      }
+    }
+    updateHeaderHeight()
+    const observer = new ResizeObserver(() => {
+      updateHeaderHeight()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   // Tự động mở Cửa Sổ Nổi Vé Điện Tử, Vé Tháng hoặc Kho Voucher khi có query param
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -108,7 +128,7 @@ export function LandingPage() {
   }, [])
 
   return (
-    <div className="relative h-screen max-h-screen w-full overflow-hidden bg-[#EBF5FB] flex flex-col justify-between select-none font-sans text-slate-900">
+    <div className="relative h-[100dvh] lg:h-screen lg:max-h-screen w-full overflow-hidden bg-[#EBF5FB] flex flex-col justify-between select-none font-sans text-slate-900">
       {/* Fullscreen Landscape Background Canvas */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
         {/* Stage strictly locked to the 1376:768 aspect ratio of tea hills background */}
@@ -178,8 +198,8 @@ export function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-white/65 via-white/35 to-transparent lg:w-[48%] pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-transparent pointer-events-none" />
 
-        {/* Ambient Drifting Clouds in Sky - GPU Accelerated & Lightweight */}
-        <div className="absolute top-2 left-0 w-[140%] h-36 opacity-20 blur-sm animate-cloud-1 pointer-events-none will-change-transform">
+        {/* Ambient Drifting Clouds in Sky - GPU Accelerated & Lightweight (Desktop Only) */}
+        <div className="hidden lg:block absolute top-2 left-0 w-[140%] h-36 opacity-20 blur-sm animate-cloud-1 pointer-events-none will-change-transform">
           <svg viewBox="0 0 1000 120" fill="none" className="w-full h-full text-white/70">
             <path
               d="M 120,60 Q 150,20 200,40 Q 240,10 290,35 Q 340,15 380,45 Q 430,25 470,55 Q 500,40 540,60 L 540,100 L 120,100 Z"
@@ -191,7 +211,7 @@ export function LandingPage() {
             />
           </svg>
         </div>
-        <div className="absolute top-8 left-[-15%] w-[130%] h-28 opacity-15 blur-xs animate-cloud-2 pointer-events-none will-change-transform">
+        <div className="hidden lg:block absolute top-8 left-[-15%] w-[130%] h-28 opacity-15 blur-xs animate-cloud-2 pointer-events-none will-change-transform">
           <svg viewBox="0 0 1000 100" fill="none" className="w-full h-full text-white/60">
             <path
               d="M 220,50 Q 270,18 330,35 Q 380,10 440,38 Q 500,20 560,50 L 560,90 L 220,90 Z"
@@ -205,7 +225,7 @@ export function LandingPage() {
       </div>
 
       {/* 2-Tier Header with Transparent Background */}
-      <div className="relative shrink-0 z-30">
+      <div ref={headerRef} className="relative shrink-0 z-50 lg:z-30">
         <TopUtilityBar
           onOpenModal={(modal) => {
             if (modal === 'lookup') {
@@ -237,7 +257,7 @@ export function LandingPage() {
       </div>
 
       {/* Middle Hero Viewport Stage */}
-      <main className="relative z-10 flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+      <main className="relative z-10 flex-1 min-h-0 flex flex-col justify-between overflow-y-auto lg:overflow-hidden scroll-touch no-scrollbar pb-[calc(88px+env(safe-area-inset-bottom,0px))] lg:pb-0">
         <VietcombankHero
           onOpenSeatPicker={() => {
             setSelectedTrip(null)
@@ -256,6 +276,17 @@ export function LandingPage() {
             }
             setIsTripSearchOpen(true)
           }}
+          onOpenModal={(modal) => {
+            if (modal === 'lookup') {
+              setIsTicketModalOpen(true)
+            } else if (modal === 'student-pass') {
+              setIsMonthlyPassModalOpen(true)
+            } else {
+              setActiveModal(modal)
+            }
+          }}
+          onOpenTicketModal={() => setIsTicketModalOpen(true)}
+          onOpenVoucherVault={() => setIsVoucherVaultOpen(true)}
         />
 
         {/* Floating Quick Access Bar with strong mobile app glassmorphism */}

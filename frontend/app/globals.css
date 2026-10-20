@@ -132,15 +132,22 @@
   --glass-bg-start: rgba(255, 255, 255, 0.38);
   --glass-bg-end: rgba(255, 255, 255, 0.10);
   --glass-tint: rgba(10, 60, 35, 0.10);
-  --glass-tint-bottom: rgba(8, 50, 28, 0.16);
+  --glass-tint-bottom: rgba(8, 50, 28, 0.22);
   --glass-rim-top: rgba(255, 255, 255, 0.85);
   --glass-rim-left: rgba(255, 255, 255, 0.35);
   --glass-rim-bottom: rgba(255, 255, 255, 0.12);
   --glass-inner-glow: rgba(255, 255, 255, 0.22);
-  --glass-outer-shadow: rgba(0, 50, 25, 0.22);
-  --glass-radius: 32px;
+  --header-height: 112px;
   --glass-card-title: #0b2e1c;
   --glass-card-subtitle: rgba(8, 40, 22, 0.85);
+
+  /* Unified Liquid Glass & Frosted Material Tokens */
+  --liquid-radius-dock: 32px;
+  --liquid-radius-search: 9999px;
+  --liquid-rim-glow: rgba(255, 255, 255, 0.85);
+  --liquid-shadow-ambient: 0 12px 40px rgba(0, 50, 25, 0.22);
+  --liquid-shadow-search: 0 8px 28px rgba(0, 45, 25, 0.10);
+  --liquid-border: 1px solid rgba(255, 255, 255, 0.75);
 }
 
 .dark {
@@ -378,19 +385,19 @@ div[class*="nextjs-toast"] {
 .dock-glass-liquid {
   position: relative;
   isolation: isolate;
-  border-radius: var(--glass-radius, 32px);
+  border-radius: var(--liquid-radius-dock, 32px);
   background: 
-    linear-gradient(180deg, rgba(8, 50, 28, 0) 0%, var(--glass-tint-bottom, rgba(8, 50, 28, 0.16)) 100%),
+    linear-gradient(180deg, rgba(8, 50, 28, 0) 0%, var(--glass-tint-bottom, rgba(8, 50, 28, 0.22)) 100%),
     linear-gradient(135deg, var(--glass-bg-start, rgba(255, 255, 255, 0.38)) 0%, var(--glass-bg-end, rgba(255, 255, 255, 0.10)) 100%),
     var(--glass-tint, rgba(10, 60, 35, 0.10));
   backdrop-filter: blur(var(--glass-blur, 26px)) saturate(var(--glass-saturate, 180%)) brightness(var(--glass-brightness, 1.05));
   -webkit-backdrop-filter: blur(var(--glass-blur, 26px)) saturate(var(--glass-saturate, 180%)) brightness(var(--glass-brightness, 1.05));
   box-shadow: 
-    inset 0 1px 0 var(--glass-rim-top, rgba(255, 255, 255, 0.85)),
+    inset 0 1px 0 var(--liquid-rim-glow, rgba(255, 255, 255, 0.85)),
     inset 1px 0 0 var(--glass-rim-left, rgba(255, 255, 255, 0.35)),
     inset 0 -1px 0 var(--glass-rim-bottom, rgba(255, 255, 255, 0.12)),
     inset 0 0 28px var(--glass-inner-glow, rgba(255, 255, 255, 0.22)),
-    0 12px 40px var(--glass-outer-shadow, rgba(0, 50, 25, 0.22));
+    var(--liquid-shadow-ambient, 0 12px 40px rgba(0, 50, 25, 0.22));
 }
 
 /* Pseudo-element Specular Gradient Rim via mask-composite (~1.5px) */
@@ -597,12 +604,14 @@ div[class*="nextjs-toast"] {
 }
 
 .hero-glass-search {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border-radius: var(--liquid-radius-search, 9999px);
+  border: var(--liquid-border, 1px solid rgba(255, 255, 255, 0.75));
+  box-shadow: 
+    inset 0 1px 0 var(--liquid-rim-glow, rgba(255, 255, 255, 0.85)),
+    var(--liquid-shadow-search, 0 8px 28px rgba(0, 45, 25, 0.10));
 }
 
 /* 3D Card Stack Hover Effect - Synchronous Scaling for All Cards */

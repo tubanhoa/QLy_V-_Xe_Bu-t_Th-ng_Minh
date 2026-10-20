@@ -10,18 +10,13 @@ import {
   LogOut,
   Menu,
   PhoneCall,
-  Route,
   ShieldCheck,
-  Sparkles,
   Ticket,
-  User,
   X,
-  Zap,
 } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
-import { useAuth } from '@/lib/auth-context'
-import { ROLE_META } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
 import { haptic } from '@/lib/utils/haptics'
 
 interface MainHeaderProps {
@@ -43,9 +38,9 @@ export function MainHeader({
   onOpenNotificationCenter,
   unreadCount = 0,
 }: MainHeaderProps) {
-  const { isAuthenticated, user, role, logout } = useAuth()
-  const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const { user, isAuthenticated, logout, role } = useAuth()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -70,15 +65,18 @@ export function MainHeader({
           : 'bg-transparent border-b border-black/5',
       )}
     >
-      <div className="mx-auto flex h-16 sm:h-[72px] max-w-7xl items-center justify-between gap-3 sm:gap-4 px-3.5 sm:px-6 lg:px-8 safe-top">
+      {/* ===================================================================
+          DESKTOP HEADER (>= lg): 100.00% EXACT BASELINE GEOMETRY & STYLING
+          =================================================================== */}
+      <div className="hidden lg:flex mx-auto h-[72px] max-w-7xl items-center justify-between gap-4 px-6 lg:px-8 safe-top">
         {/* Brand Logo - Forest Green */}
-        <Link href="/" className="flex items-center gap-2.5 sm:gap-3.5 group touch-press" aria-label="ICTU Transit - Trang chủ">
+        <Link href="/" className="flex items-center gap-3.5 group touch-press" aria-label="ICTU Transit - Trang chủ">
           <BrandMark size="md" />
           <div className="flex flex-col leading-none">
-            <span className="text-[17px] sm:text-[20px] font-black tracking-tight text-[#005A36] group-hover:text-emerald-800 transition-colors drop-shadow-sm">
+            <span className="text-[20px] font-black tracking-tight text-[#005A36] group-hover:text-emerald-800 transition-colors drop-shadow-sm">
               ICTU <span className="text-[#005A36]">TRANSIT</span>
             </span>
-            <span className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] font-bold text-slate-700">Hệ Thống Xe Buýt Thông Minh</span>
+            <span className="mt-1 text-[11px] font-bold text-slate-700">Hệ Thống Xe Buýt Thông Minh</span>
           </div>
         </Link>
 
@@ -88,7 +86,7 @@ export function MainHeader({
           <div className="group relative">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 transition-colors hover:text-[#005A36] hover:bg-white/40"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 whitespace-nowrap transition-colors hover:text-[#005A36] hover:bg-white/40"
             >
               Tuyến xe & Lịch trình
               <ChevronDown size={15} strokeWidth={2.5} className="text-slate-500 transition-transform group-hover:rotate-180" />
@@ -122,7 +120,7 @@ export function MainHeader({
           <div className="group relative">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 transition-colors hover:text-[#005A36] hover:bg-white/40"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 whitespace-nowrap transition-colors hover:text-[#005A36] hover:bg-white/40"
             >
               Vé & Tiện ích
               <ChevronDown size={15} strokeWidth={2.5} className="text-slate-500 transition-transform group-hover:rotate-180" />
@@ -214,7 +212,7 @@ export function MainHeader({
           <div className="group relative">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 transition-colors hover:text-[#005A36] hover:bg-white/40"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 whitespace-nowrap transition-colors hover:text-[#005A36] hover:bg-white/40"
             >
               Liên hệ & Hỗ trợ
               <ChevronDown size={15} strokeWidth={2.5} className="text-slate-500 transition-transform group-hover:rotate-180" />
@@ -236,7 +234,7 @@ export function MainHeader({
           {/* Non-dropdown: Giao dịch an toàn */}
           <Link
             href="/thong-tin-dich-vu#safety"
-            className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 visited:text-slate-900 transition-colors hover:text-[#005A36] hover:bg-white/40"
+            className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-extrabold text-slate-900 visited:text-slate-900 whitespace-nowrap transition-colors hover:text-[#005A36] hover:bg-white/40"
           >
             Giao dịch an toàn
           </Link>
@@ -244,7 +242,7 @@ export function MainHeader({
           {/* Insurance / Certification - Transparent outline badge linking to policy */}
           <Link
             href="/thong-tin-dich-vu#insurance"
-            className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3 py-1 text-xs font-bold text-[#005A36] transition-colors hover:bg-[#005A36]/10"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#005A36]/40 bg-transparent px-3 py-1 text-xs font-bold text-[#005A36] whitespace-nowrap transition-colors hover:bg-[#005A36]/10"
           >
             <ShieldCheck size={14} strokeWidth={2.2} className="text-[#005A36]" />
             Bảo hiểm hành khách
@@ -357,7 +355,7 @@ export function MainHeader({
             </Link>
           )}
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button - Baseline had xl:hidden */}
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -369,51 +367,121 @@ export function MainHeader({
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* ===================================================================
+          MOBILE HEADER (< lg): REFINED ACCORDING TO REQUIREMENT A
+          Height ~56px, 1 tier, only logo + bell + avatar button (0% overflow)
+          =================================================================== */}
+      <div className="flex lg:hidden mx-auto h-14 max-w-7xl items-center justify-between gap-3 px-3.5 safe-top">
+        {/* Brand Logo - Compact, no tagline */}
+        <Link href="/" className="flex items-center gap-2.5 group touch-press" aria-label="ICTU Transit - Trang chủ">
+          <BrandMark size="sm" />
+          <span className="text-[17px] font-black tracking-tight text-[#005A36] group-hover:text-emerald-800 transition-colors drop-shadow-sm">
+            ICTU <span className="text-[#005A36]">TRANSIT</span>
+          </span>
+        </Link>
+
+        {/* Right CTA: Bell + Avatar / Login */}
+        <div className="flex items-center gap-2">
+          {/* Bell button */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic.play('tap')
+              onOpenNotificationCenter?.()
+            }}
+            aria-label="Xem thông báo chuyến xe"
+            className="relative inline-flex size-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white/90 text-slate-700 transition-all cursor-pointer shadow-xs active:scale-95"
+          >
+            <Bell size={18} strokeWidth={2.2} className="text-slate-700" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Avatar button opening mobile drawer */}
+          {isAuthenticated && user ? (
+            <button
+              type="button"
+              id="mobile-drawer-trigger"
+              onClick={() => setOpen(true)}
+              aria-label="Mở menu tài khoản"
+              className="flex size-9 items-center justify-center rounded-xl bg-[#005A36] text-white font-black text-xs shadow-xs border border-emerald-400/80 active:scale-95 transition-transform cursor-pointer"
+            >
+              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            </button>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1 rounded-xl bg-[#005A36] text-white font-bold px-2.5 py-1.5 text-xs shadow-xs active:scale-95"
+              >
+                <LogIn size={14} strokeWidth={2.5} />
+                <span>Đăng nhập</span>
+              </Link>
+              <button
+                type="button"
+                id="mobile-drawer-trigger"
+                onClick={() => setOpen(true)}
+                aria-label="Mở menu"
+                className="inline-flex size-9 items-center justify-center rounded-xl text-slate-800 transition-colors hover:bg-white/60 cursor-pointer"
+              >
+                <Menu size={22} strokeWidth={2.2} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile Drawer (Accessible from mobile avatar or menu) */}
       <div
         role="dialog"
         aria-modal="true"
         className={cn(
-          'fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 xl:hidden',
+          'fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden',
           open ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
       >
         <div
           className={cn(
-            'fixed inset-y-0 right-0 w-full max-w-[320px] sm:max-w-sm bg-white p-5 sm:p-6 shadow-2xl transition-transform duration-300 ease-out flex flex-col justify-between overflow-y-auto scroll-touch safe-top safe-bottom',
+            'fixed inset-y-0 right-0 w-full max-w-[320px] sm:max-w-sm bg-white shadow-2xl transition-transform duration-300 ease-out flex flex-col overflow-hidden z-50',
             open ? 'translate-x-0' : 'translate-x-full',
           )}
         >
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          {/* Drawer Header (Fixed at top) */}
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 shrink-0 bg-white">
             <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
               <BrandMark size="sm" />
-              <span className="font-black text-[#005A36]">ICTU TRANSIT</span>
+              <span className="font-black text-[#005A36] text-base tracking-tight">ICTU TRANSIT</span>
             </Link>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex size-9 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700"
+              className="inline-flex size-9 items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             >
               <X size={20} />
             </button>
           </div>
 
-          <div className="mt-6 flex flex-col gap-2.5">
+          {/* Drawer Scrollable Content */}
+          <div className="flex-1 overflow-y-auto scroll-touch p-4 space-y-4">
+            {/* User Profile Card or Login CTA */}
             {isAuthenticated && user ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-3 shadow-xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-[#005A36] text-white font-bold text-sm">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-[#005A36] text-white font-black text-sm shadow-xs">
                     {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                   </div>
-                  <div>
-                    <p className="font-black text-sm text-slate-900">{user.fullName || user.name}</p>
-                    <p className="text-[11px] font-bold text-emerald-800">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-black text-sm text-slate-900 truncate">{user.fullName || user.name}</p>
+                    <p className="text-[11px] font-bold text-emerald-800 truncate">
                       {user.studentId ? `Mã SV: ${user.studentId}` : user.roleTitle || 'Hành khách'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-1 border-t border-emerald-200/60">
+                <div className="flex gap-2 pt-2 border-t border-emerald-200/60">
                   {role === 'admin' || role === 'dispatcher' || role === 'driver' || role === 'manager' ? (
                     <Link
                       href="/dashboard"
@@ -433,7 +501,7 @@ export function MainHeader({
                           window.location.href = '/my-tickets'
                         }
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs cursor-pointer"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#005A36] py-2 text-xs font-bold text-white shadow-xs cursor-pointer active:scale-95 transition-transform"
                       id="mobile-my-tickets-link"
                     >
                       <Ticket size={14} />
@@ -446,39 +514,39 @@ export function MainHeader({
                       logout()
                       setOpen(false)
                     }}
-                    className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 cursor-pointer"
+                    className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 active:scale-95 transition-all cursor-pointer"
                   >
                     Đăng xuất
                   </button>
                 </div>
               </div>
             ) : (
-              <>
-                <Link
-                  href="/login"
-                  onClick={() => setOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl btn-vcb-solid py-3 text-sm font-black text-white shadow-md"
-                  style={{ backgroundColor: '#005a36', color: '#ffffff' }}
-                >
-                  <LogIn size={18} strokeWidth={2.5} />
-                  Đăng nhập tài khoản
-                </Link>
-              </>
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl btn-vcb-solid py-3 text-sm font-black text-white shadow-md active:scale-95 transition-transform"
+                style={{ backgroundColor: '#005a36', color: '#ffffff' }}
+              >
+                <LogIn size={18} strokeWidth={2.5} />
+                <span>Đăng nhập tài khoản</span>
+              </Link>
             )}
 
+            {/* Quick Purchase Button */}
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
                 onOpenSeatPicker?.()
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#005A36] bg-transparent py-3 text-sm font-black text-[#005A36] shadow-xs transition-all hover:bg-[#005A36]/10 active:scale-95"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#005A36] bg-emerald-50/50 py-2.5 text-sm font-black text-[#005A36] shadow-xs transition-all hover:bg-[#005A36]/10 active:scale-95 cursor-pointer"
             >
-              <Ticket size={18} />
-              Mua vé xe lượt 28 chỗ
+              <Ticket size={16} />
+              <span>Mua vé xe lượt 28 chỗ</span>
             </button>
 
-            <div className="mt-4 flex flex-col divide-y divide-slate-100 text-sm font-bold text-slate-800">
+            {/* Navigation List */}
+            <div className="flex flex-col divide-y divide-slate-100 text-sm font-bold text-slate-800 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -488,26 +556,19 @@ export function MainHeader({
                 className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
                 id="mobile-nav-notifications"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <Bell size={16} className="text-[#005A36]" />
                   <span>Thông báo & Cảnh báo xe</span>
                 </div>
                 {unreadCount > 0 && (
-                  <span className="rounded-full bg-rose-500 text-white text-[10px] font-black px-2 py-0.2">
-                    {unreadCount} mới
+                  <span className="flex size-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  onOpenModal?.('routes')
-                }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer"
-              >
-                Mạng lưới tuyến xe buýt ICTU
-              </button>
+              <Link href="/thong-tin-dich-vu#routes" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
+                Tuyến xe & Lịch trình
+              </Link>
               <button
                 type="button"
                 onClick={() => {
@@ -520,11 +581,10 @@ export function MainHeader({
                     window.location.href = '/?openMonthlyPass=true'
                   }
                 }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer block"
                 id="mobile-nav-monthly-pass"
               >
-                <span>Đăng ký vé tháng HSSV (-50%)</span>
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">Cửa sổ nổi</span>
+                Đăng ký vé tháng HSSV
               </button>
               <button
                 type="button"
@@ -536,45 +596,48 @@ export function MainHeader({
                     window.location.href = '/?openVerification=true'
                   }
                 }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer flex items-center justify-between"
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer block"
                 id="mobile-nav-priority-verification"
               >
-                <span>Xác thực ưu đãi HSSV / Cao tuổi</span>
-                <span className="rounded-full bg-emerald-100 text-[#005A36] text-[10px] font-bold px-2 py-0.5">
-                  -50%
-                </span>
+                Xác thực ưu đãi HSSV / Cao tuổi
               </button>
-              <Link
-                href="/my-tickets"
-                onClick={() => setOpen(false)}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors block"
-                id="mobile-nav-my-tickets"
-              >
-                Vé của tôi & Mã QR
-              </Link>
-              <Link
-                href="/tra-cuu-hoa-don"
-                onClick={() => setOpen(false)}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors flex items-center justify-between"
-                id="mobile-nav-invoice-lookup"
-              >
-                <span>Tra cứu hóa đơn điện tử</span>
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-[#005A36]">VAT 8%</span>
-              </Link>
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false)
-                  onOpenModal?.('news')
+                  if (onOpenTicketModal) {
+                    onOpenTicketModal()
+                  } else {
+                    onOpenModal?.('lookup')
+                  }
                 }}
-                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer"
+                className="py-3 text-left w-full hover:text-[#005A36] transition-colors cursor-pointer block"
+                id="mobile-nav-my-tickets"
               >
-                Tin tức & Lịch chạy hôm nay
+                Vé của tôi & Mã QR
               </button>
+              <Link href="/tra-cuu-hoa-don" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
+                Tra cứu hóa đơn điện tử
+              </Link>
+              <Link href="/thong-tin-dich-vu#safety" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
+                Giao dịch an toàn
+              </Link>
+              <Link href="/thong-tin-dich-vu#insurance" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
+                Bảo hiểm hành khách
+              </Link>
               <Link href="/thong-tin-dich-vu#contact" onClick={() => setOpen(false)} className="py-3 hover:text-[#005A36] transition-colors block">
                 Liên hệ hỗ trợ 24/7
               </Link>
             </div>
+          </div>
+
+          {/* Drawer Fixed Footer */}
+          <div className="p-3.5 px-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-bold shrink-0 bg-slate-50/90 pb-[calc(14px+env(safe-area-inset-bottom,0px))]">
+            <a href="tel:19008899" className="inline-flex items-center gap-1.5 text-[#005A36] font-extrabold hover:underline">
+              <PhoneCall size={14} />
+              <span>1900 8899</span>
+            </a>
+            <span>VI · ICTU Transit</span>
           </div>
         </div>
       </div>

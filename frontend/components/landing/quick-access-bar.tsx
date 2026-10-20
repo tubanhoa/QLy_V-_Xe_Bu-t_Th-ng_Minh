@@ -247,7 +247,7 @@ export function QuickAccessBar({
   return (
     <section
       aria-label="Thanh truy cập nhanh"
-      className="relative z-20 shrink-0 px-3 sm:px-6 lg:px-8 pb-5 sm:pb-7 lg:pb-8 mb-1 select-none w-full"
+      className="hidden lg:block relative z-20 shrink-0 px-3 sm:px-6 lg:px-8 pb-5 sm:pb-7 lg:pb-6 xl:pb-8 mb-1 lg:mb-2.5 xl:mb-3.5 select-none w-full"
     >
       {/* Progressive Enhancement: SVG Lens Displacement Refraction Filter (scale: 10 for subtle refraction) */}
       <svg

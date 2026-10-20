@@ -61,7 +61,7 @@ export function TopUtilityBar({ onOpenModal }: TopUtilityBarProps) {
 
         {/* Right: Quick Links with Animated Underline Effect on Hover */}
         <div className="flex items-center gap-5">
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
+          <div className="flex items-center gap-4 text-xs font-bold text-slate-700 whitespace-nowrap">
             <Link href="/thong-tin-dich-vu#about" className="group relative py-1 text-slate-700 visited:text-slate-700 transition-colors hover:text-[#005A36]">
               Về ICTU Transit
               <span className="absolute bottom-0 left-0 h-[2px] w-0 rounded-full bg-[#005A36] transition-all duration-300 ease-out group-hover:w-full" />

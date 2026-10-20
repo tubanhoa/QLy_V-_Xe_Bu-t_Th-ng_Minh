@@ -7,7 +7,6 @@ import {
   GraduationCap,
   Home,
   Navigation,
-  QrCode,
   Search,
   Ticket,
 } from 'lucide-react'
@@ -42,9 +41,9 @@ export function MobileBottomDock({
   return (
     <nav
       aria-label="Thanh điều hướng nhanh ứng dụng di động"
-      className="fixed bottom-0 inset-x-0 z-40 sm:hidden pb-[max(env(safe-area-inset-bottom,0px),8px)] pt-1.5 px-3 bg-white/95 backdrop-blur-2xl border-t border-slate-200/90 shadow-[0_-8px_30px_rgba(0,90,54,0.10)] transition-all select-none"
+      className="fixed z-40 lg:hidden left-3 right-3 max-w-md mx-auto bottom-[calc(12px+env(safe-area-inset-bottom,0px))] rounded-[28px] bg-white/85 backdrop-blur-xl saturate-150 border border-white/80 shadow-[0_12px_36px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.95)] px-2 py-1.5 select-none transition-all"
     >
-      <div className="flex items-center justify-around gap-1 max-w-md mx-auto">
+      <div className="grid grid-cols-5 gap-1 items-center">
         {/* 1. Trang chủ */}
         <button
           type="button"
@@ -56,26 +55,19 @@ export function MobileBottomDock({
             })
           }}
           className={cn(
-            'group relative flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 min-w-[56px] cursor-pointer touch-press touch-manipulation',
+            'group relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer touch-press touch-manipulation',
             activeTab === 'home'
-              ? 'text-[#005A36]'
-              : 'text-slate-500 hover:text-slate-800',
+              ? 'bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 border border-transparent',
           )}
         >
           {activeTab === 'home' && (
-            <span className="absolute -top-1.5 size-1 rounded-full bg-[#005A36]" />
+            <span className="absolute -top-1 size-1 rounded-full bg-[#005A36]" />
           )}
-          <div
-            className={cn(
-              'flex size-8 items-center justify-center rounded-xl transition-all duration-200',
-              activeTab === 'home'
-                ? 'bg-[#005A36]/15 scale-110 shadow-xs'
-                : 'group-hover:bg-slate-100',
-            )}
-          >
-            <Home size={19} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
+          <div className="flex size-7 items-center justify-center rounded-xl transition-all duration-200">
+            <Home size={22} strokeWidth={activeTab === 'home' ? 2.4 : 2} />
           </div>
-          <span className="text-[10px] font-extrabold tracking-tight mt-0.5">
+          <span className="text-[11px] font-bold tracking-tight mt-0.5 leading-none">
             Trang chủ
           </span>
         </button>
@@ -85,26 +77,19 @@ export function MobileBottomDock({
           type="button"
           onClick={() => handleTabClick('search', onOpenTripSearch)}
           className={cn(
-            'group relative flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 min-w-[56px] cursor-pointer touch-press touch-manipulation',
+            'group relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer touch-press touch-manipulation',
             activeTab === 'search'
-              ? 'text-[#005A36]'
-              : 'text-slate-500 hover:text-slate-800',
+              ? 'bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 border border-transparent',
           )}
         >
           {activeTab === 'search' && (
-            <span className="absolute -top-1.5 size-1 rounded-full bg-[#005A36]" />
+            <span className="absolute -top-1 size-1 rounded-full bg-[#005A36]" />
           )}
-          <div
-            className={cn(
-              'flex size-8 items-center justify-center rounded-xl transition-all duration-200',
-              activeTab === 'search'
-                ? 'bg-[#005A36]/15 scale-110 shadow-xs'
-                : 'group-hover:bg-slate-100',
-            )}
-          >
-            <Search size={19} strokeWidth={activeTab === 'search' ? 2.5 : 2} />
+          <div className="flex size-7 items-center justify-center rounded-xl transition-all duration-200">
+            <Search size={22} strokeWidth={activeTab === 'search' ? 2.4 : 2} />
           </div>
-          <span className="text-[10px] font-extrabold tracking-tight mt-0.5">
+          <span className="text-[11px] font-bold tracking-tight mt-0.5 leading-none">
             Tìm chuyến
           </span>
         </button>
@@ -114,32 +99,25 @@ export function MobileBottomDock({
           type="button"
           onClick={() => handleTabClick('tickets', onOpenMyTickets)}
           className={cn(
-            'group relative flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 min-w-[56px] cursor-pointer touch-press touch-manipulation',
+            'group relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer touch-press touch-manipulation',
             activeTab === 'tickets'
-              ? 'text-[#005A36]'
-              : 'text-slate-500 hover:text-slate-800',
+              ? 'bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 border border-transparent',
           )}
         >
           {/* Active Ticket Notification Badge */}
           {activeTicketsCount > 0 && (
-            <span className="absolute -top-1 right-2 flex size-4 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-black text-white shadow-xs ring-2 ring-white animate-pulse">
+            <span className="absolute -top-1 right-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-black text-white shadow-xs ring-2 ring-white animate-pulse">
               {activeTicketsCount}
             </span>
           )}
           {activeTab === 'tickets' && (
-            <span className="absolute -top-1.5 size-1 rounded-full bg-[#005A36]" />
+            <span className="absolute -top-1 size-1 rounded-full bg-[#005A36]" />
           )}
-          <div
-            className={cn(
-              'flex size-8 items-center justify-center rounded-xl transition-all duration-200',
-              activeTab === 'tickets'
-                ? 'bg-[#005A36]/15 scale-110 shadow-xs'
-                : 'group-hover:bg-slate-100',
-            )}
-          >
-            <Ticket size={19} strokeWidth={activeTab === 'tickets' ? 2.5 : 2} />
+          <div className="flex size-7 items-center justify-center rounded-xl transition-all duration-200">
+            <Ticket size={22} strokeWidth={activeTab === 'tickets' ? 2.4 : 2} />
           </div>
-          <span className="text-[10px] font-extrabold tracking-tight mt-0.5">
+          <span className="text-[11px] font-bold tracking-tight mt-0.5 leading-none">
             Vé của tôi
           </span>
         </button>
@@ -149,29 +127,22 @@ export function MobileBottomDock({
           type="button"
           onClick={() => handleTabClick('monthly', onOpenMonthlyPass)}
           className={cn(
-            'group relative flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 min-w-[56px] cursor-pointer touch-press touch-manipulation',
+            'group relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer touch-press touch-manipulation',
             activeTab === 'monthly'
-              ? 'text-[#005A36]'
-              : 'text-slate-500 hover:text-slate-800',
+              ? 'bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 border border-transparent',
           )}
         >
           <span className="absolute -top-1.5 right-1 rounded-full bg-amber-500 px-1 py-0.2 text-[8px] font-black text-white shadow-2xs">
             -50%
           </span>
           {activeTab === 'monthly' && (
-            <span className="absolute -top-1.5 size-1 rounded-full bg-[#005A36]" />
+            <span className="absolute -top-1 size-1 rounded-full bg-[#005A36]" />
           )}
-          <div
-            className={cn(
-              'flex size-8 items-center justify-center rounded-xl transition-all duration-200',
-              activeTab === 'monthly'
-                ? 'bg-[#005A36]/15 scale-110 shadow-xs'
-                : 'group-hover:bg-slate-100',
-            )}
-          >
-            <GraduationCap size={19} strokeWidth={activeTab === 'monthly' ? 2.5 : 2} />
+          <div className="flex size-7 items-center justify-center rounded-xl transition-all duration-200">
+            <GraduationCap size={22} strokeWidth={activeTab === 'monthly' ? 2.4 : 2} />
           </div>
-          <span className="text-[10px] font-extrabold tracking-tight mt-0.5">
+          <span className="text-[11px] font-bold tracking-tight mt-0.5 leading-none">
             Vé tháng
           </span>
         </button>
@@ -184,27 +155,20 @@ export function MobileBottomDock({
             haptic.play('tap')
           }}
           className={cn(
-            'group relative flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 min-w-[56px] cursor-pointer touch-press touch-manipulation',
+            'group relative flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer touch-press touch-manipulation',
             activeTab === 'tracking'
-              ? 'text-[#005A36]'
-              : 'text-slate-500 hover:text-slate-800',
+              ? 'bg-[#005A36]/10 text-[#005A36] border border-[#005A36]/15 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 border border-transparent',
           )}
         >
           <span className="absolute -top-0.5 right-2 flex size-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
           </span>
-          <div
-            className={cn(
-              'flex size-8 items-center justify-center rounded-xl transition-all duration-200',
-              activeTab === 'tracking'
-                ? 'bg-[#005A36]/15 scale-110 shadow-xs'
-                : 'group-hover:bg-slate-100',
-            )}
-          >
-            <Navigation size={18} strokeWidth={activeTab === 'tracking' ? 2.5 : 2} />
+          <div className="flex size-7 items-center justify-center rounded-xl transition-all duration-200">
+            <Navigation size={21} strokeWidth={activeTab === 'tracking' ? 2.4 : 2} />
           </div>
-          <span className="text-[10px] font-extrabold tracking-tight mt-0.5">
+          <span className="text-[11px] font-bold tracking-tight mt-0.5 leading-none">
             Định vị xe
           </span>
         </Link>

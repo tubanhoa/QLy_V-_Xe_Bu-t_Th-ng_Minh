@@ -128,7 +128,7 @@ export const AmbientTransitFx = memo(function AmbientTransitFx({ isPaused = fals
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 z-0 overflow-hidden select-none transition-opacity duration-500 ${
+      className={`pointer-events-none absolute inset-0 z-0 overflow-hidden select-none transition-opacity duration-500 hidden lg:block lg:top-[var(--header-height,112px)] ${
         isPaused ? 'opacity-30' : 'opacity-100'
       }`}
     >
