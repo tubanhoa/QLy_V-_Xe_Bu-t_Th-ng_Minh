@@ -1,5 +1,5 @@
 import { authService } from './auth.service'
-import type { InvoiceData, ResendEmailResult } from '@/lib/types/invoice'
+import type { InvoiceData, ResendEmailResult, InvoiceListResponse } from '@/lib/types/invoice'
 import type { UnifiedApiResponse } from '@/lib/types/sprint1'
 
 const API_BASE_URL =
@@ -21,6 +21,87 @@ class InvoiceService {
       headers['Authorization'] = `Bearer ${token}`
     }
     return headers
+  }
+
+  /**
+   * Lấy danh sách toàn bộ hóa đơn điện tử cho Admin Portal
+   * GET /api/v1/invoices?page=...&limit=...&search=...&fromDate=...&toDate=...
+   */
+  async getInvoices(params?: {
+    page?: number
+    limit?: number
+    search?: string
+    fromDate?: string
+    toDate?: string
+  }): Promise<UnifiedApiResponse<InvoiceListResponse>> {
+    try {
+      const url = new URL(`${this.baseUrl}/invoices`)
+      if (params?.page) url.searchParams.set('page', String(params.page))
+      if (params?.limit) url.searchParams.set('limit', String(params.limit))
+      if (params?.search) url.searchParams.set('search', params.search.trim())
+      if (params?.fromDate) url.searchParams.set('fromDate', params.fromDate)
+      if (params?.toDate) url.searchParams.set('toDate', params.toDate)
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải danh sách hóa đơn điện tử',
+        }
+      }
+
+      const data: InvoiceListResponse = resJson?.data || resJson
+      return {
+        success: true,
+        data,
+      }
+    } catch (error: any) {
+      console.warn('[InvoiceService.getInvoices] Network error:', error)
+      return {
+        success: false,
+        message: error?.message || 'Lỗi kết nối máy chủ khi nạp danh sách hóa đơn',
+      }
+    }
+  }
+
+  /**
+   * Tải tệp PDF hóa đơn điện tử linh hoạt theo ID / Số hóa đơn / Booking code / Ticket code
+   * GET /api/v1/invoices/:identifier/pdf
+   */
+  async downloadPdf(identifier: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/invoices/${encodeURIComponent(identifier)}/pdf`,
+        {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error(`Không thể tải PDF hóa đơn (${response.status})`)
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `HoaDon_VAT_${identifier}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      return true
+    } catch (error) {
+      console.error('[InvoiceService.downloadPdf]', error)
+      return false
+    }
   }
 
   /**

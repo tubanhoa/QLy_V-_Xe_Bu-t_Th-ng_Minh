@@ -319,18 +319,89 @@ export class InvoiceService {
     this.isProcessingQueue = false;
   }
 
+  private readonly UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   /**
-   * Lấy chi tiết hóa đơn theo ID hoặc Số hóa đơn
+   * Tra cứu hóa đơn linh hoạt và an toàn tuyệt đối theo UUID, Số hóa đơn, Mã tra cứu, Mã đặt vé hoặc Mã vé
    */
-  async getInvoiceByIdOrNumber(idOrNumber: string): Promise<InvoiceEntity> {
-    const invoice = await this.invoiceRepository.findOne({
-      where: [{ id: idOrNumber }, { invoiceNumber: idOrNumber }],
+  async resolveInvoice(identifier: string): Promise<InvoiceEntity | null> {
+    if (!identifier) return null;
+    const clean = identifier.trim().toUpperCase();
+
+    // 1. Nếu là UUID hợp lệ, tìm theo ID trước
+    if (this.UUID_REGEX.test(identifier.trim())) {
+      const byId = await this.invoiceRepository.findOne({
+        where: { id: identifier.trim() },
+        relations: {
+          payment: true,
+          booking: { user: true, trip: { route: true, vehicle: true } },
+        },
+      });
+      if (byId) return byId;
+    }
+
+    // 2. Tìm theo số hóa đơn (INV-...) hoặc mã tra cứu (ICTU-...)
+    const byNumberOrLookup = await this.invoiceRepository.findOne({
+      where: [{ invoiceNumber: clean }, { lookupCode: clean }],
       relations: {
         payment: true,
         booking: { user: true, trip: { route: true, vehicle: true } },
       },
     });
+    if (byNumberOrLookup) return byNumberOrLookup;
 
+    // 3. Tìm theo Booking Code (BK-...)
+    const booking = await this.bookingRepository.findOne({
+      where: { bookingCode: clean },
+      relations: { payments: true },
+    });
+    if (booking) {
+      let inv = await this.invoiceRepository.findOne({
+        where: { bookingId: booking.id },
+        relations: {
+          payment: true,
+          booking: { user: true, trip: { route: true, vehicle: true } },
+        },
+      });
+      if (!inv && booking.payments && booking.payments.length > 0) {
+        const successfulPayment = booking.payments.find((p) => p.status === 'success') || booking.payments[0];
+        if (successfulPayment) {
+          inv = await this.createOrGetInvoice(successfulPayment.id);
+        }
+      }
+      if (inv) return inv;
+    }
+
+    // 4. Tìm theo Ticket Code (TKT-...)
+    const ticket = await this.ticketRepository.findOne({
+      where: { ticketCode: clean },
+      relations: { booking: { payments: true } },
+    });
+    if (ticket?.bookingId) {
+      let inv = await this.invoiceRepository.findOne({
+        where: { bookingId: ticket.bookingId },
+        relations: {
+          payment: true,
+          booking: { user: true, trip: { route: true, vehicle: true } },
+        },
+      });
+      if (!inv && ticket.booking?.payments && ticket.booking.payments.length > 0) {
+        const successfulPayment = ticket.booking.payments.find((p) => p.status === 'success') || ticket.booking.payments[0];
+        if (successfulPayment) {
+          inv = await this.createOrGetInvoice(successfulPayment.id);
+        }
+      }
+      if (inv) return inv;
+    }
+
+    return null;
+  }
+
+  /**
+   * Lấy chi tiết hóa đơn theo ID hoặc Số hóa đơn
+   */
+  async getInvoiceByIdOrNumber(idOrNumber: string): Promise<InvoiceEntity> {
+    const invoice = await this.resolveInvoice(idOrNumber);
     if (!invoice) {
       throw new NotFoundException(`Không tìm thấy hóa đơn điện tử: ${idOrNumber}`);
     }
@@ -341,93 +412,107 @@ export class InvoiceService {
    * Lấy hóa đơn theo mã đơn đặt vé (Booking Code)
    */
   async getInvoiceByBookingCode(bookingCode: string): Promise<InvoiceEntity> {
-    const booking = await this.bookingRepository.findOne({
-      where: { bookingCode },
-      relations: { payments: true },
-    });
-
-    if (!booking) {
-      throw new NotFoundException(`Không tìm thấy đơn đặt vé: ${bookingCode}`);
-    }
-
-    let invoice = await this.invoiceRepository.findOne({
-      where: { bookingId: booking.id },
-      relations: {
-        payment: true,
-        booking: { user: true, trip: { route: true, vehicle: true } },
-      },
-    });
-
-    // Nếu chưa tạo hóa đơn nhưng đơn vé đã có payment, thử tạo
-    if (!invoice && booking.payments && booking.payments.length > 0) {
-      const successfulPayment = booking.payments.find((p) => p.status === 'success') || booking.payments[0];
-      if (successfulPayment) {
-        invoice = await this.createOrGetInvoice(successfulPayment.id);
-      }
-    }
-
+    const invoice = await this.resolveInvoice(bookingCode);
     if (!invoice) {
-      throw new NotFoundException(`Đơn đặt vé ${bookingCode} chưa có hóa đơn điện tử phát hành`);
+      throw new NotFoundException(`Không tìm thấy hóa đơn điện tử cho đơn đặt vé: ${bookingCode}`);
     }
-
     return invoice;
   }
 
   /**
-   * Tra cứu hóa đơn bằng mã tra cứu (Lookup Code) và/hoặc số hóa đơn / mã đặt vé
-   * Hỗ trợ tìm kiếm linh hoạt phục vụ cổng tra cứu công khai chuẩn Cục Thuế
+   * Tra cứu hóa đơn bằng mã tra cứu (Lookup Code) và/hoặc số hóa đơn / mã đặt vé / mã vé
    */
   async lookupInvoice(lookupCode: string, invoiceNumber?: string): Promise<InvoiceEntity> {
-    const cleanCode = (lookupCode || '').trim().toUpperCase();
-    const cleanInvNumber = (invoiceNumber || '').trim().toUpperCase();
+    const cleanCode = (lookupCode || '').trim();
+    const cleanInv = (invoiceNumber || '').trim();
 
-    let invoice: InvoiceEntity | null = null;
-
-    if (cleanInvNumber) {
-      invoice = await this.invoiceRepository.findOne({
-        where: { lookupCode: cleanCode, invoiceNumber: cleanInvNumber },
+    if (cleanInv) {
+      const match = await this.invoiceRepository.findOne({
+        where: { lookupCode: cleanCode.toUpperCase(), invoiceNumber: cleanInv.toUpperCase() },
         relations: {
           payment: true,
           booking: { user: true, trip: { route: true, vehicle: true } },
         },
       });
+      if (match) return match;
     }
 
-    if (!invoice) {
-      // Tìm theo lookupCode hoặc số hóa đơn
-      invoice = await this.invoiceRepository.findOne({
-        where: [
-          { lookupCode: cleanCode },
-          { invoiceNumber: cleanCode },
-        ],
-        relations: {
-          payment: true,
-          booking: { user: true, trip: { route: true, vehicle: true } },
-        },
-      });
-    }
-
-    // Fallback: Tìm theo Booking Code nếu khách nhập mã đơn vé
-    if (!invoice) {
-      const booking = await this.bookingRepository.findOne({
-        where: { bookingCode: cleanCode },
-        relations: { payments: true },
-      });
-      if (booking) {
-        invoice = await this.invoiceRepository.findOne({
-          where: { bookingId: booking.id },
-          relations: {
-            payment: true,
-            booking: { user: true, trip: { route: true, vehicle: true } },
-          },
-        });
-      }
-    }
-
+    const invoice = await this.resolveInvoice(cleanCode);
     if (!invoice) {
       throw new NotFoundException(`Không tìm thấy hóa đơn điện tử hợp lệ với mã tra cứu: ${lookupCode}`);
     }
     return invoice;
+  }
+
+  /**
+   * Lấy danh sách toàn bộ hóa đơn điện tử cho trang quản trị (Admin Portal)
+   */
+  async findAllInvoices(query?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const qb = this.invoiceRepository
+      .createQueryBuilder('invoice')
+      .leftJoinAndSelect('invoice.payment', 'payment')
+      .leftJoinAndSelect('invoice.booking', 'booking')
+      .leftJoinAndSelect('booking.user', 'user')
+      .leftJoinAndSelect('booking.trip', 'trip')
+      .leftJoinAndSelect('trip.route', 'route')
+      .leftJoinAndSelect('trip.vehicle', 'vehicle');
+
+    if (query?.search?.trim()) {
+      const s = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(invoice.invoiceNumber) LIKE :s OR LOWER(invoice.lookupCode) LIKE :s OR LOWER(booking.bookingCode) LIKE :s OR LOWER(user.fullName) LIKE :s OR LOWER(user.email) LIKE :s OR LOWER(user.phoneNumber) LIKE :s)',
+        { s },
+      );
+    }
+
+    if (query?.fromDate) {
+      qb.andWhere('invoice.issuedAt >= :fromDate', { fromDate: new Date(query.fromDate) });
+    }
+
+    if (query?.toDate) {
+      const to = new Date(query.toDate);
+      to.setHours(23, 59, 59, 999);
+      qb.andWhere('invoice.issuedAt <= :toDate', { toDate: to });
+    }
+
+    qb.orderBy('invoice.issuedAt', 'DESC');
+
+    const [items, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    // Thống kê nhanh toàn bộ số liệu hóa đơn
+    const statsQuery = await this.invoiceRepository
+      .createQueryBuilder('inv')
+      .select('COUNT(inv.id)', 'totalCount')
+      .addSelect('COALESCE(SUM(inv.totalAmount), 0)', 'totalRevenue')
+      .addSelect('COALESCE(SUM(inv.vatAmount), 0)', 'totalVat')
+      .addSelect('COALESCE(SUM(inv.subtotalAmount), 0)', 'totalSubtotal')
+      .getRawOne();
+
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+      summary: {
+        totalInvoices: Number(statsQuery?.totalCount || total),
+        totalRevenue: Number(statsQuery?.totalRevenue || 0),
+        totalVatAmount: Number(statsQuery?.totalVat || 0),
+        totalSubtotal: Number(statsQuery?.totalSubtotal || 0),
+      },
+    };
   }
 
   /**
