@@ -30,35 +30,6 @@ interface VoucherInputProps {
   serviceType?: 'single_ticket' | 'monthly_pass' | 'all'
 }
 
-// Danh sách voucher fallback giới thiệu nếu API chưa trả về
-const DEFAULT_FEATURED_VOUCHERS: Partial<VoucherItem>[] = [
-  {
-    code: 'ICTU2026',
-    description: 'Ưu đãi chào tân sinh viên K22 ICTU - Giảm 20% tối đa 30.000đ',
-    discountType: 'percentage',
-    discountValue: 20,
-    minOrderValue: 20000,
-    maxDiscountAmount: 30000,
-    applicableType: 'all',
-  },
-  {
-    code: 'ICTU_BUS10K',
-    description: 'Trợ giá kích cầu tuyến xe buýt Thái Nguyên - Giảm ngay 10.000đ',
-    discountType: 'fixed_amount',
-    discountValue: 10000,
-    minOrderValue: 10000,
-    applicableType: 'single_ticket',
-  },
-  {
-    code: 'VETHANG_50K',
-    description: 'Giảm 50.000đ khi đăng ký hoặc gia hạn vé tháng',
-    discountType: 'fixed_amount',
-    discountValue: 50000,
-    minOrderValue: 100000,
-    applicableType: 'monthly_pass',
-  },
-]
-
 export function VoucherInput({
   orderAmount,
   onApplied,
@@ -145,14 +116,14 @@ export function VoucherInput({
     setIsPickerOpen(true)
     setLoadingVouchers(true)
     try {
-      const res = await promotionService.getAvailableVouchers()
-      if (res.success && res.data && res.data.length > 0) {
+      const res = await promotionService.getAvailableVouchers({ limit: 100 })
+      if (res.success && Array.isArray(res.data)) {
         setAvailableVouchers(res.data)
       } else {
-        setAvailableVouchers(DEFAULT_FEATURED_VOUCHERS as VoucherItem[])
+        setAvailableVouchers([])
       }
     } catch {
-      setAvailableVouchers(DEFAULT_FEATURED_VOUCHERS as VoucherItem[])
+      setAvailableVouchers([])
     } finally {
       setLoadingVouchers(false)
     }
@@ -307,23 +278,37 @@ export function VoucherInput({
                 </div>
               ) : (
                 availableVouchers.map((v, i) => {
-                  const isEligible = orderAmount >= Number(v.minOrderValue || 0)
+                  const todayStr = new Date().toISOString().slice(0, 10)
+                  const isExpired =
+                    Boolean(v.isExpired) ||
+                    v.dynamicStatus === 'expired' ||
+                    v.status === 'expired' ||
+                    Boolean(v.endDate && v.endDate.slice(0, 10) < todayStr)
+                  const isEligible = !isExpired && orderAmount >= Number(v.minOrderValue || 0)
                   const isSelected = code === v.code
 
                   return (
                     <div
                       key={v.id || v.code || i}
                       className={`relative rounded-2xl border p-3.5 transition-all flex flex-col justify-between gap-2.5 ${
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500/30'
-                          : isEligible
-                            ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-400'
-                            : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 opacity-70'
+                        isExpired
+                          ? 'border-slate-300 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/90 opacity-60'
+                          : isSelected
+                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500/30'
+                            : isEligible
+                              ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-400'
+                              : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 opacity-70'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-[#005A36] text-white shadow-xs">
+                          <div
+                            className={`p-2 rounded-xl text-white shadow-xs ${
+                              isExpired
+                                ? 'bg-slate-600'
+                                : 'bg-gradient-to-br from-emerald-500 to-[#005A36]'
+                            }`}
+                          >
                             {v.discountType === 'percentage' ? (
                               <Percent className="w-4 h-4" />
                             ) : (
@@ -331,10 +316,20 @@ export function VoucherInput({
                             )}
                           </div>
                           <div>
-                            <span className="font-mono font-black text-sm text-[#005A36] dark:text-emerald-400 block tracking-tight">
+                            <span
+                              className={`font-mono font-black text-sm block tracking-tight ${
+                                isExpired
+                                  ? 'text-slate-500 line-through'
+                                  : 'text-[#005A36] dark:text-emerald-400'
+                              }`}
+                            >
                               {v.code}
                             </span>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                            <span
+                              className={`text-xs font-bold block ${
+                                isExpired ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'
+                              }`}
+                            >
                               {v.discountType === 'percentage'
                                 ? `Giảm ${v.discountValue}%`
                                 : `Giảm ${(Number(v.discountValue) || 0).toLocaleString('vi-VN')} đ`}
@@ -348,17 +343,19 @@ export function VoucherInput({
                         {/* Nút Áp dụng */}
                         <button
                           type="button"
-                          onClick={() => handleSelectVoucher(v)}
-                          disabled={!isEligible}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-emerald-600 text-white'
-                              : isEligible
-                                ? 'bg-[#005A36] text-white hover:bg-emerald-800 shadow-xs'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                          onClick={() => !isExpired && handleSelectVoucher(v)}
+                          disabled={!isEligible || isExpired}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                            isExpired
+                              ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed opacity-60'
+                              : isSelected
+                                ? 'bg-emerald-600 text-white cursor-pointer'
+                                : isEligible
+                                  ? 'bg-[#005A36] text-white hover:bg-emerald-800 shadow-xs cursor-pointer'
+                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                           }`}
                         >
-                          {isSelected ? 'Đang dùng' : 'Áp dụng'}
+                          {isExpired ? 'Hết hạn' : isSelected ? 'Đang dùng' : 'Áp dụng'}
                         </button>
                       </div>
 
@@ -370,14 +367,17 @@ export function VoucherInput({
 
                       <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2">
                         <span>Đơn tối thiểu: {Number(v.minOrderValue || 0).toLocaleString('vi-VN')}đ</span>
-                        {!isEligible && (
+                        {isExpired ? (
+                          <span className="text-rose-500 font-bold">
+                            Mã đã hết hạn sử dụng
+                          </span>
+                        ) : !isEligible ? (
                           <span className="text-rose-500 font-bold">
                             Chưa đủ điều kiện đơn hàng
                           </span>
-                        )}
-                        {v.endDate && isEligible && (
+                        ) : v.endDate ? (
                           <span>HSD: {new Date(v.endDate).toLocaleDateString('vi-VN')}</span>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )

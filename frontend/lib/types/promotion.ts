@@ -25,8 +25,9 @@ export interface VoucherItem {
   status: VoucherStatus | string
   applicableType?: VoucherApplicableType
   applicableRouteIds?: string[]
-  remainingUses?: number
+  remainingUses?: number | string
   dynamicStatus?: 'active' | 'inactive' | 'expired' | 'depleted'
+  isExpired?: boolean
   createdAt?: string
   updatedAt?: string
 }
