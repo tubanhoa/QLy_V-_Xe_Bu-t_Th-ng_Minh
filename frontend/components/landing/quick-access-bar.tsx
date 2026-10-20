@@ -246,7 +246,7 @@ export function QuickAccessBar({
   return (
     <section
       aria-label="Thanh truy cập nhanh"
-      className="relative z-20 shrink-0 px-3 sm:px-6 lg:px-8 pb-3 sm:pb-4 select-none w-full"
+      className="relative z-20 shrink-0 px-3 sm:px-6 lg:px-8 pb-5 sm:pb-7 lg:pb-8 mb-1 select-none w-full"
     >
       {/* Progressive Enhancement: SVG Lens Displacement Refraction Filter (scale: 10 for subtle refraction) */}
       <svg
@@ -341,17 +341,17 @@ export function QuickAccessBar({
                     </span>
                   )}
 
-                  {/* Icon Staging Container: Subtle Gradient Frosted Pill */}
-                  <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-b from-white/95 to-emerald-50/80 text-[#005a36] border border-emerald-200/50 shadow-xs transition-all duration-300 group-hover:bg-[#005a36] group-hover:text-white group-hover:scale-110 group-hover:shadow-md group-hover:shadow-[#005a36]/25 mt-0.5 pointer-events-none">
-                    <Icon size={20} strokeWidth={2.3} className="transition-transform duration-300 group-hover:scale-105" />
+                  {/* Icon Staging Container: Crisp Pill in normal state, Deep Forest Green on Hover */}
+                  <div className="dock-icon-box">
+                    <Icon size={20} strokeWidth={2.3} className="transition-transform duration-300" />
                   </div>
 
                   {/* Clean Typography Hierarchy: Dark Forest Green Title & High Contrast Subtitle */}
                   <div className="w-full mt-1.5 flex flex-col items-center pointer-events-none">
-                    <span className="text-[13px] font-bold text-[#0b2e1c] group-hover:text-[#005a36] transition-colors line-clamp-1 leading-tight tracking-tight">
+                    <span className="dock-card-title line-clamp-1">
                       {item.label}
                     </span>
-                    <span className="text-[12px] font-semibold text-[rgba(8,38,22,0.85)] mt-0.5 line-clamp-1 group-hover:text-[#0b2e1c] transition-colors">
+                    <span className="dock-card-subtitle line-clamp-1">
                       {item.sublabel}
                     </span>
                   </div>
