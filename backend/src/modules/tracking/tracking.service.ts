@@ -705,18 +705,35 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       order: { stopOrder: 'ASC' },
     });
 
-    if (!routeStations || routeStations.length < 2) {
-      throw new BadRequestException('Tuyến xe cần có ít nhất 2 trạm dừng để chạy mô phỏng');
+    let stationsData: Array<{ latitude: number | string; longitude: number | string }> = [];
+
+    if (routeStations && routeStations.length >= 2) {
+      stationsData = routeStations.map((rs) => ({
+        latitude: rs.station.latitude,
+        longitude: rs.station.longitude,
+      }));
+    } else {
+      // Tự động kích hoạt 4 trạm dừng chuẩn của lộ trình ICTU Thái Nguyên đảm bảo demo luôn hoạt động
+      stationsData = [
+        { latitude: 21.585284, longitude: 105.806297 }, // KTX ĐH CNTT & TT Thái Nguyên (ICTU)
+        { latitude: 21.587845, longitude: 105.808520 }, // Cổng chính ICTU - Đường Z115
+        { latitude: 21.591240, longitude: 105.815410 }, // Ngã 3 Z115 - Tân Thịnh
+        { latitude: 21.596850, longitude: 105.828450 }, // Bến xe Trung tâm TP. Thái Nguyên
+      ];
+      this.logger.log(`[TrackingSimulator] Chuyến xe ${tripId} chưa có đủ trạm dừng trong CSDL -> Áp dụng 4 trạm dừng tiêu chuẩn ICTU`);
+    }
+
+    // Tự động cập nhật trạng thái chuyến xe sang IN_PROGRESS nếu đang là SCHEDULED
+    if (trip.status === TripStatus.SCHEDULED) {
+      trip.status = TripStatus.IN_PROGRESS;
+      trip.actualDeparture = trip.actualDeparture || new Date();
+      await this.tripRepository.save(trip).catch(() => {});
     }
 
     // Reset lại trạm đã qua trong cache
     await this.cacheDel(`tracking:trip:${tripId}:stations_passed`);
 
     // Trích xuất danh sách waypoints bám sát 100% mặt đường thực tế OSRM
-    const stationsData = routeStations.map((rs) => ({
-      latitude: rs.station.latitude,
-      longitude: rs.station.longitude,
-    }));
     const waypoints = await this.generateOsrmRoadWaypoints(stationsData);
 
     const speedKmh = 35 * Math.min(10, Math.max(0.5, speedMultiplier));

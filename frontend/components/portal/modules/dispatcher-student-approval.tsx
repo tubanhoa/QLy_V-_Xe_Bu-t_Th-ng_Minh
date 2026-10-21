@@ -323,25 +323,37 @@ export function DispatcherStudentApproval() {
     }
   }
 
-  // Lọc tìm kiếm hồ sơ tài khoản
-  const filteredVerifications = verifications.filter((v) => {
-    const name = v.user?.fullName?.toLowerCase() || ''
-    const email = v.user?.email?.toLowerCase() || ''
-    const studentId = v.studentId?.toLowerCase() || ''
-    const idCard = v.idCardNumber?.toLowerCase() || ''
-    const school = v.schoolName?.toLowerCase() || ''
-    const s = verifSearch.toLowerCase()
-    return name.includes(s) || email.includes(s) || studentId.includes(s) || idCard.includes(s) || school.includes(s)
-  })
+  // Lọc tìm kiếm hồ sơ tài khoản (ưu tiên Chờ duyệt lên đầu danh sách)
+  const filteredVerifications = verifications
+    .filter((v) => {
+      const name = v.user?.fullName?.toLowerCase() || ''
+      const email = v.user?.email?.toLowerCase() || ''
+      const studentId = v.studentId?.toLowerCase() || ''
+      const idCard = v.idCardNumber?.toLowerCase() || ''
+      const school = v.schoolName?.toLowerCase() || ''
+      const s = verifSearch.toLowerCase()
+      return name.includes(s) || email.includes(s) || studentId.includes(s) || idCard.includes(s) || school.includes(s)
+    })
+    .sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1
+      if (a.status !== 'pending' && b.status === 'pending') return 1
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
 
-  // Lọc tìm kiếm vé tháng
-  const filteredPasses = passes.filter(
-    (a) =>
-      a.studentName.toLowerCase().includes(passSearch.toLowerCase()) ||
-      a.studentId.toLowerCase().includes(passSearch.toLowerCase()) ||
-      a.passCode.toLowerCase().includes(passSearch.toLowerCase()) ||
-      a.route.toLowerCase().includes(passSearch.toLowerCase())
-  )
+  // Lọc tìm kiếm vé tháng (ưu tiên Chờ duyệt lên đầu danh sách)
+  const filteredPasses = passes
+    .filter(
+      (a) =>
+        a.studentName.toLowerCase().includes(passSearch.toLowerCase()) ||
+        a.studentId.toLowerCase().includes(passSearch.toLowerCase()) ||
+        a.passCode.toLowerCase().includes(passSearch.toLowerCase()) ||
+        a.route.toLowerCase().includes(passSearch.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1
+      if (a.status !== 'pending' && b.status === 'pending') return 1
+      return new Date(b.appliedDate).getTime() - new Date(a.appliedDate).getTime()
+    })
 
   // Thống kê hồ sơ tài khoản
   const verifPendingCount = verifications.filter((v) => v.status === 'pending').length
@@ -1020,11 +1032,14 @@ export function DispatcherStudentApproval() {
                     </span>
                     <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                       <img
-                        src={previewVerif.frontImageUrl}
+                        src={formatProofUrl(previewVerif.frontImageUrl)}
                         alt="Mặt trước"
                         className="h-full w-full object-cover cursor-zoom-in"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                        }}
                         onClick={() => {
-                          setLightboxImage({ url: previewVerif.frontImageUrl, title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                          setLightboxImage({ url: formatProofUrl(previewVerif.frontImageUrl), title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                           setLightboxZoom(1)
                           setLightboxRotation(0)
                         }}
@@ -1032,7 +1047,7 @@ export function DispatcherStudentApproval() {
                       <button
                         type="button"
                         onClick={() => {
-                          setLightboxImage({ url: previewVerif.frontImageUrl, title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                          setLightboxImage({ url: formatProofUrl(previewVerif.frontImageUrl), title: `Mặt trước Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                           setLightboxZoom(1)
                           setLightboxRotation(0)
                         }}
@@ -1051,11 +1066,14 @@ export function DispatcherStudentApproval() {
                       </span>
                       <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                         <img
-                          src={previewVerif.backImageUrl}
+                          src={formatProofUrl(previewVerif.backImageUrl)}
                           alt="Mặt sau"
                           className="h-full w-full object-cover cursor-zoom-in"
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                          }}
                           onClick={() => {
-                            setLightboxImage({ url: previewVerif.backImageUrl!, title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxImage({ url: formatProofUrl(previewVerif.backImageUrl!), title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                             setLightboxZoom(1)
                             setLightboxRotation(0)
                           }}
@@ -1063,7 +1081,7 @@ export function DispatcherStudentApproval() {
                         <button
                           type="button"
                           onClick={() => {
-                            setLightboxImage({ url: previewVerif.backImageUrl!, title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxImage({ url: formatProofUrl(previewVerif.backImageUrl!), title: `Mặt sau Thẻ SV/CCCD: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                             setLightboxZoom(1)
                             setLightboxRotation(0)
                           }}
@@ -1083,11 +1101,14 @@ export function DispatcherStudentApproval() {
                       </span>
                       <div className="relative h-36 w-full rounded-2xl overflow-hidden border border-border bg-muted/40 flex items-center justify-center group">
                         <img
-                          src={previewVerif.portraitImageUrl}
+                          src={formatProofUrl(previewVerif.portraitImageUrl)}
                           alt="Chân dung"
                           className="h-full w-full object-contain cursor-zoom-in"
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                          }}
                           onClick={() => {
-                            setLightboxImage({ url: previewVerif.portraitImageUrl!, title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxImage({ url: formatProofUrl(previewVerif.portraitImageUrl!), title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                             setLightboxZoom(1)
                             setLightboxRotation(0)
                           }}
@@ -1095,7 +1116,7 @@ export function DispatcherStudentApproval() {
                         <button
                           type="button"
                           onClick={() => {
-                            setLightboxImage({ url: previewVerif.portraitImageUrl!, title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
+                            setLightboxImage({ url: formatProofUrl(previewVerif.portraitImageUrl!), title: `Ảnh chân dung: ${previewVerif.user?.fullName || 'Khách hàng'}` })
                             setLightboxZoom(1)
                             setLightboxRotation(0)
                           }}
@@ -1399,6 +1420,9 @@ export function DispatcherStudentApproval() {
                     src={formatProofUrl(previewPass.idCardPhotoUrl)}
                     alt={`Thẻ sinh viên ${previewPass.studentName}`}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                    }}
                   />
                   <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <span className="px-3 py-1.5 rounded-xl bg-black/75 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
@@ -1533,6 +1557,9 @@ export function DispatcherStudentApproval() {
             <img
               src={lightboxImage.url}
               alt={lightboxImage.title}
+              onError={(e) => {
+                e.currentTarget.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+              }}
               style={{
                 transform: `scale(${lightboxZoom}) rotate(${lightboxRotation}deg)`,
                 transition: 'transform 0.2s ease',

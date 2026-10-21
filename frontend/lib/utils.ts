@@ -18,18 +18,26 @@ export function isValidEmail(email: string): boolean {
  * Nếu là đường dẫn tương đối từ backend (/uploads/...) -> tự động trỏ đến http://localhost:3001/uploads/...
  */
 export function formatProofUrl(url?: string | null): string {
+  const fallbackUrl = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
   if (!url || typeof url !== 'string' || !url.trim()) {
-    return 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+    return fallbackUrl
   }
   const clean = url.trim()
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     return clean
   }
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+    .replace(/\/api\/v1\/?$/, '')
+    .replace(/\/$/, '')
+
   if (clean.startsWith('/uploads/')) {
-    return `http://127.0.0.1:3001${clean}`
+    return `${apiBase}${clean}`
   }
   if (clean.startsWith('uploads/')) {
-    return `http://127.0.0.1:3001/${clean}`
+    return `${apiBase}/${clean}`
   }
-  return clean
+  if (clean.startsWith('/')) {
+    return `${apiBase}${clean}`
+  }
+  return `${apiBase}/${clean}`
 }
