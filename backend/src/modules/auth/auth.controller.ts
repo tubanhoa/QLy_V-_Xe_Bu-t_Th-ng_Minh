@@ -12,7 +12,16 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
-import { RegisterDto, LoginDto, RefreshTokenDto, ChangePasswordDto, UpdateProfileDto } from './dto/index.js';
+import {
+  RegisterDto,
+  LoginDto,
+  RefreshTokenDto,
+  ChangePasswordDto,
+  UpdateProfileDto,
+  ForgotPasswordDto,
+  VerifyResetOtpDto,
+  ResetPasswordDto,
+} from './dto/index.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
@@ -126,6 +135,37 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.authService.updateProfile(userId, dto);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Yêu cầu gửi mã OTP đặt lại mật khẩu cho sinh viên ICTU' })
+  @ApiResponse({ status: 200, description: 'Gửi mã OTP thành công về email sinh viên' })
+  @ApiResponse({ status: 400, description: 'Thông tin sinh viên không hợp lệ hoặc bị giới hạn thời gian' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài khoản sinh viên' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @Post('verify-reset-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xác thực mã OTP 6 số để nhận Reset Token' })
+  @ApiResponse({ status: 200, description: 'Xác thực OTP thành công' })
+  @ApiResponse({ status: 400, description: 'Mã OTP không đúng hoặc đã hết hạn' })
+  async verifyResetOtp(@Body() dto: VerifyResetOtpDto) {
+    return this.authService.verifyResetOtp(dto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng Reset Token' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Reset Token không hợp lệ hoặc mật khẩu không đủ mạnh' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }
 

@@ -9,12 +9,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { RoleEntity } from '../../database/entities/role.entity.js';
-import { RegisterDto, LoginDto, ChangePasswordDto, UpdateProfileDto } from './dto/index.js';
+import { PasswordResetEntity } from '../../database/entities/password-reset.entity.js';
+import {
+  RegisterDto,
+  LoginDto,
+  ChangePasswordDto,
+  UpdateProfileDto,
+  ForgotPasswordDto,
+  VerifyResetOtpDto,
+  ResetPasswordDto,
+} from './dto/index.js';
 import { Role } from '../../common/constants/roles.constant.js';
 import { UserStatus } from '../../common/constants/status.constant.js';
 import { AuditService } from '../audit/audit.service.js';
+import { NotificationService } from '../notification/notification.service.js';
 
 @Injectable()
 export class AuthService {
@@ -23,8 +34,11 @@ export class AuthService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
+    @InjectRepository(PasswordResetEntity)
+    private readonly passwordResetRepository: Repository<PasswordResetEntity>,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -356,5 +370,207 @@ export class AuthService {
   private async updateRefreshToken(userId: string, refreshToken: string) {
     const hash = await bcrypt.hash(refreshToken, 10);
     await this.userRepository.update(userId, { refreshTokenHash: hash });
+  }
+
+  /**
+   * Tìm kiếm tài khoản sinh viên dựa trên Mã sinh viên hoặc Email ICTU
+   */
+  private async resolveStudentUser(rawIdentifier: string): Promise<UserEntity> {
+    const trimmed = (rawIdentifier || '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('Vui lòng nhập Mã sinh viên hoặc Email ICTU của bạn');
+    }
+
+    let searchConditions: Array<{ email?: string; studentId?: string }> = [];
+
+    if (trimmed.includes('@')) {
+      const emailLower = trimmed.toLowerCase();
+      searchConditions.push({ email: emailLower });
+      const prefix = trimmed.split('@')[0].toUpperCase();
+      if (prefix.startsWith('DTC')) {
+        searchConditions.push({ studentId: prefix });
+      }
+    } else {
+      const studentIdUpper = trimmed.toUpperCase();
+      searchConditions.push({ studentId: studentIdUpper });
+      searchConditions.push({ email: `${trimmed.toLowerCase()}@ictu.edu.vn` });
+    }
+
+    const user = await this.userRepository.findOne({
+      where: searchConditions,
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        `Không tìm thấy tài khoản sinh viên với thông tin "${trimmed}". Vui lòng kiểm tra lại Mã sinh viên hoặc Email đã đăng ký!`,
+      );
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Tài khoản sinh viên này đang bị tạm khóa hoặc ngừng hoạt động. Vui lòng liên hệ hỗ trợ!');
+    }
+
+    return user;
+  }
+
+  /**
+   * Yêu cầu đặt lại mật khẩu: Sinh mã OTP 6 số và gửi qua email sinh viên ICTU
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ success: boolean; email: string; maskedEmail: string; message: string }> {
+    const user = await this.resolveStudentUser(dto.identifier);
+
+    // Kiểm tra rate limit: Chống spam OTP (1 lần / 60 giây)
+    const latestReset = await this.passwordResetRepository.findOne({
+      where: { email: user.email, isUsed: false },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestReset) {
+      const elapsedMs = Date.now() - new Date(latestReset.createdAt).getTime();
+      if (elapsedMs < 60000) {
+        const remainingSeconds = Math.ceil((60000 - elapsedMs) / 1000);
+        throw new BadRequestException(
+          `Bạn đã yêu cầu gửi mã gần đây. Vui lòng đợi ${remainingSeconds} giây trước khi yêu cầu gửi lại OTP!`,
+        );
+      }
+    }
+
+    // Sinh mã OTP 6 số ngẫu nhiên
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otpCode, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+
+    const resetRecord = this.passwordResetRepository.create({
+      userId: user.id,
+      email: user.email,
+      studentId: user.studentId || null,
+      otpHash,
+      expiresAt,
+      attempts: 0,
+      isUsed: false,
+    });
+    await this.passwordResetRepository.save(resetRecord);
+
+    // Gửi email HTML chuẩn học đường ICTU
+    await this.notificationService.sendPasswordResetOtpEmail({
+      recipientEmail: user.email,
+      studentName: user.fullName,
+      studentId: user.studentId,
+      otpCode,
+      expiresInMinutes: 10,
+    });
+
+    // Tạo chuỗi che mờ email: vi***@ictu.edu.vn
+    const [localPart, domainPart] = user.email.split('@');
+    const maskedLocal = localPart.length > 3 ? `${localPart.slice(0, 2)}***${localPart.slice(-1)}` : `${localPart.slice(0, 1)}***`;
+    const maskedEmail = `${maskedLocal}@${domainPart}`;
+
+    return {
+      success: true,
+      email: user.email,
+      maskedEmail,
+      message: `Mã xác thực OTP gồm 6 chữ số đã được gửi tới email ${maskedEmail}. Mã có hiệu lực trong 10 phút.`,
+    };
+  }
+
+  /**
+   * Xác thực mã OTP 6 số do sinh viên nhập
+   */
+  async verifyResetOtp(dto: VerifyResetOtpDto): Promise<{ success: boolean; email: string; resetToken: string; message: string }> {
+    const user = await this.resolveStudentUser(dto.identifier);
+
+    const activeReset = await this.passwordResetRepository.findOne({
+      where: { email: user.email, isUsed: false },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!activeReset) {
+      throw new BadRequestException('Không tìm thấy yêu cầu đặt lại mật khẩu cho tài khoản này. Vui lòng bấm "Quên mật khẩu" để nhận mã mới.');
+    }
+
+    if (new Date(activeReset.expiresAt).getTime() < Date.now()) {
+      activeReset.isUsed = true;
+      await this.passwordResetRepository.save(activeReset);
+      throw new BadRequestException('Mã xác thực OTP đã hết hạn (quá 10 phút). Vui lòng yêu cầu gửi lại mã mới!');
+    }
+
+    if (activeReset.attempts >= 5) {
+      activeReset.isUsed = true;
+      await this.passwordResetRepository.save(activeReset);
+      throw new BadRequestException('Bạn đã nhập sai mã OTP quá 5 lần. Mã này đã bị hủy bỏ để đảm bảo an toàn. Vui lòng gửi lại mã mới!');
+    }
+
+    const isMatch = await bcrypt.compare(dto.otp.trim(), activeReset.otpHash);
+    if (!isMatch) {
+      activeReset.attempts += 1;
+      await this.passwordResetRepository.save(activeReset);
+      const remainingAttempts = 5 - activeReset.attempts;
+      throw new BadRequestException(`Mã xác thực OTP không chính xác. Bạn còn ${remainingAttempts} lần thử!`);
+    }
+
+    // OTP chính xác -> Tạo resetToken bí mật dùng một lần
+    const resetToken = `rst_${crypto.randomUUID().replace(/-/g, '')}${Date.now().toString(36)}`;
+    activeReset.resetToken = resetToken;
+    await this.passwordResetRepository.save(activeReset);
+
+    return {
+      success: true,
+      email: user.email,
+      resetToken,
+      message: 'Xác thực mã OTP thành công. Vui lòng tạo mật khẩu mới cho tài khoản của bạn.',
+    };
+  }
+
+  /**
+   * Đặt lại mật khẩu mới sau khi đã có resetToken hợp lệ
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<{ success: boolean; message: string }> {
+    const user = await this.resolveStudentUser(dto.identifier);
+
+    const activeReset = await this.passwordResetRepository.findOne({
+      where: { email: user.email, resetToken: dto.resetToken, isUsed: false },
+    });
+
+    if (!activeReset) {
+      throw new BadRequestException('Phiên đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng. Vui lòng thao tác lại từ đầu.');
+    }
+
+    if (new Date(activeReset.expiresAt).getTime() < Date.now()) {
+      activeReset.isUsed = true;
+      await this.passwordResetRepository.save(activeReset);
+      throw new BadRequestException('Phiên đặt lại mật khẩu đã hết thời gian cho phép. Vui lòng yêu cầu lại mã mới.');
+    }
+
+    // Kiểm tra độ mạnh mật khẩu mới
+    const pwRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])/;
+    if (dto.newPassword.length < 6 || !pwRegex.test(dto.newPassword)) {
+      throw new BadRequestException(
+        'Mật khẩu mới phải chứa ít nhất 6 ký tự, gồm ít nhất 1 chữ hoa, 1 chữ số và 1 ký tự đặc biệt (!@#$%^&*)',
+      );
+    }
+
+    // Mã hóa mật khẩu mới và cập nhật CSDL
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    user.passwordHash = passwordHash;
+    user.refreshTokenHash = null as any; // Buộc đăng nhập lại trên mọi thiết bị
+    await this.userRepository.save(user);
+
+    // Đánh dấu mã OTP / reset token đã sử dụng
+    activeReset.isUsed = true;
+    await this.passwordResetRepository.save(activeReset);
+
+    // Ghi nhận Audit Log
+    this.auditService.log({
+      action: 'RESET_PASSWORD',
+      resourceName: 'auth',
+      resourceId: user.id,
+      userId: user.id,
+      changes: { email: user.email, studentId: user.studentId, resetAt: new Date().toISOString() },
+    }).catch(() => {});
+
+    return {
+      success: true,
+      message: 'Đặt lại mật khẩu thành công! Bạn có thể sử dụng mật khẩu mới để đăng nhập ngay bây giờ.',
+    };
   }
 }

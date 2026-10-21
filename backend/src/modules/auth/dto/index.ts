@@ -3,3 +3,4 @@ export * from './login.dto.js';
 export * from './refresh-token.dto.js';
 export * from './change-password.dto.js';
 export * from './update-profile.dto.js';
+export * from './password-reset.dto.js';

@@ -7,10 +7,11 @@ import { AuthService } from './auth.service.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
 import { RoleEntity } from '../../database/entities/role.entity.js';
+import { PasswordResetEntity } from '../../database/entities/password-reset.entity.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, RoleEntity]),
+    TypeOrmModule.forFeature([UserEntity, RoleEntity, PasswordResetEntity]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
   ],
