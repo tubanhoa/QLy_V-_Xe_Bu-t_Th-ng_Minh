@@ -25,6 +25,7 @@ export * from './notification.entity.js';
 export * from './notification-preference.entity.js';
 export * from './priority-verification.entity.js';
 export * from './driver-profile.entity.js';
+export * from './password-reset.entity.js';
 
 import { RoleEntity } from './role.entity.js';
 import { UserEntity } from './user.entity.js';
@@ -53,6 +54,7 @@ import { NotificationEntity } from './notification.entity.js';
 import { NotificationPreferenceEntity } from './notification-preference.entity.js';
 import { PriorityVerificationEntity } from './priority-verification.entity.js';
 import { DriverProfileEntity } from './driver-profile.entity.js';
+import { PasswordResetEntity } from './password-reset.entity.js';
 
 export const ALL_ENTITIES = [
   RoleEntity,
@@ -82,6 +84,7 @@ export const ALL_ENTITIES = [
   NotificationPreferenceEntity,
   PriorityVerificationEntity,
   DriverProfileEntity,
+  PasswordResetEntity,
 ];
 
 

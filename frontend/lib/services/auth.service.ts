@@ -691,6 +691,119 @@ class AuthService {
       return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
     }
   }
+
+  /**
+   * Yêu cầu gửi mã OTP đặt lại mật khẩu cho sinh viên ICTU
+   * Endpoint: POST /api/v1/auth/forgot-password
+   */
+  async forgotPassword(identifier: string): Promise<{
+    success: boolean
+    email?: string
+    maskedEmail?: string
+    message?: string
+  }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: identifier.trim() }),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return {
+          success: false,
+          message: errorMsg || 'Không thể yêu cầu đặt lại mật khẩu',
+        }
+      }
+
+      return {
+        success: true,
+        email: json?.data?.email || json?.email,
+        maskedEmail: json?.data?.maskedEmail || json?.maskedEmail,
+        message: json?.message || 'Mã OTP xác thực đã được gửi đến email của bạn',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Xác thực mã OTP 6 số để nhận Reset Token
+   * Endpoint: POST /api/v1/auth/verify-reset-otp
+   */
+  async verifyResetOtp(identifier: string, otp: string): Promise<{
+    success: boolean
+    resetToken?: string
+    message?: string
+  }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/verify-reset-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: identifier.trim(), otp: otp.trim() }),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return {
+          success: false,
+          message: errorMsg || 'Mã OTP xác thực không hợp lệ',
+        }
+      }
+
+      return {
+        success: true,
+        resetToken: json?.data?.resetToken || json?.resetToken,
+        message: json?.message || 'Xác thực mã OTP thành công',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
+
+  /**
+   * Đặt lại mật khẩu mới bằng Reset Token
+   * Endpoint: POST /api/v1/auth/reset-password
+   */
+  async resetPassword(payload: {
+    identifier: string
+    resetToken: string
+    newPassword: string
+  }): Promise<{
+    success: boolean
+    message?: string
+  }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: payload.identifier.trim(),
+          resetToken: payload.resetToken.trim(),
+          newPassword: payload.newPassword,
+        }),
+      })
+
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        const errorMsg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message
+        return {
+          success: false,
+          message: errorMsg || 'Không thể đặt lại mật khẩu',
+        }
+      }
+
+      return {
+        success: true,
+        message: json?.message || 'Đặt lại mật khẩu thành công',
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Lỗi kết nối máy chủ' }
+    }
+  }
 }
 
 export const authService = new AuthService()
