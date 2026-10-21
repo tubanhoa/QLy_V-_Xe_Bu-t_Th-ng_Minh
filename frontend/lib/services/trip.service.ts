@@ -371,6 +371,60 @@ class TripService {
       }
     }
   }
+
+  /** Xóa một chuyến xe cụ thể (hỗ trợ xóa chuyến lỗi/tạo tự động) */
+  async deleteTrip(tripId: string, force = false): Promise<TripApiResponse<any>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/${tripId}${force ? '?force=true' : ''}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể xóa chuyến xe',
+        }
+      }
+      return {
+        success: true,
+        data: json,
+        message: json?.message || 'Đã xóa chuyến xe thành công',
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
+
+  /** Dọn dẹp toàn bộ chuyến xe mồ côi của các tuyến đã bị xóa */
+  async cleanOrphanTrips(): Promise<TripApiResponse<{ deletedCount: number } | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/admin/clean-orphan-trips`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể dọn dẹp các chuyến xe mồ côi',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
 }
 
 export const tripService = new TripService()

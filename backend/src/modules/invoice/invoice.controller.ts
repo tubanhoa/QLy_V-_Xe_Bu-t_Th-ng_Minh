@@ -21,10 +21,39 @@ export class ResendEmailDto {
   email?: string;
 }
 
+export class QueryInvoicesDto {
+  @IsOptional()
+  page?: number;
+
+  @IsOptional()
+  limit?: number;
+
+  @IsOptional()
+  search?: string;
+
+  @IsOptional()
+  fromDate?: string;
+
+  @IsOptional()
+  toDate?: string;
+}
+
 @ApiTags('Invoices - Hóa Đơn Điện Tử')
 @Controller('invoices')
 export class InvoiceController {
   constructor(private readonly invoiceService: InvoiceService) {}
+
+  @Public()
+  @Get()
+  @ApiOperation({ summary: 'Lấy danh sách tất cả hóa đơn điện tử cho trang quản trị (Admin Portal)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'fromDate', required: false, type: String })
+  @ApiQuery({ name: 'toDate', required: false, type: String })
+  async findAll(@Query() query: QueryInvoicesDto) {
+    return this.invoiceService.findAllInvoices(query);
+  }
 
   @Public()
   @Get('lookup')

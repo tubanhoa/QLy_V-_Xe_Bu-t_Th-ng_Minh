@@ -112,7 +112,7 @@ export class VoucherService {
       } else if (query.status === 'inactive') {
         queryBuilder.andWhere('v.status = :st', { st: 'inactive' });
       } else if (query.status === 'expired') {
-        queryBuilder.andWhere('v.end_date < :today', { today });
+        queryBuilder.andWhere('(v.end_date < :today OR v.status = :st)', { today, st: 'expired' });
       }
     }
 
@@ -120,9 +120,10 @@ export class VoucherService {
 
     const [items, total] = await queryBuilder.getManyAndCount();
 
-    // Thêm dynamic status để hiển thị cho UI Admin
+    // Thêm dynamic status và isExpired để hiển thị cho UI Admin & Khách hàng
     const enriched = items.map((item) => {
       let dynamicStatus = item.status;
+      const isExpired = item.endDate < today || item.status === 'expired';
       if (item.status === 'active') {
         if (item.endDate < today) {
           dynamicStatus = 'expired';
@@ -133,6 +134,7 @@ export class VoucherService {
       return {
         ...item,
         dynamicStatus,
+        isExpired,
         remainingUses: item.usageLimit > 0 ? Math.max(0, item.usageLimit - item.usedCount) : 'unlimited',
       };
     });

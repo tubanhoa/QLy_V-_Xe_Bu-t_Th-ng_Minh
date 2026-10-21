@@ -409,24 +409,78 @@ export class SeedService implements OnApplicationBootstrap {
       }
     }
 
-    // 7. Seed Vouchers
-    const voucherCode = 'ICTU2026';
-    const existingVoucher = await this.voucherRepo.findOne({ where: { code: voucherCode } });
-    if (!existingVoucher) {
-      await this.voucherRepo.save(
-        this.voucherRepo.create({
-          code: voucherCode,
-          discountType: 'percentage',
-          discountValue: 20,
-          minOrderValue: 10000,
-          maxDiscountAmount: 20000,
-          startDate: '2026-09-01',
-          endDate: '2026-12-31',
-          usageLimit: 1000,
-          status: 'active',
-        }),
-      );
-      this.logger.log(`Seeded voucher: ${voucherCode} (-20%)`);
+    // 7. Seed Vouchers (Đồng bộ đầy đủ voucher thực tế & voucher hết hạn)
+    const vouchersToSeed = [
+      {
+        code: 'ICTU2026',
+        description: 'Ưu đãi chào tân sinh viên K22 ICTU - Giảm 20% tối đa 30.000đ cho mọi chuyến buýt',
+        discountType: 'percentage' as const,
+        discountValue: 20,
+        minOrderValue: 20000,
+        maxDiscountAmount: 30000,
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        usageLimit: 1000,
+        applicableType: 'all' as const,
+        status: 'active',
+      },
+      {
+        code: 'ICTU_BUS10K',
+        description: 'Trợ giá kích cầu tuyến xe buýt Thái Nguyên - Trừ thẳng 10.000đ trực tiếp vào giá vé lượt',
+        discountType: 'fixed_amount' as const,
+        discountValue: 10000,
+        minOrderValue: 10000,
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        usageLimit: 300,
+        applicableType: 'single_ticket' as const,
+        status: 'active',
+      },
+      {
+        code: 'VETHANG_50K',
+        description: 'Giảm 50.000đ khi đăng ký mới hoặc gia hạn vé tháng liên tuyến ĐH Thái Nguyên',
+        discountType: 'fixed_amount' as const,
+        discountValue: 50000,
+        minOrderValue: 100000,
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        usageLimit: 200,
+        applicableType: 'monthly_pass' as const,
+        status: 'active',
+      },
+      {
+        code: 'CUOITUAN_VUI',
+        description: 'Kích cầu di chuyển cuối tuần - Giảm 15% tối đa 20.000đ cho các chuyến xe thứ 7 & chủ nhật',
+        discountType: 'percentage' as const,
+        discountValue: 15,
+        minOrderValue: 20000,
+        maxDiscountAmount: 20000,
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        usageLimit: 400,
+        applicableType: 'single_ticket' as const,
+        status: 'active',
+      },
+      {
+        code: 'HE2025_EXP',
+        description: 'Ưu đãi kích cầu mùa hè 2025 - Giảm 25.000đ cho vé tháng sinh viên (Đã kết thúc)',
+        discountType: 'fixed_amount' as const,
+        discountValue: 25000,
+        minOrderValue: 80000,
+        startDate: '2025-06-01',
+        endDate: '2025-08-31',
+        usageLimit: 500,
+        applicableType: 'monthly_pass' as const,
+        status: 'active',
+      },
+    ];
+
+    for (const v of vouchersToSeed) {
+      const existing = await this.voucherRepo.findOne({ where: { code: v.code } });
+      if (!existing) {
+        await this.voucherRepo.save(this.voucherRepo.create(v));
+        this.logger.log(`Seeded voucher: ${v.code}`);
+      }
     }
 
     this.logger.log('Database seeding check completed successfully!');

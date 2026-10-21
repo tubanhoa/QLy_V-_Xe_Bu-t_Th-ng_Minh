@@ -120,18 +120,46 @@ class PromotionService {
   }
 
   /**
-   * Lấy danh sách Voucher khả dụng cho khách hàng (Public / Customer Vault)
+   * Lấy danh sách Voucher từ hệ thống cho khách hàng (Public / Customer Vault)
+   * Endpoint: GET /api/v1/vouchers
    */
-  async getAvailableVouchers(): Promise<UnifiedApiResponse<VoucherItem[]>> {
+  async getAvailableVouchers(query?: {
+    search?: string
+    status?: string
+    applicableType?: string
+    limit?: number
+  }): Promise<UnifiedApiResponse<VoucherItem[]>> {
     try {
-      // Thử gọi API admin nếu đang có token hợp lệ
-      const adminRes = await this.getAdminVouchers({ status: 'active', limit: 50 })
-      if (adminRes.success && adminRes.data?.items?.length) {
-        return { success: true, data: adminRes.data.items }
+      const params = new URLSearchParams()
+      if (query?.search) params.append('search', query.search)
+      if (query?.status && query.status !== 'all') params.append('status', query.status)
+      if (query?.applicableType && query.applicableType !== 'all') {
+        params.append('applicableType', query.applicableType)
       }
-      return { success: true, data: [] }
+      params.append('limit', String(query?.limit || 100))
+
+      const url = `${this.baseUrl}/vouchers?${params.toString()}`
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      })
+
+      const resJson = await response.json().catch(() => null)
+      if (!response.ok) {
+        return {
+          success: false,
+          statusCode: response.status,
+          message: resJson?.message || 'Không thể tải kho voucher',
+        }
+      }
+
+      const rawData = resJson?.data || resJson
+      const items = Array.isArray(rawData) ? rawData : rawData?.items || []
+      return { success: true, data: items }
     } catch (error: any) {
-      return { success: true, data: [] }
+      console.error('[PromotionService.getAvailableVouchers]', error)
+      return { success: false, message: error?.message || 'Lỗi kết nối máy chủ voucher' }
     }
   }
 

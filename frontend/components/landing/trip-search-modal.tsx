@@ -351,7 +351,7 @@ export function TripSearchModal({
               </div>
 
               {/* Ngày đi (Date) & Mobile Search Button */}
-              <div className="grid grid-cols-2 md:grid-cols-1 gap-2 items-end">
+              <div className="grid grid-cols-[1fr_125px] sm:grid-cols-2 md:grid-cols-1 gap-2 items-end">
                 <div>
                   <label className="block text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">
                     Ngày khởi hành
@@ -632,7 +632,7 @@ export function TripSearchModal({
         )}
 
         {/* Results List Viewport */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div id="trip-search-results-list" className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 pb-[calc(32px+env(safe-area-inset-bottom,0px))]">
           {/* Active Sort Banner Indicator */}
           {!loading && !error && filteredTrips.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 font-medium">
@@ -813,7 +813,7 @@ export function TripSearchModal({
                                 isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
                               )}
                             />
-                            <span>
+                            <span className="whitespace-nowrap">
                               {isSoldOut
                                 ? 'Hết chỗ'
                                 : isAlmostFull
@@ -823,16 +823,16 @@ export function TripSearchModal({
                           </span>
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#005A36] transition-colors">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
+                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#005A36] transition-colors truncate">
                             {trip.routeName}
                           </h4>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-[#005A36] border border-emerald-200/60">
+                          <span className="shrink-0 whitespace-nowrap inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-[#005A36] border border-emerald-200/60">
                             <Zap size={10} className="fill-[#005A36]" /> Xe Buýt Điện
                           </span>
                         </div>
-                        <span className="text-[11px] font-medium text-slate-500">
+                        <span className="text-[11px] font-medium text-slate-500 block truncate">
                           Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa: {totalSeats} ghế ngồi
                         </span>
                       </div>
@@ -842,7 +842,7 @@ export function TripSearchModal({
                       <div className="text-lg sm:text-xl font-black text-[#005A36]">
                         {Number(trip.basePrice).toLocaleString('vi-VN')}đ
                       </div>
-                      <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-800 border border-emerald-200">
+                      <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-800 border border-emerald-200 shrink-0 whitespace-nowrap">
                         <Sparkles size={11} className="text-emerald-600" />
                         <span>SV ICTU: {Number(trip.studentPrice).toLocaleString('vi-VN')}đ (-50%)</span>
                       </div>
@@ -852,34 +852,34 @@ export function TripSearchModal({
                   {/* Route Timeline tích hợp Điểm đón/trả & Nút Đặt Vé */}
                   <div className="my-3 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/90 rounded-2xl p-3 border border-slate-200/80">
                     {/* Timeline hành trình */}
-                    <div className="flex items-center justify-between sm:justify-start gap-3 text-xs flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 sm:gap-3 text-xs flex-1 min-w-0">
                       {/* Departure & Origin */}
-                      <div className="text-left shrink-0 max-w-[140px] sm:max-w-[160px]">
-                        <span className="block text-base sm:text-lg font-black text-slate-900 leading-none">{depTime}</span>
-                        <span className="text-[10px] text-emerald-800 font-extrabold uppercase tracking-wider block mt-1">Trạm đón</span>
+                      <div className="text-left flex-1 min-w-0">
+                        <span className="block text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">{depTime}</span>
+                        <span className="text-[10px] text-emerald-800 font-extrabold uppercase tracking-wider block mt-1 whitespace-nowrap">Trạm đón</span>
                         <span className="text-[11px] font-bold text-slate-800 block truncate" title={trip.origin}>
                           {trip.origin}
                         </span>
                       </div>
                       {/* Travel Line */}
-                      <div className="flex-1 flex flex-col items-center px-1.5 min-w-[100px] sm:min-w-[130px]">
-                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-500 mb-1">
-                          <Clock size={11} className="text-slate-400" />
-                          <span>45 phút dự kiến</span>
+                      <div className="shrink-0 px-1 sm:px-2 flex flex-col items-center w-20 sm:w-28 md:w-36">
+                        <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold text-slate-500 mb-1 whitespace-nowrap">
+                          <Clock size={10} className="text-slate-400" />
+                          <span>45p dự kiến</span>
                         </div>
                         <div className="w-full h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-[#005A36] rounded-full relative flex items-center justify-center shadow-xs">
-                          <div className="size-5 rounded-full bg-white border-2 border-[#005A36] text-[#005A36] flex items-center justify-center shadow-xs">
-                            <Bus size={10} strokeWidth={2.5} />
+                          <div className="size-4 sm:size-5 rounded-full bg-white border-2 border-[#005A36] text-[#005A36] flex items-center justify-center shadow-xs">
+                            <Bus size={9} strokeWidth={2.5} />
                           </div>
                         </div>
-                        <span className="text-[9px] text-slate-400 font-medium mt-1 truncate max-w-[120px] sm:max-w-[150px]">
-                          Lộ trình đón cố định
+                        <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium mt-1 truncate max-w-[80px] sm:max-w-[120px]">
+                          Cố định
                         </span>
                       </div>
                       {/* Arrival & Destination */}
-                      <div className="text-right shrink-0 max-w-[140px] sm:max-w-[160px]">
-                        <span className="block text-base sm:text-lg font-black text-slate-900 leading-none">{arrTime}</span>
-                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mt-1">Trạm trả</span>
+                      <div className="text-right flex-1 min-w-0">
+                        <span className="block text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">{arrTime}</span>
+                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mt-1 whitespace-nowrap">Trạm trả</span>
                         <span className="text-[11px] font-bold text-slate-800 block truncate" title={trip.destination}>
                           {trip.destination}
                         </span>

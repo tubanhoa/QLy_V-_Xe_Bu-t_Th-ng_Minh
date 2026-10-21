@@ -991,7 +991,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       {/* ========================================================================= */}
       {/* 2. THANH HUD ĐỈNH NỔI DẠNG KÍNH (TOP FLOATING COCKPIT BAR)               */}
       {/* ========================================================================= */}
-      <header className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+      <header className="absolute top-4 left-4 right-4 z-40 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
         {/* Left: Thông tin xe & Tuyến */}
         <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2.5 shadow-lg border border-slate-200/90 dark:border-slate-800">
           <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md">
@@ -1032,20 +1032,20 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
           </div>
         </div>
 
-        {/* Right: Bộ công cụ Telemetry, Bản đồ & Phần cứng */}
-        <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1.5 shadow-lg border border-slate-200/90 dark:border-slate-800">
+        {/* Right: Bộ công cụ Telemetry, Bản đồ & Phần cứng (Vùng chạm chuẩn cảm ứng 44px) */}
+        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1.5 shadow-lg border border-slate-200/90 dark:border-slate-800">
           {/* Nút Bật / Tắt Định vị Thiết Bị Thực */}
           <button
             type="button"
             onClick={handleToggleDeviceGps}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 h-10 sm:h-11 px-3 sm:px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-95 ${
               isDeviceGpsActive
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title="Bật/Tắt truyền vị trí GPS thật từ thiết bị di động / máy tính bảng"
           >
-            <Radio size={14} className={isDeviceGpsActive ? 'animate-pulse' : ''} />
+            <Radio size={15} className={isDeviceGpsActive ? 'animate-pulse' : ''} />
             <span className="hidden sm:inline">GPS Thiết Bị</span>
           </button>
 
@@ -1053,14 +1053,14 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
           <button
             type="button"
             onClick={handleToggleSimulator}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 h-10 sm:h-11 px-3 sm:px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-95 ${
               simStatus?.isRunning
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title="Bật/Tắt bộ giả lập lộ trình OSRM chạy tự động"
           >
-            {simStatus?.isRunning ? <Square size={13} /> : <Play size={13} />}
+            {simStatus?.isRunning ? <Square size={14} /> : <Play size={14} />}
             <span className="hidden sm:inline">
               {simStatus?.isRunning ? 'Dừng Sim' : 'Chạy Sim'}
             </span>
@@ -1070,44 +1070,44 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
           <button
             type="button"
             onClick={handleCenterBus}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
+            className={`size-10 sm:size-11 flex items-center justify-center rounded-xl transition-all cursor-pointer active:scale-95 ${
               followBus
                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                 : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title="Định vị tâm xe buýt"
           >
-            <Crosshair size={16} />
+            <Crosshair size={18} />
           </button>
 
           {/* Nút Căn Toàn Tuyến (Fit Route) */}
           <button
             type="button"
             onClick={handleFitRoute}
-            className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+            className="size-10 sm:size-11 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer active:scale-95"
             title="Xem toàn bộ tuyến đường"
           >
-            <Compass size={16} />
+            <Compass size={18} />
           </button>
 
           {/* Nút Đổi Ban Ngày / Ban Đêm */}
           <button
             type="button"
             onClick={() => setIsDayMode(!isDayMode)}
-            className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+            className="size-10 sm:size-11 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer active:scale-95"
             title={isDayMode ? 'Chuyển sang Chế độ Tối' : 'Chuyển sang Chế độ Sáng Ban Ngày'}
           >
-            {isDayMode ? <Sun size={17} className="text-amber-500" /> : <Moon size={17} className="text-blue-400" />}
+            {isDayMode ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} className="text-blue-400" />}
           </button>
 
           {/* Nút Toàn màn hình */}
           <button
             type="button"
             onClick={handleToggleFullscreen}
-            className="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+            className="size-10 sm:size-11 flex items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer active:scale-95"
             title="Bật / Tắt Toàn màn hình Kiosk"
           >
-            {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
 
           {/* Nút Xem Văn Phòng */}
@@ -1115,9 +1115,10 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             <button
               type="button"
               onClick={onSwitchToOfficeView}
-              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              className="h-10 sm:h-11 px-3.5 sm:px-4 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer active:scale-95 flex items-center gap-1"
             >
-              Văn phòng →
+              <span>Văn phòng</span>
+              <span className="font-mono">→</span>
             </button>
           )}
         </div>
@@ -1145,18 +1146,18 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
               <button
                 type="button"
                 onClick={handleArriveStation}
-                className="h-8 px-2.5 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-[11px] font-black flex items-center gap-1 shadow active:scale-95 cursor-pointer"
+                className="h-10 px-3.5 rounded-xl bg-[#005A36] hover:bg-[#00472b] text-white text-xs font-black flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
               >
-                <CheckCheck size={13} />
+                <CheckCheck size={15} />
                 <span>Cập trạm 🔔</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsStopCardMinimized(false)}
-                className="size-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer"
+                className="size-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer active:scale-95"
                 title="Mở rộng thông tin trạm"
               >
-                <ChevronDown size={16} />
+                <ChevronDown size={18} />
               </button>
             </div>
           </div>
@@ -1168,17 +1169,17 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                 <span className="size-2 rounded-full bg-emerald-600 animate-ping" />
                 Trạm Dừng Kế Tiếp (Stop {currentStopIndex + 1}/{stops.length})
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold text-slate-500">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                   Cách ~{distanceToNextStop}m
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsStopCardMinimized(true)}
-                  className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer"
+                  className="size-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 hover:text-slate-900 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
                   title="Thu gọn thẻ trạm"
                 >
-                  <ChevronUp size={15} />
+                  <ChevronUp size={18} />
                 </button>
               </div>
             </div>
@@ -1188,16 +1189,18 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
             </h2>
 
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-              <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-slate-700 dark:text-slate-300">
+              <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-slate-700 dark:text-slate-300">
                 <Clock size={14} className="text-amber-600" />
-                <span>Dự kiến tới: ~1.5 phút</span>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1">
-                <CheckCircle2 size={14} />
                 <span>
                   {currentStop.etaMinutes != null
-                    ? `Dự kiến: ~${currentStop.etaMinutes} phút`
-                    : `Trạm số ${currentStop.order} trên lộ trình`}
+                    ? `Dự kiến tới: ~${currentStop.etaMinutes} phút`
+                    : `Dự kiến tới: ~${Math.max(1, Math.round(distanceToNextStop / 400))} phút`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5">
+                <CheckCircle2 size={14} />
+                <span>
+                  Trạm số {currentStopIndex + 1}/{stops.length} trên lộ trình
                 </span>
               </div>
             </div>
@@ -1227,7 +1230,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
       {/* 4. DOCK ĐIỀU KHIỂN BÊN HÔNG (SIDE PANEL DRAWER - KHÔNG CHE NÚT XUẤT BẾN)  */}
       {/* ========================================================================= */}
       {activeTab !== 'none' && (
-        <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[480px] lg:w-[540px] bg-white/98 dark:bg-slate-900/98 backdrop-blur-2xl shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between p-5 animate-in slide-in-from-right duration-250">
+        <aside className="absolute max-sm:inset-0 sm:top-20 sm:right-4 sm:bottom-24 z-30 w-full sm:w-[480px] lg:w-[540px] sm:max-h-[calc(100vh-11rem)] bg-white/98 dark:bg-slate-900/98 backdrop-blur-2xl shadow-2xl border border-slate-200 dark:border-slate-800 sm:rounded-3xl flex flex-col justify-between p-5 animate-in slide-in-from-right duration-250">
           {/* Header Panel */}
           <div className="pb-3 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
@@ -1729,14 +1732,14 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
 
           {/* TAB 3: BÁO CÁO SỰ CỐ KHẨN CẤP (QUICK SOS DISPATCH) */}
           {activeTab === 'incident' && (
-            <div className="flex-1 flex flex-col justify-between py-4">
+            <div className="flex-1 flex flex-col justify-between py-2 overflow-y-auto pr-1">
               <div>
-                <p className="text-xs text-slate-500 mb-3 font-semibold">
+                <p className="text-xs text-slate-500 mb-2.5 font-semibold">
                   Chọn nhanh loại sự cố để báo về Phòng Điều Hành ICTU:
                 </p>
 
                 {/* 6 Phím chọn loại sự cố to bản */}
-                <div className="grid grid-cols-2 gap-2.5 mb-4">
+                <div className="grid grid-cols-2 gap-2 mb-3">
                   {[
                     { id: 'traffic_jam' as IncidentType, label: 'Ùn tắc giao thông', icon: Clock },
                     { id: 'breakdown' as IncidentType, label: 'Hỏng hóc / Nổ lốp', icon: AlertTriangle },
@@ -1752,7 +1755,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                         key={item.id}
                         type="button"
                         onClick={() => setSelectedIncidentType(item.id)}
-                        className={`flex items-center gap-2 p-3 rounded-2xl border text-xs font-black transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 p-2.5 sm:p-3 rounded-2xl border text-xs font-black transition-all cursor-pointer active:scale-95 ${
                           isSelected
                             ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-500 text-rose-700 dark:text-rose-300 shadow-md'
                             : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1766,7 +1769,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                 </div>
 
                 {/* Chọn số phút trễ dự kiến */}
-                <div className="mb-4">
+                <div className="mb-3">
                   <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">
                     Dự kiến trễ thêm:
                   </label>
@@ -1776,7 +1779,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                         key={mins}
                         type="button"
                         onClick={() => setDelayMinutes(mins)}
-                        className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-95 ${
                           delayMinutes === mins
                             ? 'bg-rose-600 text-white shadow-sm'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -1786,6 +1789,43 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Gợi ý mô tả nhanh 1 chạm */}
+                <div className="mb-3">
+                  <span className="text-[11px] font-bold text-slate-500 mb-1.5 block">
+                    Gợi ý mô tả nhanh:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Thủng lốp xe', 'Tắc đường ngã tư Z115', 'Chờ sinh viên tan ca', 'Hỏng máy lạnh', 'Va chạm nhẹ'].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setIncidentDescription((prev) =>
+                            prev ? (prev.includes(tag) ? prev : `${prev}, ${tag}`) : tag
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer active:scale-95"
+                      >
+                        +{tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Ô nhập ghi chú chi tiết */}
+                <div className="mb-3">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Ghi chú chi tiết cho phòng điều hành (tùy chọn):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={incidentDescription}
+                    onChange={(e) => setIncidentDescription(e.target.value)}
+                    placeholder="Nhập mô tả cụ thể hoặc số lượng sinh viên ảnh hưởng..."
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-rose-500 focus:outline-hidden resize-none"
+                  />
                 </div>
 
                 {incidentSuccessNotice && (
@@ -1800,7 +1840,7 @@ export function DriverCockpit({ onSwitchToOfficeView }: DriverCockpitProps) {
                 type="button"
                 onClick={handleSendSosIncident}
                 disabled={isSubmittingIncident}
-                className="h-14 w-full rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-black text-sm shadow-xl shadow-rose-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+                className="h-13 sm:h-14 w-full rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-black text-sm shadow-xl shadow-rose-900/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 shrink-0"
               >
                 {isSubmittingIncident ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 <span>GỬI BÁO CÁO SOS KHẨN CẤP</span>

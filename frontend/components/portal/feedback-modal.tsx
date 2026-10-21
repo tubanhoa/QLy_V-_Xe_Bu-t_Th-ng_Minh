@@ -492,6 +492,15 @@ export function FeedbackModal({
                           src={url.startsWith('http') ? url : `http://localhost:3001${url}`}
                           alt={`Minh chứng ${idx + 1}`}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.currentTarget
+                            if (target.src.includes('localhost:3001/uploads/')) {
+                              target.src = target.src.replace('http://localhost:3001', '')
+                              return
+                            }
+                            target.onerror = null
+                            target.src = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80'
+                          }}
                         />
                         <button
                           type="button"

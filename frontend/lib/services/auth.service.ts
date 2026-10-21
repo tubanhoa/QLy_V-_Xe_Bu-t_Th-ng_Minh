@@ -260,13 +260,31 @@ class AuthService {
           success: true,
           data: {
             user: {
-              id: 'usr_driver_001',
+              id: '6f8ca420-b860-4dbf-a1b7-4b3c74faa444',
               email: 'driver.nam@smartbus.ictu.vn',
               fullName: 'Trần Văn Nam (Tài Xế)',
               role: 'driver',
               phoneNumber: '0903456789',
+              idCardNumber: '019200001234',
             },
             accessToken: 'mock_jwt_token_driver_ictu_smart_bus',
+          },
+          message: 'Đăng nhập Tài xế thành công!',
+        }
+      }
+      if (inputIdentifier === 'driver.le.nam@smartbus.ictu.vn' || inputIdentifier === 'taixe02@ictu.edu.vn') {
+        return {
+          success: true,
+          data: {
+            user: {
+              id: '4e88227d-28d3-48a2-8864-c5f0080818a1',
+              email: 'driver.le.nam@smartbus.ictu.vn',
+              fullName: 'Lê Hoàng Nam (Tài Xế)',
+              role: 'driver',
+              phoneNumber: '0912445566',
+              idCardNumber: '019200005678',
+            },
+            accessToken: 'mock_jwt_token_driver_le_nam_ictu',
           },
           message: 'Đăng nhập Tài xế thành công!',
         }

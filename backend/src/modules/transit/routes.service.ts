@@ -15,6 +15,7 @@ import { TripEntity } from '../../database/entities/trip.entity.js';
 import { TicketEntity } from '../../database/entities/ticket.entity.js';
 import { VehicleEntity } from '../../database/entities/vehicle.entity.js';
 import { UserEntity } from '../../database/entities/user.entity.js';
+import { DriverProfileEntity, DriverLicenseStatus } from '../../database/entities/driver-profile.entity.js';
 import { NotificationCenterService } from '../notification/notification-center.service.js';
 import {
   CreateRouteDto,
@@ -25,7 +26,7 @@ import {
   AddRouteStationDto,
   BulkUpdateRouteStationsDto,
 } from './dto/transit.dto.js';
-import { TicketStatus, TripStatus } from '../../common/constants/status.constant.js';
+import { TicketStatus, TripStatus, VehicleStatus, UserStatus } from '../../common/constants/status.constant.js';
 
 @Injectable()
 export class RoutesService {
@@ -46,6 +47,9 @@ export class RoutesService {
     private readonly vehicleRepository: Repository<VehicleEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    @Optional()
+    @InjectRepository(DriverProfileEntity)
+    private readonly driverProfileRepository?: Repository<DriverProfileEntity>,
     @Optional()
     private readonly notificationCenterService?: NotificationCenterService,
   ) {}
@@ -191,6 +195,43 @@ export class RoutesService {
       throw new ConflictException(`Mã tuyến ${routeCode} đã tồn tại`);
     }
 
+    // 1. Kiểm tra an toàn phương tiện nếu có chỉ định xe ban đầu
+    if (dto.assignedVehicleId) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { id: dto.assignedVehicleId } });
+      if (!vehicle) {
+        throw new NotFoundException('Phương tiện xe buýt không tồn tại');
+      }
+      if (vehicle.status !== VehicleStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Xe buýt ${vehicle.licensePlate} đang trong trạng thái bảo dưỡng hoặc ngừng hoạt động (${vehicle.status}), không thể phân công vào tuyến!`,
+        );
+      }
+    }
+
+    // 2. Kiểm tra an toàn tài xế & giấy phép lái xe nếu có chỉ định tài xế ban đầu
+    if (dto.assignedDriverId) {
+      const driver = await this.userRepository.findOne({ where: { id: dto.assignedDriverId } });
+      if (!driver) {
+        throw new NotFoundException('Tài xế không tồn tại');
+      }
+      if (driver.status !== UserStatus.ACTIVE) {
+        throw new BadRequestException(`Tài xế ${driver.fullName} đang bị khóa hoặc chưa kích hoạt (${driver.status})!`);
+      }
+      if (this.driverProfileRepository) {
+        const profile = await this.driverProfileRepository.findOne({ where: { userId: driver.id } });
+        if (!profile || profile.status !== DriverLicenseStatus.APPROVED) {
+          const statusText = !profile
+            ? 'Chưa nộp hồ sơ GPLX'
+            : profile.status === DriverLicenseStatus.PENDING
+            ? 'Chờ thẩm định'
+            : 'Đã bị từ chối';
+          throw new BadRequestException(
+            `Tài xế ${driver.fullName} chưa đủ điều kiện GPLX để điều khiển xe buýt chở khách (Trạng thái hồ sơ: "${statusText}"). Vui lòng thẩm định và phê duyệt bằng lái trước khi phân công!`,
+          );
+        }
+      }
+    }
+
     const route = this.routeRepository.create({
       routeCode,
       name: dto.name,
@@ -223,160 +264,9 @@ export class RoutesService {
       await this.routeStationRepository.save(stopsToSave);
     }
 
-    // Tự động kích hoạt lịch chạy 7 ngày liên tiếp (Rolling 7-day schedule) và phân quyền Tài xế + Xe buýt
-    // Sinh chuyến chính xác theo giờ mở tuyến (operatingStart), giờ đóng tuyến (operatingEnd), và tần suất (frequencyMinutes)
-    const startStr = dto.operatingStart || '06:00:00';
-    const endStr = dto.operatingEnd || '21:00:00';
-    const [startH, startM] = startStr.split(':').map((v) => parseInt(v, 10) || 0);
-    const [endH, endM] = endStr.split(':').map((v) => parseInt(v, 10) || 0);
-    const freqMin = dto.frequencyMinutes && dto.frequencyMinutes > 0 ? dto.frequencyMinutes : 60;
-
-    let startTotalMin = startH * 60 + startM;
-    let endTotalMin = endH * 60 + endM;
-
-    // Hỗ trợ trường hợp giờ chạy mở lúc 00:00 hoặc chạy đêm
-    if (endTotalMin <= startTotalMin) {
-      endTotalMin = 24 * 60;
-    }
-
-    const dailyTimeSlots: Array<{ h: number; m: number }> = [];
-    let curMin = startTotalMin;
-    while (curMin < endTotalMin && dailyTimeSlots.length < 24) {
-      const h = Math.floor(curMin / 60) % 24;
-      const m = curMin % 60;
-      dailyTimeSlots.push({ h, m });
-      curMin += freqMin;
-    }
-
-    // Đảm bảo luôn có ít nhất mốc giờ mở tuyến (kể cả khi nhập 00:00:00)
-    if (dailyTimeSlots.length === 0) {
-      dailyTimeSlots.push({ h: startH, m: startM });
-    }
-
-    const durationMin = dto.estimatedDurationMinutes || 40;
-    const tripsToCreate: TripEntity[] = [];
-    const now = new Date();
-
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + dayOffset);
-
-      for (const slot of dailyTimeSlots) {
-        const dep = new Date(targetDate);
-        dep.setHours(slot.h, slot.m, 0, 0);
-        const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
-
-        const trip = new TripEntity();
-        trip.routeId = savedRoute.id;
-        if (dto.assignedVehicleId) trip.vehicleId = dto.assignedVehicleId;
-        if (dto.assignedDriverId) trip.driverId = dto.assignedDriverId;
-        trip.departureTime = dep;
-        trip.arrivalTime = arr;
-        // Nếu chuyến đã quá khứ hơn 30 phút thì đánh dấu COMPLETED, ngược lại là SCHEDULED
-        trip.status =
-          dep.getTime() < now.getTime() - 30 * 60 * 1000
-            ? TripStatus.COMPLETED
-            : TripStatus.SCHEDULED;
-        tripsToCreate.push(trip);
-      }
-    }
-
-    // ĐẶC BIỆT DÀNH CHO DEMO: Đảm bảo ngày hôm nay luôn có ít nhất 1 chuyến khởi hành sắp tới (sau 20 phút)
-    const hasUpcomingToday = tripsToCreate.some(
-      (t) =>
-        t.departureTime.toDateString() === now.toDateString() &&
-        t.departureTime.getTime() > now.getTime() + 10 * 60 * 1000,
+    this.logger.log(
+      `[RoutesService.create] Đã tạo tuyến xe mới thành công: ${savedRoute.routeCode} (${savedRoute.name}). Chuyến xe sẽ được tạo thủ công theo nhu cầu demo.`,
     );
-
-    if (!hasUpcomingToday) {
-      const demoDep = new Date(now.getTime() + 20 * 60 * 1000); // 20 phút tới
-      const demoArr = new Date(demoDep.getTime() + durationMin * 60 * 1000);
-      const demoTrip = new TripEntity();
-      demoTrip.routeId = savedRoute.id;
-      if (dto.assignedVehicleId) demoTrip.vehicleId = dto.assignedVehicleId;
-      if (dto.assignedDriverId) demoTrip.driverId = dto.assignedDriverId;
-      demoTrip.departureTime = demoDep;
-      demoTrip.arrivalTime = demoArr;
-      demoTrip.status = TripStatus.SCHEDULED;
-      tripsToCreate.push(demoTrip);
-    }
-
-    try {
-      await this.tripRepository.save(tripsToCreate);
-      this.logger.log(
-        `[RoutesService.create] Đã tự động khởi tạo ${tripsToCreate.length} chuyến xe trong 7 ngày tới cho tuyến: ${savedRoute.routeCode} (${savedRoute.name})`,
-      );
-
-      // Tự động gửi thông báo phân công cho Tài xế
-      if (dto.assignedDriverId && this.notificationCenterService) {
-        try {
-          const vehicle = dto.assignedVehicleId
-            ? await this.vehicleRepository.findOne({ where: { id: dto.assignedVehicleId } })
-            : null;
-          const licensePlate = vehicle?.licensePlate || 'Xe buýt ICTU';
-
-          // 1. Thông báo tổng hợp phân công tuyến mới
-          const summaryTitle = `📋 Phân công tuyến mới: ${savedRoute.routeCode} (${savedRoute.name})`;
-          const summaryMsg = `Bạn đã được phân công phụ trách tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) với tổng cộng ${tripsToCreate.length} ca chạy trong 7 ngày tới. Vui lòng kiểm tra lịch trình làm việc trên ứng dụng.`;
-
-          await this.notificationCenterService.saveNotification({
-            userId: dto.assignedDriverId,
-            type: 'TRIP_ASSIGNED',
-            title: summaryTitle,
-            message: summaryMsg,
-            deepLink: '/portal/driver',
-            data: {
-              routeId: savedRoute.id,
-              routeCode: savedRoute.routeCode,
-              routeName: savedRoute.name,
-              licensePlate,
-              totalTripsCreated: tripsToCreate.length,
-            },
-          });
-
-          // 2. Thông báo chi tiết ca chạy đầu tiên hôm nay (nếu có ca hôm nay)
-          const todayTrips = tripsToCreate
-            .filter((t) => t.departureTime.toDateString() === now.toDateString())
-            .sort((a, b) => a.departureTime.getTime() - b.departureTime.getTime());
-
-          if (todayTrips.length > 0) {
-            const firstTodayTrip = todayTrips[0];
-            const depTimeStr = firstTodayTrip.departureTime.toLocaleTimeString('vi-VN', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            });
-            const depDateStr = firstTodayTrip.departureTime.toLocaleDateString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-            });
-
-            const tripTitle = `Phân công ca chạy hôm nay: Tuyến ${savedRoute.routeCode} lúc ${depTimeStr}`;
-            const tripMsg = `Bạn có ca chạy xe ${licensePlate} trên tuyến ${savedRoute.name} lúc ${depTimeStr} ngày ${depDateStr}. Vui lòng tiếp nhận ca và kiểm tra phương tiện trước giờ xuất bến.`;
-
-            await this.notificationCenterService.saveNotification({
-              userId: dto.assignedDriverId,
-              tripId: firstTodayTrip.id,
-              type: 'TRIP_ASSIGNED',
-              title: tripTitle,
-              message: tripMsg,
-              deepLink: '/portal/driver',
-              data: {
-                tripId: firstTodayTrip.id,
-                routeCode: savedRoute.routeCode,
-                licensePlate,
-                departureTime: firstTodayTrip.departureTime,
-              },
-            });
-          }
-        } catch (notifErr: any) {
-          this.logger.warn(`[RoutesService.create] Lỗi khi gửi thông báo phân công cho tài xế: ${notifErr?.message}`);
-        }
-      }
-    } catch (tripErr: any) {
-      this.logger.warn(`[RoutesService.create] Lỗi khi tự động sinh chuyến xe: ${tripErr?.message}`);
-    }
 
     return this.findById(savedRoute.id);
   }
@@ -417,11 +307,11 @@ export class RoutesService {
     return this.findById(id);
   }
 
-  async delete(id: string) {
+  async delete(id: string, force = false) {
     await this.findById(id);
 
     // 1. RÀNG BUỘC TOÀN VẸN VỚI VÉ XE (TicketEntity qua Booking -> Trip)
-    // Không cho phép xóa nếu đã phát sinh vé chưa hủy
+    // Không cho phép xóa nếu đã phát sinh vé chưa hủy (trừ khi có cờ force = true cho Admin dọn dẹp)
     const activeTicketsCount = await this.ticketRepository
       .createQueryBuilder('ticket')
       .innerJoin('ticket.booking', 'booking')
@@ -432,34 +322,76 @@ export class RoutesService {
       })
       .getCount();
 
-    if (activeTicketsCount > 0) {
+    if (activeTicketsCount > 0 && !force) {
       throw new ConflictException(
-        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Vui lòng chuyển trạng thái sang tạm ngưng (inactive) thay vì xóa.',
+        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Bạn có thể chọn "Xóa Cưỡng Chế" nếu đây là dữ liệu thử nghiệm, hoặc chuyển trạng thái sang tạm ngưng (inactive).',
       );
     }
 
-    // 2. RÀNG BUỘC TOÀN VẸN VỚI CHUYẾN XE (TripEntity)
-    // Không cho phép xóa nếu có chuyến xe ở trạng thái scheduled, in_progress, hoặc delayed
-    const activeTripsCount = await this.tripRepository.count({
-      where: {
-        routeId: id,
-        status: In([
-          TripStatus.SCHEDULED,
-          TripStatus.IN_PROGRESS,
-          TripStatus.DELAYED,
-          TripStatus.BOARDING,
-          TripStatus.DEPARTED,
-        ]),
-      },
-    });
+    if (force && activeTicketsCount > 0) {
+      // Xóa cưỡng chế: Hủy toàn bộ vé và booking test liên quan của các chuyến thuộc tuyến này
+      await this.ticketRepository.query(
+        `UPDATE tickets
+         SET status = 'cancelled'
+         WHERE booking_id IN (
+           SELECT b.id FROM bookings b
+           JOIN trips t ON b.trip_id = t.id
+           WHERE t.route_id = $1
+         )`,
+        [id],
+      );
 
-    if (activeTripsCount > 0) {
-      throw new ConflictException('Tuyến đường đang có chuyến xe hoạt động hoặc đã lên lịch chạy.');
+      await this.ticketRepository.query(
+        `UPDATE bookings
+         SET status = 'cancelled'
+         WHERE trip_id IN (
+           SELECT t.id FROM trips t
+           WHERE t.route_id = $1
+         )`,
+        [id],
+      );
     }
 
-    // Thực hiện soft delete
+    // 2. XỬ LÝ CHUYẾN XE: Nếu xóa cưỡng chế (force = true) thì dọn dẹp triệt để các chuyến xe test; ngược lại chỉ hủy chuyến chưa chạy
+    if (force) {
+      const trips = await this.tripRepository.find({ where: { routeId: id }, select: { id: true } });
+      if (trips.length > 0) {
+        const tripIds = trips.map((t) => t.id);
+        await this.tripRepository.query('UPDATE feedback SET trip_id = NULL WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+        await this.tripRepository.query('DELETE FROM seat_holds WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+        await this.tripRepository.query('DELETE FROM vehicle_tracking WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+        await this.tripRepository.query('DELETE FROM trip_incidents WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+        const bookings = await this.tripRepository.query('SELECT id FROM bookings WHERE trip_id = ANY($1)', [tripIds]);
+        if (bookings && bookings.length > 0) {
+          const bIds = bookings.map((b: any) => b.id);
+          await this.tripRepository.query('DELETE FROM refund_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+          await this.tripRepository.query('DELETE FROM payment_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+          await this.tripRepository.query('DELETE FROM invoices WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+          await this.tripRepository.query('DELETE FROM payments WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+          await this.tripRepository.query('DELETE FROM tickets WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+          await this.tripRepository.query('DELETE FROM bookings WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+        }
+        await this.tripRepository.query('DELETE FROM trips WHERE route_id = $1', [id]);
+      }
+    } else {
+      await this.tripRepository
+        .createQueryBuilder()
+        .update(TripEntity)
+        .set({ status: TripStatus.CANCELLED })
+        .where('route_id = :routeId', { routeId: id })
+        .andWhere('status NOT IN (:...doneStatuses)', {
+          doneStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
+        })
+        .execute();
+    }
+
+    // Thực hiện soft delete tuyến xe
     await this.routeRepository.update(id, { status: 'deleted' });
-    return { message: 'Đã xóa tuyến xe thành công' };
+    return {
+      message: force
+        ? 'Đã xóa cưỡng chế tuyến xe và hủy toàn bộ dữ liệu vé/chuyến test thành công'
+        : 'Đã xóa tuyến xe và hủy các chuyến xe chưa có vé thành công',
+    };
   }
 
   // =========================================================================

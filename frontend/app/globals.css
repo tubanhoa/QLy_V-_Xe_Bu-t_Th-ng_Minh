@@ -124,6 +124,30 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.06);
   --sidebar-ring: #005a36;
+
+  /* iOS 26/27 Liquid Glass System Tokens */
+  --glass-blur: 26px;
+  --glass-saturate: 180%;
+  --glass-brightness: 1.05;
+  --glass-bg-start: rgba(255, 255, 255, 0.38);
+  --glass-bg-end: rgba(255, 255, 255, 0.10);
+  --glass-tint: rgba(10, 60, 35, 0.10);
+  --glass-tint-bottom: rgba(8, 50, 28, 0.22);
+  --glass-rim-top: rgba(255, 255, 255, 0.85);
+  --glass-rim-left: rgba(255, 255, 255, 0.35);
+  --glass-rim-bottom: rgba(255, 255, 255, 0.12);
+  --glass-inner-glow: rgba(255, 255, 255, 0.22);
+  --header-height: 112px;
+  --glass-card-title: #0b2e1c;
+  --glass-card-subtitle: rgba(8, 40, 22, 0.85);
+
+  /* Unified Liquid Glass & Frosted Material Tokens */
+  --liquid-radius-dock: 32px;
+  --liquid-radius-search: 9999px;
+  --liquid-rim-glow: rgba(255, 255, 255, 0.85);
+  --liquid-shadow-ambient: 0 12px 40px rgba(0, 50, 25, 0.22);
+  --liquid-shadow-search: 0 8px 28px rgba(0, 45, 25, 0.10);
+  --liquid-border: 1px solid rgba(255, 255, 255, 0.75);
 }
 
 .dark {
@@ -357,63 +381,216 @@ div[class*="nextjs-toast"] {
   pointer-events: none;
 }
 
-/* Ultra-Clean Liquid Glassmorphism for Quick Access Dock (macOS & VisionOS Style) */
+/* iOS 26/27 Ultra-Clean Liquid Glassmorphism for Quick Access Dock */
 .dock-glass-liquid {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.82) 0%,
-    rgba(255, 255, 255, 0.60) 50%,
-    rgba(236, 253, 245, 0.75) 100%
-  );
-  backdrop-filter: blur(28px) saturate(200%) contrast(102%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%) contrast(102%);
-  border-radius: 30px;
-  border: 1.5px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 
-    0 24px 60px -12px rgba(0, 50, 30, 0.18),
-    0 12px 28px -6px rgba(0, 0, 0, 0.08),
-    inset 0 2px 2px 0 rgba(255, 255, 255, 1),
-    inset 0 -1.5px 2px 0 rgba(0, 90, 54, 0.08);
   position: relative;
-  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--liquid-radius-dock, 32px);
+  background: 
+    linear-gradient(180deg, rgba(8, 50, 28, 0) 0%, var(--glass-tint-bottom, rgba(8, 50, 28, 0.22)) 100%),
+    linear-gradient(135deg, var(--glass-bg-start, rgba(255, 255, 255, 0.38)) 0%, var(--glass-bg-end, rgba(255, 255, 255, 0.10)) 100%),
+    var(--glass-tint, rgba(10, 60, 35, 0.10));
+  backdrop-filter: blur(var(--glass-blur, 26px)) saturate(var(--glass-saturate, 180%)) brightness(var(--glass-brightness, 1.05));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 26px)) saturate(var(--glass-saturate, 180%)) brightness(var(--glass-brightness, 1.05));
+  box-shadow: 
+    inset 0 1px 0 var(--liquid-rim-glow, rgba(255, 255, 255, 0.85)),
+    inset 1px 0 0 var(--glass-rim-left, rgba(255, 255, 255, 0.35)),
+    inset 0 -1px 0 var(--glass-rim-bottom, rgba(255, 255, 255, 0.12)),
+    inset 0 0 28px var(--glass-inner-glow, rgba(255, 255, 255, 0.22)),
+    var(--liquid-shadow-ambient, 0 12px 40px rgba(0, 50, 25, 0.22));
 }
 
+/* Pseudo-element Specular Gradient Rim via mask-composite (~1.5px) */
 .dock-glass-liquid::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 5%;
-  right: 5%;
-  height: 2px;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
   background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.95) 25%,
-    rgba(255, 255, 255, 1) 50%,
-    rgba(255, 255, 255, 0.95) 75%,
-    transparent 100%
+    135deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.35) 25%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.18) 75%,
+    rgba(255, 255, 255, 0.55) 100%
   );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Pointer-following light spotlight */
+.dock-glass-spotlight {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 240px at var(--x, 50%) var(--y, 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 55%
+  );
+  opacity: var(--mouse-opacity, 0);
+  pointer-events: none;
+  transition: opacity 300ms ease;
+  z-index: 1;
+}
+
+/* Sliding Pill Indicator (iOS liquid glass style) */
+.dock-glass-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 60, 30, 0.06),
+    0 8px 24px -4px rgba(0, 50, 25, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.80);
+  pointer-events: none;
+  z-index: 2;
+  transition: 
+    transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    height 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 200ms ease;
+}
+
+/* Individual Tiles within Quick Access Dock */
+.dock-tile-glass {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  position: relative;
+  z-index: 3;
+  outline: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* KHÔNG dùng transform scale/translate trên .dock-tile-glass để tránh làm mờ/rasterize lại chữ */
+.dock-tile-glass:hover,
+.dock-tile-glass:focus-visible,
+.dock-tile-glass:active {
+  transform: none !important;
+}
+
+/* Dedicated Icon Container: Crisp White Pill in normal state, Deep Forest Green on Hover with subtle bounce */
+.dock-icon-box {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(236, 253, 245, 0.85) 100%);
+  color: #005a36;
+  border: 1px solid rgba(16, 185, 129, 0.30);
+  box-shadow: 0 2px 6px rgba(0, 40, 20, 0.05);
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), background 250ms ease, color 250ms ease, box-shadow 250ms ease;
+  margin-top: 2px;
   pointer-events: none;
 }
 
-/* Individual Tile Glass within Quick Access Dock */
-.dock-tile-glass {
-  background: rgba(255, 255, 255, 0.48);
-  border: 1px solid rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: all 260ms cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(0, 40, 20, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+.dock-tile-glass:hover .dock-icon-box,
+.dock-tile-glass:focus-visible .dock-icon-box {
+  background: linear-gradient(180deg, #005a36 0%, #004529 100%) !important;
+  color: #ffffff !important;
+  border-color: #004529 !important;
+  box-shadow: 
+    0 8px 18px -2px rgba(0, 90, 54, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  transform: translateY(-2px) scale(1.06) !important;
 }
 
-.dock-tile-glass:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(16, 185, 129, 0.6);
-  transform: translateY(-4px) scale(1.015);
-  box-shadow: 
-    0 16px 32px -6px rgba(0, 90, 54, 0.16),
-    0 6px 14px -2px rgba(0, 0, 0, 0.06),
-    inset 0 1.5px 0 rgba(255, 255, 255, 1);
+/* Typography Rules: No text-shadow (loại bỏ hoàn toàn quầng sáng trắng làm mờ chữ), font antialiased sắc nét */
+.dock-card-title {
+  color: #0b2e1c !important;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.dock-tile-glass:hover .dock-card-title,
+.dock-tile-glass:focus-visible .dock-card-title {
+  color: #0b2e1c !important; /* Luôn giữ màu đậm #0b2e1c khi hover/focus */
+}
+
+.dock-card-subtitle {
+  color: rgba(8, 40, 22, 0.85) !important;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.25;
+  text-shadow: none !important;
+  margin-top: 2px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Progressive Enhancement: SVG Lens Refraction (Desktop Chromium only, applied via JS class) */
+@media (min-width: 768px) {
+  .dock-glass-liquid.is-chromium-lens {
+    backdrop-filter: url(#lens) blur(10px) saturate(180%) brightness(1.05);
+    -webkit-backdrop-filter: url(#lens) blur(10px) saturate(180%) brightness(1.05);
+  }
+}
+
+/* Accessibility: High Contrast & Reduced Transparency */
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .dock-glass-liquid {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1.5px solid #005a36 !important;
+    box-shadow: 0 10px 30px rgba(0, 50, 25, 0.20) !important;
+  }
+  .dock-glass-slider {
+    background: rgba(230, 246, 238, 0.96) !important;
+    border: 1.5px solid #005a36 !important;
+    box-shadow: none !important;
+  }
+  .dock-glass-spotlight {
+    display: none !important;
+  }
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .dock-glass-liquid,
+  .dock-tile-glass,
+  .dock-glass-slider,
+  .dock-glass-spotlight {
+    transition: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+}
+
+/* Mobile Performance Optimizations (< 768px) */
+@media (max-width: 767px) {
+  .dock-glass-spotlight,
+  .dock-glass-slider {
+    display: none !important;
+  }
 }
 
 /* Glassmorphism for Hero Overlays */
@@ -427,12 +604,14 @@ div[class*="nextjs-toast"] {
 }
 
 .hero-glass-search {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border-radius: var(--liquid-radius-search, 9999px);
+  border: var(--liquid-border, 1px solid rgba(255, 255, 255, 0.75));
+  box-shadow: 
+    inset 0 1px 0 var(--liquid-rim-glow, rgba(255, 255, 255, 0.85)),
+    var(--liquid-shadow-search, 0 8px 28px rgba(0, 45, 25, 0.10));
 }
 
 /* 3D Card Stack Hover Effect - Synchronous Scaling for All Cards */

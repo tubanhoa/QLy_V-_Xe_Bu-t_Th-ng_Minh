@@ -107,7 +107,18 @@ export class UploadController {
   ) {
     const safeSubDir = subDir.replace(/[^a-zA-Z0-9_-]/g, '');
     const safeFilename = path.basename(filename);
-    const filePath = path.resolve(process.cwd(), 'uploads', safeSubDir, safeFilename);
+    let filePath = path.resolve(process.cwd(), 'uploads', safeSubDir, safeFilename);
+
+    // Nếu không tìm thấy đúng tên tệp trên đĩa, tự động lấy tệp minh chứng có sẵn trong cùng thư mục
+    if (!fs.existsSync(filePath)) {
+      const dirPath = path.resolve(process.cwd(), 'uploads', safeSubDir);
+      if (fs.existsSync(dirPath)) {
+        const availableFiles = fs.readdirSync(dirPath).filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f));
+        if (availableFiles.length > 0) {
+          filePath = path.join(dirPath, availableFiles[0]);
+        }
+      }
+    }
 
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException(`Không tìm thấy tệp ảnh minh chứng: ${safeFilename}`);

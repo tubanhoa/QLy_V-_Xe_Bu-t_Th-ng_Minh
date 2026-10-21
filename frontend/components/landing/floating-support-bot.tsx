@@ -20,6 +20,7 @@ import { CONTACT } from '@/lib/landing-data'
 export function FloatingSupportBot() {
   const [isOpen, setIsOpen] = useState(false)
   const [showHint, setShowHint] = useState(false)
+  const [showInitialLabel, setShowInitialLabel] = useState(true)
   const [messages, setMessages] = useState<Array<{ sender: 'bot' | 'user'; text: string }>>([
     {
       sender: 'bot',
@@ -28,10 +29,27 @@ export function FloatingSupportBot() {
   ])
   const [inputVal, setInputVal] = useState('')
 
-  // Proactively pop up a gentle greeting hint after 2.5s
+  // Hiện nhãn "Trợ lý ICTU Bus" trong 4 giây đầu rồi thu lại dạng tròn trên desktop
   useEffect(() => {
-    const timer = setTimeout(() => setShowHint(true), 2500)
-    return () => clearTimeout(timer)
+    const labelTimer = setTimeout(() => {
+      setShowInitialLabel(false)
+    }, 4000)
+    return () => clearTimeout(labelTimer)
+  }, [])
+
+  // Proactively pop up a gentle greeting hint after 2.5s and auto-dismiss after ~6s
+  useEffect(() => {
+    let hideTimer: NodeJS.Timeout
+    const showTimer = setTimeout(() => {
+      setShowHint(true)
+      hideTimer = setTimeout(() => {
+        setShowHint(false)
+      }, 6000)
+    }, 2500)
+    return () => {
+      clearTimeout(showTimer)
+      if (hideTimer) clearTimeout(hideTimer)
+    }
   }, [])
 
   const handleSend = (text?: string) => {
@@ -63,8 +81,16 @@ export function FloatingSupportBot() {
   return (
     <>
       {/* Unified Single Floating Support Capsule in Bottom Right with Idle Levitation */}
-      <div className="fixed bottom-20 sm:bottom-24 right-3 sm:right-6 z-40 animate-bot-breathe safe-mb-dock touch-press">
-        {/* Subtle proactive speech bubble prompt - Desktop only to keep mobile uncluttered */}
+      <div className="group/bot fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] right-4 lg:bottom-24 lg:right-6 z-40 animate-bot-breathe touch-press">
+        {/* Tooltip nổi bật khi hover/focus vào nút tròn */}
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full mb-2.5 right-0 hidden group-hover/bot:flex group-focus-within/bot:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 text-white text-xs font-bold shadow-xl border border-white/10 backdrop-blur-xs whitespace-nowrap z-50 animate-in fade-in duration-150"
+        >
+          <span>Trợ lý ảo ICTU Bus 24/7</span>
+        </div>
+
+        {/* Proactive speech bubble prompt - Only on 2xl screens where wide margins exist, auto-dismisses after 6s */}
         {!isOpen && showHint && (
           <div
             role="button"
@@ -79,7 +105,7 @@ export function FloatingSupportBot() {
               setIsOpen(true)
               setShowHint(false)
             }}
-            className="hidden sm:flex cursor-pointer absolute -top-11 right-0 items-center gap-1.5 rounded-2xl bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-xl border border-emerald-200/80 animate-in fade-in slide-in-from-bottom-2 duration-300 hover:scale-105 transition-transform"
+            className="hidden lg:flex cursor-pointer absolute -top-11 right-0 items-center gap-1.5 rounded-2xl bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-xl border border-emerald-200/80 animate-in fade-in slide-in-from-bottom-2 duration-300 hover:scale-105 transition-transform"
           >
             <span className="relative flex size-2 items-center justify-center">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 animate-ping opacity-75" />
@@ -108,22 +134,22 @@ export function FloatingSupportBot() {
           }}
           aria-label={isOpen ? 'Đóng trợ lý ảo' : 'Mở trợ lý ảo ICTU Bus 24/7'}
           className={cn(
-            'flex items-center gap-2.5 rounded-full bg-[#005A36] p-2.5 sm:px-4 sm:py-2.5 text-white shadow-xl shadow-emerald-950/25 border-2 border-white/95 transition-all duration-200 hover:bg-[#004529] active:scale-95',
-            isOpen ? 'p-2.5 sm:px-3 sm:py-3' : '',
+            'flex items-center justify-center lg:gap-2.5 rounded-full bg-[#005A36] size-12 p-0 lg:w-auto lg:h-auto lg:px-4 lg:py-2.5 text-white shadow-xl shadow-emerald-950/25 border-2 border-white/95 transition-all duration-200 hover:bg-[#004529] active:scale-95',
+            isOpen ? 'size-12 p-0 lg:px-3 lg:py-3' : '',
           )}
         >
           {isOpen ? (
             <X size={20} strokeWidth={2.5} className="text-white" />
           ) : (
             <>
-              <div className="relative flex items-center justify-center">
+              <div className="relative flex items-center justify-center shrink-0">
                 <Bot size={22} strokeWidth={2.2} className="text-white" />
                 <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400" />
                 <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 animate-ping opacity-75" />
               </div>
-              <div className="text-left leading-tight pr-1 hidden sm:block">
-                <span className="block text-xs font-black text-white tracking-wide">Trợ lý ICTU Bus</span>
-                <span className="block text-[10px] font-semibold text-emerald-200">Trực tuyến 24/7</span>
+              <div className="text-left leading-tight pr-1 hidden lg:block">
+                <span className="block text-xs font-black text-white tracking-wide whitespace-nowrap">Trợ lý ICTU Bus</span>
+                <span className="block text-[10px] font-semibold text-emerald-200 whitespace-nowrap">Trực tuyến 24/7</span>
               </div>
             </>
           )}
@@ -132,7 +158,7 @@ export function FloatingSupportBot() {
 
       {/* Interactive Chat Popup Window */}
       {isOpen && (
-        <div className="fixed bottom-4 sm:bottom-20 right-3 sm:right-5 left-3 sm:left-auto z-40 max-w-sm rounded-3xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col max-h-[82vh] h-[480px] animate-in fade-in slide-in-from-bottom-6 duration-200 safe-bottom">
+        <div className="fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] lg:bottom-20 right-4 lg:right-5 left-4 sm:left-auto z-40 max-w-sm rounded-3xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col max-h-[80vh] h-[480px] animate-in fade-in slide-in-from-bottom-6 duration-200 safe-bottom">
           {/* Header */}
           <div className="bg-[#005A36] p-4 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">

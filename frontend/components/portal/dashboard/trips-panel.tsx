@@ -129,7 +129,7 @@ export function TripsPanel({ trips, onOpenDispatch, onNavigateToSchedule }: Trip
   ]
 
   return (
-    <section className="rounded-2xl border border-border bg-card shadow-xs" aria-labelledby="trips-heading">
+    <section className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden" aria-labelledby="trips-heading">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 pb-3 border-b border-border/50">
         <div>
           <div className="flex items-center gap-2">
@@ -175,11 +175,12 @@ export function TripsPanel({ trips, onOpenDispatch, onNavigateToSchedule }: Trip
           dataSource={displayTrips}
           pagination={false}
           size="middle"
+          scroll={{ y: 440 }}
           locale={{ emptyText: 'Chưa có chuyến xe nào xuất bến trong khung giờ này' }}
         />
       </div>
 
-      <ul className="flex flex-col gap-3 p-4 md:hidden">
+      <ul className="flex flex-col gap-3 p-4 md:hidden max-h-[560px] overflow-y-auto">
         {displayTrips.map((trip: Trip) => (
           <li key={trip.id} className="rounded-2xl border border-border bg-background p-4 space-y-3">
             <div className="flex items-start justify-between gap-3">

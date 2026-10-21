@@ -45,6 +45,16 @@ export class VoucherController {
   }
 
   /**
+   * Khách hàng / Sinh viên xem danh sách các mã voucher trong hệ thống (Kho Voucher & Ưu Đãi Của Tôi)
+   */
+  @Public()
+  @Get('vouchers')
+  @ApiOperation({ summary: 'Danh sách các voucher khuyến mại công khai cho khách hàng (Public / Customer Vault)' })
+  async getPublicVouchers(@Query() query: QueryVoucherDto) {
+    return this.voucherService.findAll(query);
+  }
+
+  /**
    * Tạo mã voucher khuyến mại mới (Dành cho Marketing, Quản lý, Admin)
    */
   @UseGuards(JwtAuthGuard, RolesGuard)

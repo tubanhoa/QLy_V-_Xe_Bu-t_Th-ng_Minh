@@ -79,10 +79,14 @@ export class RoutesController {
   @ApiBearerAuth('JWT')
   @Delete(':id')
   @ApiOperation({
-    summary: 'Xóa tuyến xe với kiểm tra ràng buộc toàn vẹn chuyến xe và vé (Manager, Admin)',
+    summary: 'Xóa tuyến xe với kiểm tra ràng buộc toàn vẹn chuyến xe và vé (Manager, Admin). Hỗ trợ ?force=true để xóa cưỡng chế dữ liệu test',
   })
-  async delete(@Param('id') id: string) {
-    return this.routesService.delete(id);
+  async delete(
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ) {
+    const isForce = force === 'true' || force === '1';
+    return this.routesService.delete(id, isForce);
   }
 
   // =========================================================================

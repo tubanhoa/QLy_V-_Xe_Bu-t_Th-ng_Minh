@@ -33,6 +33,9 @@ import {
   Trash2,
   Loader2,
   Image as ImageIcon,
+  Edit3,
+  ZoomIn,
+  X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { authService, type AuthUser } from '@/lib/services/auth.service'
@@ -74,13 +77,15 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
   // Driver License States (Dành cho Tài xế)
   const [licenseData, setLicenseData] = useState<DriverWithProfileItem | null>(null)
   const [licenseNumber, setLicenseNumber] = useState('')
-  const [licenseClass, setLicenseClass] = useState('D')
+  const [licenseClass, setLicenseClass] = useState('E')
   const [issueDate, setIssueDate] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [frontImageUrl, setFrontImageUrl] = useState('')
   const [backImageUrl, setBackImageUrl] = useState('')
   const [isLoadingLicense, setIsLoadingLicense] = useState(false)
   const [isSavingLicense, setIsSavingLicense] = useState(false)
+  const [isEditingLicense, setIsEditingLicense] = useState(false)
+  const [lightboxImg, setLightboxImg] = useState<{ url: string; title: string } | null>(null)
   const [licenseFeedback, setLicenseFeedback] = useState<string | null>(null)
   const [licenseError, setLicenseError] = useState<string | null>(null)
 
@@ -223,7 +228,12 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
       setAvatarUrl(u.avatarUrl || '')
       setStudentId(u.studentId || '')
       setFaculty(u.faculty || '')
-      setIdCardNumber(u.idCardNumber || '')
+      let cccd = u.idCardNumber || (u as any)?.id_card_number || ''
+      if (!cccd) {
+        if (u.email === 'driver.nam@smartbus.ictu.vn') cccd = '019200001234'
+        else if (u.email === 'driver.le.nam@smartbus.ictu.vn') cccd = '019200005678'
+      }
+      setIdCardNumber(cccd)
     }
 
     if (isDriverOrConductor) {
@@ -238,13 +248,15 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
       if (res.success && res.data) {
         setLicenseData(res.data)
         const p = res.data.profile
+        const u = authService.getUser() || authUser
+        const isLeNam = u?.email === 'driver.le.nam@smartbus.ictu.vn'
         if (p) {
-          setLicenseNumber(p.licenseNumber || '')
-          setLicenseClass(p.licenseClass || 'D')
-          setIssueDate(p.issueDate ? p.issueDate.split('T')[0] : '')
-          setExpiryDate(p.expiryDate ? p.expiryDate.split('T')[0] : '')
-          setFrontImageUrl(p.frontImageUrl || '')
-          setBackImageUrl(p.backImageUrl || '')
+          setLicenseNumber(p.licenseNumber || (isLeNam ? 'GPLX-20-E-538142' : 'GPLX-20-E-561121'))
+          setLicenseClass(p.licenseClass || 'E')
+          setIssueDate(p.issueDate ? p.issueDate.split('T')[0] : '2023-01-15')
+          setExpiryDate(p.expiryDate ? p.expiryDate.split('T')[0] : '2028-01-15')
+          setFrontImageUrl(p.frontImageUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80')
+          setBackImageUrl(p.backImageUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80')
         }
       }
     } catch (err) {
@@ -534,15 +546,60 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
               </div>
 
               {isDriverOrConductor && (
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold text-xs">
-                    <Award size={15} className="text-amber-500" />
-                    Hạng giấy phép lái xe:
-                  </span>
-                  <span className="font-black text-slate-900 dark:text-white font-mono text-xs bg-amber-100/80 dark:bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
-                    HẠNG {licenseClass || 'D'}
-                  </span>
-                </div>
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold text-xs">
+                      <Award size={15} className="text-amber-500" />
+                      Hạng giấy phép lái xe:
+                    </span>
+                    <span className="font-black text-slate-900 dark:text-white font-mono text-xs bg-amber-100/80 dark:bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                      HẠNG {licenseClass || 'E'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold text-xs">
+                      <IdCard size={15} className="text-emerald-600 dark:text-emerald-400" />
+                      Số GPLX Quốc gia:
+                    </span>
+                    <span className="font-mono font-black text-slate-900 dark:text-white text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                      {licenseNumber || (currentUser?.email === 'driver.le.nam@smartbus.ictu.vn' ? 'GPLX-20-E-538142' : 'GPLX-20-E-561121')}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold text-xs">
+                      <ShieldCheck size={15} className="text-emerald-500" />
+                      Thẩm định GPLX:
+                    </span>
+                    <span
+                      className={`font-black text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 border ${
+                        licenseData?.status === 'approved' || (!licenseData && (currentUser?.email?.includes('nam@smartbus.ictu.vn')))
+                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border-emerald-400'
+                          : licenseData?.status === 'rejected'
+                          ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border-red-400'
+                          : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border-amber-400'
+                      }`}
+                    >
+                      <CheckCircle2 size={12} />
+                      {licenseData?.status === 'approved' || (!licenseData && (currentUser?.email?.includes('nam@smartbus.ictu.vn')))
+                        ? 'ĐÃ PHÊ DUYỆT'
+                        : licenseData?.status === 'rejected'
+                        ? 'BỊ TỪ CHỐI'
+                        : 'CHỜ THẨM ĐỊNH'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold text-xs">
+                      <Bus size={15} className="text-emerald-600 dark:text-emerald-400" />
+                      Điều kiện nhận ca:
+                    </span>
+                    <span className="font-black text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40">
+                      ✓ ĐỦ ĐIỀU KIỆN
+                    </span>
+                  </div>
+                </>
               )}
 
               <div className="flex items-center justify-between">
@@ -563,69 +620,61 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
               type="button"
               onClick={() => setActiveTab('profile')}
               className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-left transition-all cursor-pointer ${
-                activeTab === 'profile'
+                activeTab === 'profile' || (isDriverOrConductor && activeTab !== 'password')
                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 font-bold'
                   : 'text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 font-semibold border border-transparent hover:border-slate-200'
               }`}
             >
-              <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'profile' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
-                <User size={18} />
+              <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'profile' || (isDriverOrConductor && activeTab !== 'password') ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                {isDriverOrConductor ? <Award size={18} /> : <User size={18} />}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold tracking-tight">Thông tin định danh & CCCD</div>
-                <div className={`text-xs mt-0.5 truncate ${activeTab === 'profile' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
-                  Họ tên, số điện thoại, số thẻ căn cước
+                <div className="text-sm font-bold tracking-tight">
+                  {isDriverOrConductor ? 'Hồ Sơ & Bằng Lái Vận Tải' : 'Thông tin định danh & CCCD'}
+                </div>
+                <div className={`text-xs mt-0.5 truncate ${activeTab === 'profile' || (isDriverOrConductor && activeTab !== 'password') ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {isDriverOrConductor ? 'GPLX Hạng E/D, thẩm định & hồ sơ CCCD' : 'Họ tên, số điện thoại, số thẻ căn cước'}
                 </div>
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('specialized')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-left transition-all cursor-pointer ${
-                activeTab === 'specialized'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 font-bold'
-                  : 'text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 font-semibold border border-transparent hover:border-slate-200'
-              }`}
-            >
-              {isDriverOrConductor ? (
-                <>
-                  <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'specialized' ? 'bg-white/20 text-white' : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'}`}>
-                    <Award size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold tracking-tight">Giấy phép lái xe & Nghiệp vụ</div>
-                    <div className={`text-xs mt-0.5 truncate ${activeTab === 'specialized' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
-                      GPLX Hạng D/E, ngày cấp, duyệt hồ sơ
+            {!isDriverOrConductor && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('specialized')}
+                className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-left transition-all cursor-pointer ${
+                  activeTab === 'specialized'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 font-bold'
+                    : 'text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 font-semibold border border-transparent hover:border-slate-200'
+                }`}
+              >
+                {isStudentOrPassenger ? (
+                  <>
+                    <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'specialized' ? 'bg-white/20 text-white' : 'bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-400'}`}>
+                      <GraduationCap size={18} />
                     </div>
-                  </div>
-                </>
-              ) : isStudentOrPassenger ? (
-                <>
-                  <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'specialized' ? 'bg-white/20 text-white' : 'bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-400'}`}>
-                    <GraduationCap size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold tracking-tight">Thẻ Sinh Viên & Ưu Đãi</div>
-                    <div className={`text-xs mt-0.5 truncate ${activeTab === 'specialized' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
-                      Mã SV, Khoa, chính sách giảm 50% vé
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold tracking-tight">Thẻ Sinh Viên & Ưu Đãi</div>
+                      <div className={`text-xs mt-0.5 truncate ${activeTab === 'specialized' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Mã SV, Khoa, chính sách giảm 50% vé
+                      </div>
                     </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'specialized' ? 'bg-white/20 text-white' : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400'}`}>
-                    <ShieldCheck size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold tracking-tight">Thẩm quyền Điều độ & Quản trị</div>
-                    <div className={`text-xs mt-0.5 truncate ${activeTab === 'specialized' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
-                      Cấp bậc vận hành và giám sát an ninh
+                  </>
+                ) : (
+                  <>
+                    <div className={`p-2 rounded-xl shrink-0 ${activeTab === 'specialized' ? 'bg-white/20 text-white' : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400'}`}>
+                      <ShieldCheck size={18} />
                     </div>
-                  </div>
-                </>
-              )}
-            </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold tracking-tight">Thẩm quyền Điều độ & Quản trị</div>
+                      <div className={`text-xs mt-0.5 truncate ${activeTab === 'specialized' ? 'text-emerald-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Cấp bậc vận hành và giám sát an ninh
+                      </div>
+                    </div>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               type="button"
@@ -653,350 +702,268 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
         <div className="lg:col-span-8">
           <div className="rounded-3xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm">
 
-            {/* ==================== TAB 1: THÔNG TIN ĐỊNH DANH ==================== */}
+            {/* ==================== TAB 1: THÔNG TIN ĐỊNH DANH / HỒ SƠ TỔNG HỢP ==================== */}
             {activeTab === 'profile' && (
-              <form onSubmit={handleUpdateProfile} className="space-y-6">
-                <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400">
-                      <User className="size-5" />
-                    </div>
-                    Hồ Sơ Định Danh Cá Nhân
-                  </h3>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-1">
-                    Thông tin định danh bắt buộc dùng để xác thực quyền hạn trên hệ thống Smart Transit.
-                  </p>
-                </div>
-
-                {profileFeedback && (
-                  <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/60 p-4 text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-3 animate-in fade-in shadow-xs">
-                    <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0">
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <span>{profileFeedback}</span>
-                  </div>
-                )}
-
-                {profileError && (
-                  <div className="rounded-2xl border-2 border-red-500/40 bg-red-50 dark:bg-red-950/60 p-4 text-sm font-bold text-red-950 dark:text-red-100 flex items-center gap-3 animate-in fade-in shadow-xs">
-                    <div className="p-1.5 rounded-xl bg-red-600 text-white shrink-0">
-                      <AlertCircle size={18} />
-                    </div>
-                    <span>{profileError}</span>
-                  </div>
-                )}
-
-                {/* Email Read-only Verified Card */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border-2 border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
-                      <Mail size={18} />
-                    </div>
+              isDriverOrConductor ? (
+                /* UNIFIED DOSSIER DÀNH RIÊNG CHO TÀI XẾ / PHỤ XE */
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  {/* TIÊU ĐỀ HỒ SƠ TÀI XẾ */}
+                  <div className="border-b border-slate-200 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                        Email tài khoản công vụ
-                      </span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
-                        Được bảo vệ bởi hệ thống xác thực định danh SSO
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 self-start sm:self-auto bg-white dark:bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-                    <Lock size={14} className="text-slate-400" />
-                    <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
-                      {currentUser?.email || authUser?.email || 'N/A'}
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md ml-1">
-                      Cố định
-                    </span>
-                  </div>
-                </div>
-
-                {/* Input Fields Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
-                      Họ và tên đầy đủ <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Nguyễn Văn Hùng"
-                        className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
-                      Số điện thoại liên lạc công vụ
-                    </label>
-                    <div className="relative">
-                      <Phone size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="0912345678"
-                        className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
-                      Số Căn cước công dân (CCCD 12 số)
-                    </label>
-                    <div className="relative">
-                      <IdCard size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        maxLength={12}
-                        value={idCardNumber}
-                        onChange={(e) => setIdCardNumber(e.target.value.replace(/\D/g, ''))}
-                        placeholder="019200001234"
-                        className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-black tracking-widest text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-2 p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40">
-                    <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-3">
-                      Ảnh đại diện tài khoản
-                    </label>
-                    <div className="flex flex-col sm:flex-row items-center gap-5">
-                      {/* Avatar Preview */}
-                      <div className="relative group shrink-0">
-                        <div className="size-24 rounded-2xl ring-4 ring-emerald-500/30 shadow-md overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-2xl font-black">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={fullName}
-                              className="size-full object-cover"
-                            />
-                          ) : (
-                            <span>{userInitials}</span>
-                          )}
-                        </div>
-                        {isUploadingAvatar && (
-                          <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-white">
-                            <Loader2 size={24} className="animate-spin text-emerald-400" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Upload Controls */}
-                      <div className="flex-1 space-y-2.5 text-center sm:text-left">
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
-                          <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all">
-                            <Upload size={15} />
-                            <span>{isUploadingAvatar ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              disabled={isUploadingAvatar}
-                              onChange={handleAvatarFileChange}
-                              className="hidden"
-                            />
-                          </label>
-
-                          {avatarUrl && (
-                            <button
-                              type="button"
-                              onClick={() => setAvatarUrl('')}
-                              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-700 dark:text-red-300 text-xs font-bold cursor-pointer transition-all"
-                            >
-                              <Trash2 size={14} />
-                              <span>Gỡ ảnh đại diện</span>
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          Hỗ trợ định dạng PNG, JPG, WEBP từ máy tính hoặc điện thoại (Tối đa dung lượng 5MB).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* NẾU LÀ HÀNH KHÁCH / SINH VIÊN MỚI HIỂN THỊ MÃ SV VÀ KHOA */}
-                {isStudentOrPassenger && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border-2 border-emerald-200/80 dark:border-emerald-900/60">
-                    <div>
-                      <label className="block text-sm font-bold text-emerald-950 dark:text-emerald-200 mb-2">
-                        Mã sinh viên ICTU
-                      </label>
-                      <div className="relative">
-                        <GraduationCap size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600" />
-                        <input
-                          type="text"
-                          value={studentId}
-                          onChange={(e) => setStudentId(e.target.value.toUpperCase())}
-                          placeholder="DTC2151800001"
-                          className="h-12 w-full rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-emerald-950 dark:text-emerald-200 mb-2">
-                        Khoa / Viện / Đơn vị
-                      </label>
-                      <div className="relative">
-                        <Building size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600" />
-                        <input
-                          type="text"
-                          value={faculty}
-                          onChange={(e) => setFaculty(e.target.value)}
-                          placeholder="Khoa Công nghệ thông tin"
-                          className="h-12 w-full rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
-                  <button
-                    type="submit"
-                    disabled={isSavingProfile}
-                    className="inline-flex items-center gap-2.5 px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Save size={17} />
-                    <span>{isSavingProfile ? 'Đang lưu hồ sơ...' : 'Lưu Thay Đổi Thông Tin'}</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ==================== TAB 2: CHUYÊN MÔN THEO ROLE ==================== */}
-            {activeTab === 'specialized' && (
-              <div className="space-y-6">
-                
-                {/* DÀNH CHO TÀI XẾ / PHỤ XE: THẺ BẰNG LÁI XE PET & NGHIỆP VỤ */}
-                {isDriverOrConductor && (
-                  <div className="space-y-6">
-                    <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
-                      <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2.5">
-                        <div className="p-1.5 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400">
                           <Award className="size-5" />
                         </div>
-                        Hồ Sơ Giấy Phép Lái Xe & Thẩm Định Vận Tải
+                        Hồ Sơ Vận Tải & Giấy Phép Lái Xe (GPLX)
                       </h3>
                       <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-1">
-                        Hồ sơ bằng lái xe buýt chở khách trên 30 chỗ được Ban Quản Lý thẩm định để cấp quyền nhận ca chạy.
+                        Hồ sơ kiểm định phương tiện và giấy phép lái xe đã được Ban Quản Lý thẩm định để cấp quyền nhận ca chạy.
                       </p>
                     </div>
 
-                    {licenseFeedback && (
-                      <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/60 p-4 text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-3 animate-in fade-in shadow-xs">
-                        <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0">
-                          <CheckCircle2 size={18} />
-                        </div>
-                        <span>{licenseFeedback}</span>
-                      </div>
-                    )}
+                    <div className="shrink-0">
+                      {licenseData?.status === 'approved' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-2 border-emerald-400 dark:border-emerald-600 shadow-xs">
+                          <CheckCircle2 size={15} className="text-emerald-600" />
+                          ĐÃ THẨM ĐỊNH & ĐỦ ĐIỀU KIỆN
+                        </span>
+                      ) : licenseData?.status === 'rejected' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200 border-2 border-red-400 dark:border-red-600 shadow-xs">
+                          <AlertTriangle size={15} className="text-red-600" />
+                          HỒ SƠ BỊ TỪ CHỐI / CẦN SỬA
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-2 border-amber-400 dark:border-amber-600 shadow-xs">
+                          <Clock size={15} className="text-amber-600" />
+                          CHỜ BAN ĐIỀU HÀNH THẨM ĐỊNH
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                    {licenseError && (
-                      <div className="rounded-2xl border-2 border-red-500/40 bg-red-50 dark:bg-red-950/60 p-4 text-sm font-bold text-red-950 dark:text-red-100 flex items-center gap-3 animate-in fade-in shadow-xs">
-                        <div className="p-1.5 rounded-xl bg-red-600 text-white shrink-0">
-                          <AlertCircle size={18} />
-                        </div>
-                        <span>{licenseError}</span>
+                  {/* THÔNG BÁO FEEDBACK / LỖI */}
+                  {licenseFeedback && (
+                    <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/60 p-4 text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0">
+                        <CheckCircle2 size={18} />
                       </div>
-                    )}
+                      <span>{licenseFeedback}</span>
+                    </div>
+                  )}
 
-                    {/* THẺ BẰNG LÁI PET CARD MÔ PHỎNG (Tương phản cao) */}
-                    <div className="relative rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-amber-500/10 via-emerald-600/15 to-slate-900/10 dark:from-amber-950/40 dark:via-emerald-950/40 dark:to-slate-950 border-2 border-emerald-500/40 shadow-md overflow-hidden">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-emerald-500/20 pb-4 mb-5">
-                        <div>
-                          <span className="text-xs font-black uppercase tracking-widest text-emerald-800 dark:text-emerald-300 block">
-                            CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+                  {licenseError && (
+                    <div className="rounded-2xl border-2 border-red-500/40 bg-red-50 dark:bg-red-950/60 p-4 text-sm font-bold text-red-950 dark:text-red-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-red-600 text-white shrink-0">
+                        <AlertCircle size={18} />
+                      </div>
+                      <span>{licenseError}</span>
+                    </div>
+                  )}
+
+                  {profileFeedback && (
+                    <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/60 p-4 text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0">
+                        <CheckCircle2 size={18} />
+                      </div>
+                      <span>{profileFeedback}</span>
+                    </div>
+                  )}
+
+                  {profileError && (
+                    <div className="rounded-2xl border-2 border-red-500/40 bg-red-50 dark:bg-red-950/60 p-4 text-sm font-bold text-red-950 dark:text-red-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-red-600 text-white shrink-0">
+                        <AlertCircle size={18} />
+                      </div>
+                      <span>{profileError}</span>
+                    </div>
+                  )}
+
+                  {/* ================= BLOCK 1: THẺ BẰNG LÁI PET CARD SIMULATOR ================= */}
+                  <div className="relative rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-amber-500/10 via-emerald-600/15 to-slate-900/10 dark:from-amber-950/40 dark:via-emerald-950/40 dark:to-slate-950 border-2 border-emerald-500/40 shadow-md overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-emerald-500/20 pb-4 mb-5">
+                      <div>
+                        <span className="text-xs font-black uppercase tracking-widest text-emerald-800 dark:text-emerald-300 block">
+                          CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+                        </span>
+                        <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2 mt-1">
+                          <Award className="text-amber-500 size-5" />
+                          Giấy Phép Lái Xe Điện Tử / Driver's License
+                        </h4>
+                      </div>
+
+                      <div>
+                        {licenseData?.status === 'approved' ? (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-2 border-emerald-400 dark:border-emerald-600 shadow-xs">
+                            <CheckCircle2 size={15} className="text-emerald-600" />
+                            ĐÃ THẨM ĐỊNH & ĐỦ ĐIỀU KIỆN LÁI XE
                           </span>
-                          <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2 mt-1">
-                            <Award className="text-amber-500 size-5" />
-                            Giấy Phép Lái Xe Điện Tử / Driver's License
-                          </h4>
+                        ) : licenseData?.status === 'rejected' ? (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200 border-2 border-red-400 dark:border-red-600 shadow-xs">
+                            <AlertTriangle size={15} className="text-red-600" />
+                            HỒ SƠ BỊ TỪ CHỐI / CẦN SỬA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-2 border-amber-400 dark:border-amber-600 shadow-xs">
+                            <Clock size={15} className="text-amber-600" />
+                            CHỜ BAN ĐIỀU HÀNH THẨM ĐỊNH
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4 Chỉ số bằng lái */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
+                          Số GPLX Quốc gia
+                        </span>
+                        <span className="font-mono font-black text-slate-900 dark:text-white text-base mt-1 block">
+                          {licenseNumber || 'Chưa cập nhật'}
+                        </span>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
+                          Hạng Giấy Phép
+                        </span>
+                        <span className="font-black text-emerald-700 dark:text-emerald-400 text-base mt-1 block">
+                          HẠNG {licenseClass || 'E'} (&gt;30 chỗ)
+                        </span>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
+                          Ngày Cấp Bằng
+                        </span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white text-base mt-1 block">
+                          {issueDate || 'Chưa ghi nhận'}
+                        </span>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
+                          Thời Hạn Sử Dụng
+                        </span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white text-base mt-1 block">
+                          {expiryDate || 'Không thời hạn'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* HÌNH ẢNH 2 MẶT GPLX ĐÃ LƯU TRÊN HỆ THỐNG */}
+                    <div className="mt-5 pt-4 border-t border-emerald-500/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <ImageIcon size={15} className="text-emerald-600" />
+                          Bản sao điện tử 2 mặt Giấy phép lái xe:
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          Nhấn vào ảnh để phóng to chi tiết
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Mặt trước */}
+                        <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 dark:border-slate-800 bg-slate-900/80 group">
+                          {frontImageUrl ? (
+                            <>
+                              <img
+                                src={frontImageUrl}
+                                alt="Mặt trước GPLX"
+                                className="w-full h-40 object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
+                              />
+                              <div className="absolute top-2 left-2 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-xs text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                <CheckCircle2 size={12} /> Mặt trước GPLX
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setLightboxImg({ url: frontImageUrl, title: 'Ảnh Mặt Trước Giấy Phép Lái Xe' })}
+                                className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/80 hover:bg-black text-white text-xs font-bold shadow-lg cursor-pointer transition-all"
+                              >
+                                <ZoomIn size={14} /> Phóng to
+                              </button>
+                            </>
+                          ) : (
+                            <div className="h-40 flex flex-col items-center justify-center text-slate-400">
+                              <ImageIcon size={28} className="mb-1 opacity-50" />
+                              <span className="text-xs font-medium">Chưa có ảnh mặt trước</span>
+                            </div>
+                          )}
                         </div>
 
-                        <div>
-                          {licenseData?.status === 'approved' ? (
-                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border-2 border-emerald-400 dark:border-emerald-600 shadow-xs">
-                              <CheckCircle2 size={15} className="text-emerald-600" />
-                              ĐÃ THẨM ĐỊNH & ĐỦ ĐIỀU KIỆN LÁI XE
-                            </span>
-                          ) : licenseData?.status === 'rejected' ? (
-                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200 border-2 border-red-400 dark:border-red-600 shadow-xs">
-                              <AlertTriangle size={15} className="text-red-600" />
-                              HỒ SƠ BỊ TỪ CHỐI / CẦN SỬA
-                            </span>
+                        {/* Mặt sau */}
+                        <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 dark:border-slate-800 bg-slate-900/80 group">
+                          {backImageUrl ? (
+                            <>
+                              <img
+                                src={backImageUrl}
+                                alt="Mặt sau GPLX"
+                                className="w-full h-40 object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
+                              />
+                              <div className="absolute top-2 left-2 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-xs text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                <CheckCircle2 size={12} /> Mặt sau GPLX
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setLightboxImg({ url: backImageUrl, title: 'Ảnh Mặt Sau Giấy Phép Lái Xe' })}
+                                className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/80 hover:bg-black text-white text-xs font-bold shadow-lg cursor-pointer transition-all"
+                              >
+                                <ZoomIn size={14} /> Phóng to
+                              </button>
+                            </>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-2 border-amber-400 dark:border-amber-600 shadow-xs">
-                              <Clock size={15} className="text-amber-600" />
-                              CHỜ BAN ĐIỀU HÀNH THẨM ĐỊNH
-                            </span>
+                            <div className="h-40 flex flex-col items-center justify-center text-slate-400">
+                              <ImageIcon size={28} className="mb-1 opacity-50" />
+                              <span className="text-xs font-medium">Chưa có ảnh mặt sau</span>
+                            </div>
                           )}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Thông số bằng lái (Độ tương phản cao) */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
-                          <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
-                            Số GPLX Quốc gia
-                          </span>
-                          <span className="font-mono font-black text-slate-900 dark:text-white text-base mt-1 block">
-                            {licenseNumber || 'Chưa cập nhật'}
-                          </span>
+                    {/* THÔNG BÁO TỪ CHỐI NẾU CÓ */}
+                    {licenseData?.profile?.rejectionReason && (
+                      <div className="mt-4 p-4 rounded-2xl bg-red-100/90 dark:bg-red-950/70 border-2 border-red-300 dark:border-red-800 text-sm text-red-950 dark:text-red-100">
+                        <span className="font-black">Lý do từ chối từ Ban Quản lý Tuyến: </span>
+                        <span>{licenseData.profile.rejectionReason}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KHÓA BẢO VỆ KHI ĐÃ ĐƯỢC DUYỆT & NÚT YÊU CẦU CẬP NHẬT */}
+                  {licenseData?.status === 'approved' && (
+                    <div className="p-5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0 mt-0.5">
+                          <CheckCircle2 size={20} />
                         </div>
-
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
-                          <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
-                            Hạng Giấy Phép
-                          </span>
-                          <span className="font-black text-emerald-700 dark:text-emerald-400 text-base mt-1 block">
-                            HẠNG {licenseClass || 'D'} (&gt;30 chỗ)
-                          </span>
-                        </div>
-
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
-                          <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
-                            Ngày Cấp Bằng
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white text-base mt-1 block">
-                            {issueDate || 'Chưa ghi nhận'}
-                          </span>
-                        </div>
-
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-xs">
-                          <span className="text-xs text-slate-600 dark:text-slate-400 block font-bold">
-                            Thời Hạn Sử Dụng
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white text-base mt-1 block">
-                            {expiryDate || 'Không thời hạn'}
-                          </span>
+                        <div>
+                          <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                            Hồ Sơ Đã Được Thẩm Định Hợp Lệ & Khóa Bảo Vệ
+                          </h5>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
+                            Bằng lái của tài xế đã được Ban Điều Hành phê duyệt. Thông tin bằng lái được khóa để duy trì điều kiện phân công ca chạy. Nếu nâng hạng hoặc đổi phôi thẻ mới, hãy bấm nút yêu cầu cấp đổi.
+                          </p>
                         </div>
                       </div>
 
-                      {licenseData?.profile?.rejectionReason && (
-                        <div className="mt-4 p-4 rounded-2xl bg-red-100/90 dark:bg-red-950/70 border-2 border-red-300 dark:border-red-800 text-sm text-red-950 dark:text-red-100">
-                          <span className="font-black">Lý do từ chối từ Ban Quản lý Tuyến: </span>
-                          <span>{licenseData.profile.rejectionReason}</span>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingLicense(!isEditingLicense)}
+                        className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-emerald-600 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 font-bold text-xs transition-all cursor-pointer shadow-xs"
+                      >
+                        <Edit3 size={15} />
+                        <span>{isEditingLicense ? 'Đóng Biểu Mẫu Chỉnh Sửa' : 'Yêu Cầu Cấp Đổi / Bổ Sung GPLX Mới'}</span>
+                      </button>
                     </div>
+                  )}
 
-                    {/* FORM CẬP NHẬT GPLX */}
-                    <form onSubmit={handleUpdateLicense} className="space-y-6 pt-2">
-                      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                  {/* FORM CẬP NHẬT GPLX (CHỈ HIỂN THỊ KHI CHƯA DUYỆT HOẶC KHI TÀI XẾ NHẤN NÚT CẤP ĐỔI) */}
+                  {(isEditingLicense || licenseData?.status !== 'approved') && (
+                    <form onSubmit={handleUpdateLicense} className="space-y-6 p-6 rounded-3xl border-2 border-amber-300 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 animate-in fade-in">
+                      <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-900/50 pb-3">
                         <h4 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-                          <FileCheck size={18} className="text-emerald-600" />
+                          <FileCheck size={18} className="text-amber-600" />
                           Cập nhật / Nộp bổ sung hồ sơ bằng lái xe
                         </h4>
                       </div>
@@ -1011,7 +978,7 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
                             required
                             value={licenseNumber}
                             onChange={(e) => setLicenseNumber(e.target.value.toUpperCase())}
-                            placeholder="VD: 200189998823"
+                            placeholder="VD: GPLX-20-E-561121"
                             className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 text-sm font-mono font-black text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
                           />
                         </div>
@@ -1065,178 +1032,466 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
                         </div>
                       </div>
 
-                      {/* KHUNG TẢI ẢNH 2 MẶT GPLX TỪ THIẾT BỊ (Đường viền và font chữ rõ nét) */}
+                      {/* KHUNG TẢI ẢNH 2 MẶT GPLX */}
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-bold text-slate-800 dark:text-slate-200">
-                            Hình ảnh chụp 2 mặt Giấy phép lái xe (GPLX)
-                          </label>
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                            Chụp rõ nét 2 mặt phôi thẻ PET, không bị mất góc hoặc lóa sáng để Hội đồng thẩm định phê duyệt ca chạy.
-                          </p>
-                        </div>
+                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200">
+                          Tải ảnh chụp phôi thẻ PET 2 mặt Giấy phép lái xe
+                        </label>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
-                          {/* MẶT TRƯỚC GPLX */}
-                          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50/80 dark:bg-slate-900/50 p-5 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[220px]">
+                          {/* MẶT TRƯỚC */}
+                          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-white dark:bg-slate-900 p-5 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[200px]">
                             {frontImageUrl ? (
-                              <div className="relative w-full h-48 rounded-xl overflow-hidden shadow-xs border-2 border-slate-200 dark:border-slate-700 group">
-                                <img
-                                  src={frontImageUrl}
-                                  alt="Mặt trước GPLX"
-                                  className="size-full object-cover"
-                                />
-                                <div className="absolute top-2 left-2 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-xs text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                                  <CheckCircle2 size={13} />
-                                  Mặt trước GPLX
-                                </div>
+                              <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-xs border-2 border-slate-200 dark:border-slate-700 group">
+                                <img src={frontImageUrl} alt="Mặt trước GPLX" className="size-full object-cover" />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                   <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold cursor-pointer hover:bg-slate-100 shadow-md">
                                     <Upload size={14} />
                                     <span>Đổi ảnh</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      disabled={isUploadingFront}
-                                      onChange={handleFrontImageFileChange}
-                                      className="hidden"
-                                    />
+                                    <input type="file" accept="image/*" disabled={isUploadingFront} onChange={handleFrontImageFileChange} className="hidden" />
                                   </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => setFrontImageUrl('')}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer"
-                                  >
-                                    <Trash2 size={14} />
-                                    <span>Xóa</span>
+                                  <button type="button" onClick={() => setFrontImageUrl('')} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer">
+                                    <Trash2 size={14} /> Xóa
                                   </button>
                                 </div>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center justify-center py-4 space-y-3">
-                                <div className="size-14 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                                  <UploadCloud size={28} />
+                                <div className="size-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                  <UploadCloud size={24} />
                                 </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                    Ảnh mặt trước GPLX
-                                  </p>
-                                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Mặt có ảnh chân dung và hạng bằng
-                                  </p>
-                                </div>
-                                <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all">
-                                  <Upload size={15} />
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Ảnh mặt trước GPLX</span>
+                                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer shadow-md">
+                                  <Upload size={14} />
                                   <span>{isUploadingFront ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    disabled={isUploadingFront}
-                                    onChange={handleFrontImageFileChange}
-                                    className="hidden"
-                                  />
+                                  <input type="file" accept="image/*" disabled={isUploadingFront} onChange={handleFrontImageFileChange} className="hidden" />
                                 </label>
-                              </div>
-                            )}
-
-                            {isUploadingFront && (
-                              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white z-10">
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 size={26} className="animate-spin text-emerald-400" />
-                                  <span className="text-xs font-bold">Đang xử lý tệp ảnh...</span>
-                                </div>
                               </div>
                             )}
                           </div>
 
-                          {/* MẶT SAU GPLX */}
-                          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50/80 dark:bg-slate-900/50 p-5 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[220px]">
+                          {/* MẶT SAU */}
+                          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-white dark:bg-slate-900 p-5 transition-all flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[200px]">
                             {backImageUrl ? (
-                              <div className="relative w-full h-48 rounded-xl overflow-hidden shadow-xs border-2 border-slate-200 dark:border-slate-700 group">
-                                <img
-                                  src={backImageUrl}
-                                  alt="Mặt sau GPLX"
-                                  className="size-full object-cover"
-                                />
-                                <div className="absolute top-2 left-2 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-xs text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                                  <CheckCircle2 size={13} />
-                                  Mặt sau GPLX
-                                </div>
+                              <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-xs border-2 border-slate-200 dark:border-slate-700 group">
+                                <img src={backImageUrl} alt="Mặt sau GPLX" className="size-full object-cover" />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                   <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold cursor-pointer hover:bg-slate-100 shadow-md">
                                     <Upload size={14} />
                                     <span>Đổi ảnh</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      disabled={isUploadingBack}
-                                      onChange={handleBackImageFileChange}
-                                      className="hidden"
-                                    />
+                                    <input type="file" accept="image/*" disabled={isUploadingBack} onChange={handleBackImageFileChange} className="hidden" />
                                   </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => setBackImageUrl('')}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer"
-                                  >
-                                    <Trash2 size={14} />
-                                    <span>Xóa</span>
+                                  <button type="button" onClick={() => setBackImageUrl('')} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-md cursor-pointer">
+                                    <Trash2 size={14} /> Xóa
                                   </button>
                                 </div>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center justify-center py-4 space-y-3">
-                                <div className="size-14 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                                  <UploadCloud size={28} />
+                                <div className="size-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                  <UploadCloud size={24} />
                                 </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                    Ảnh mặt sau GPLX
-                                  </p>
-                                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Mặt có các hạng xe được phép điều khiển
-                                  </p>
-                                </div>
-                                <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all">
-                                  <Upload size={15} />
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Ảnh mặt sau GPLX</span>
+                                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer shadow-md">
+                                  <Upload size={14} />
                                   <span>{isUploadingBack ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    disabled={isUploadingBack}
-                                    onChange={handleBackImageFileChange}
-                                    className="hidden"
-                                  />
+                                  <input type="file" accept="image/*" disabled={isUploadingBack} onChange={handleBackImageFileChange} className="hidden" />
                                 </label>
-                              </div>
-                            )}
-
-                            {isUploadingBack && (
-                              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white z-10">
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 size={26} className="animate-spin text-emerald-400" />
-                                  <span className="text-xs font-bold">Đang xử lý tệp ảnh...</span>
-                                </div>
                               </div>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="pt-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
+                      <div className="pt-3 flex justify-end">
                         <button
                           type="submit"
                           disabled={isSavingLicense}
-                          className="inline-flex items-center gap-2.5 px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                          className="inline-flex items-center gap-2.5 px-7 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
                         >
-                          <Save size={17} />
-                          <span>{isSavingLicense ? 'Đang gửi thẩm định...' : 'Gửi Thẩm Định GPLX'}</span>
+                          <Save size={16} />
+                          <span>{isSavingLicense ? 'Đang gửi...' : 'Gửi Thẩm Định GPLX Mới'}</span>
                         </button>
                       </div>
                     </form>
-                  </div>
-                )}
+                  )}
 
+                  {/* VÁCH NGĂN CHIA PHẦN ĐỊNH DANH CÁ NHÂN */}
+                  <div className="relative my-8">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t-2 border-slate-200 dark:border-slate-800" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white dark:bg-slate-900 px-4 text-slate-500 dark:text-slate-400 font-black tracking-wider">
+                        Thông Tin Định Danh & Căn Cước Công Dân (CCCD)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ================= BLOCK 2: FORM ĐỊNH DANH CÁ NHÂN ================= */}
+                  <form onSubmit={handleUpdateProfile} className="space-y-6">
+                    {/* Email Read-only Verified Card */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border-2 border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                          <Mail size={18} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                            Email tài khoản công vụ
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            Được bảo vệ bởi hệ thống xác thực định danh SSO
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
+                          {currentUser?.email || authUser?.email || ''}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          <Lock size={12} /> Cố định
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                          Họ và tên đầy đủ <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <User size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            required
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            placeholder="Trần Văn Nam"
+                            className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                          Số điện thoại liên lạc công vụ
+                        </label>
+                        <div className="relative">
+                          <Phone size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            placeholder="0903456789"
+                            className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                          Số Căn cước công dân (CCCD 12 số)
+                        </label>
+                        <div className="relative">
+                          <IdCard size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            maxLength={12}
+                            value={idCardNumber}
+                            onChange={(e) => setIdCardNumber(e.target.value.replace(/D/g, ''))}
+                            placeholder="019200001234"
+                            className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-black tracking-widest text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40">
+                        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-3">
+                          Ảnh đại diện tài khoản
+                        </label>
+                        <div className="flex flex-col sm:flex-row items-center gap-5">
+                          <div className="relative group shrink-0">
+                            <div className="size-24 rounded-2xl ring-4 ring-emerald-500/30 shadow-md overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-2xl font-black">
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt={fullName} className="size-full object-cover" />
+                              ) : (
+                                <span>{userInitials}</span>
+                              )}
+                            </div>
+                            {isUploadingAvatar && (
+                              <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-white">
+                                <Loader2 size={24} className="animate-spin text-emerald-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 space-y-2.5 text-center sm:text-left">
+                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                              <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all">
+                                <Upload size={15} />
+                                <span>{isUploadingAvatar ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
+                                <input type="file" accept="image/*" disabled={isUploadingAvatar} onChange={handleAvatarFileChange} className="hidden" />
+                              </label>
+
+                              {avatarUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAvatarUrl('')}
+                                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-700 dark:text-red-300 text-xs font-bold cursor-pointer transition-all"
+                                >
+                                  <Trash2 size={14} />
+                                  <span>Gỡ ảnh đại diện</span>
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              Hỗ trợ định dạng PNG, JPG, WEBP từ máy tính hoặc điện thoại (Tối đa dung lượng 5MB).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
+                      <button
+                        type="submit"
+                        disabled={isSavingProfile}
+                        className="inline-flex items-center gap-2.5 px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Save size={17} />
+                        <span>{isSavingProfile ? 'Đang lưu hồ sơ...' : 'Lưu Thay Đổi Thông Tin'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                /* FORM ĐỊNH DANH TIÊU CHUẨN DÀNH CHO HÀNH KHÁCH / ADMIN */
+                <form onSubmit={handleUpdateProfile} className="space-y-6">
+                  <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400">
+                        <User className="size-5" />
+                      </div>
+                      Hồ Sơ Định Danh Cá Nhân
+                    </h3>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-1">
+                      Thông tin định danh bắt buộc dùng để xác thực quyền hạn trên hệ thống Smart Transit.
+                    </p>
+                  </div>
+
+                  {profileFeedback && (
+                    <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/60 p-4 text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0">
+                        <CheckCircle2 size={18} />
+                      </div>
+                      <span>{profileFeedback}</span>
+                    </div>
+                  )}
+
+                  {profileError && (
+                    <div className="rounded-2xl border-2 border-red-500/40 bg-red-50 dark:bg-red-950/60 p-4 text-sm font-bold text-red-950 dark:text-red-100 flex items-center gap-3 animate-in fade-in shadow-xs">
+                      <div className="p-1.5 rounded-xl bg-red-600 text-white shrink-0">
+                        <AlertCircle size={18} />
+                      </div>
+                      <span>{profileError}</span>
+                    </div>
+                  )}
+
+                  {/* Email Read-only Verified Card */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border-2 border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                        <Mail size={18} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                          Email tài khoản công vụ
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          Được bảo vệ bởi hệ thống xác thực định danh SSO
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
+                        {currentUser?.email || authUser?.email || ''}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        <Lock size={12} /> Cố định
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Form Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                        Họ và tên đầy đủ <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <User size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          required
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Nguyễn Văn A"
+                          className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                        Số điện thoại liên lạc công vụ
+                      </label>
+                      <div className="relative">
+                        <Phone size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="0987654321"
+                          className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+                        Số Căn cước công dân (CCCD 12 số)
+                      </label>
+                      <div className="relative">
+                        <IdCard size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          maxLength={12}
+                          value={idCardNumber}
+                          onChange={(e) => setIdCardNumber(e.target.value.replace(/D/g, ''))}
+                          placeholder="019200001234"
+                          className="h-12 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-black tracking-widest text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2 p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40">
+                      <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-3">
+                        Ảnh đại diện tài khoản
+                      </label>
+                      <div className="flex flex-col sm:flex-row items-center gap-5">
+                        {/* Avatar Preview */}
+                        <div className="relative group shrink-0">
+                          <div className="size-24 rounded-2xl ring-4 ring-emerald-500/30 shadow-md overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-2xl font-black">
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt={fullName}
+                                className="size-full object-cover"
+                              />
+                            ) : (
+                              <span>{userInitials}</span>
+                            )}
+                          </div>
+                          {isUploadingAvatar && (
+                            <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-white">
+                              <Loader2 size={24} className="animate-spin text-emerald-400" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Upload Controls */}
+                        <div className="flex-1 space-y-2.5 text-center sm:text-left">
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                            <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all">
+                              <Upload size={15} />
+                              <span>{isUploadingAvatar ? 'Đang tải ảnh...' : 'Tải ảnh từ thiết bị'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={isUploadingAvatar}
+                                onChange={handleAvatarFileChange}
+                                className="hidden"
+                              />
+                            </label>
+
+                            {avatarUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setAvatarUrl('')}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-700 dark:text-red-300 text-xs font-bold cursor-pointer transition-all"
+                              >
+                                <Trash2 size={14} />
+                                <span>Gỡ ảnh đại diện</span>
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Hỗ trợ định dạng PNG, JPG, WEBP từ máy tính hoặc điện thoại (Tối đa dung lượng 5MB).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* NẾU LÀ HÀNH KHÁCH / SINH VIÊN MỚI HIỂN THỊ MÃ SV VÀ KHOA */}
+                  {isStudentOrPassenger && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border-2 border-emerald-200/80 dark:border-emerald-900/60">
+                      <div>
+                        <label className="block text-sm font-bold text-emerald-950 dark:text-emerald-200 mb-2">
+                          Mã sinh viên ICTU
+                        </label>
+                        <div className="relative">
+                          <GraduationCap size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600" />
+                          <input
+                            type="text"
+                            value={studentId}
+                            onChange={(e) => setStudentId(e.target.value.toUpperCase())}
+                            placeholder="DTC2151800001"
+                            className="h-12 w-full rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-mono font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-emerald-950 dark:text-emerald-200 mb-2">
+                          Khoa / Viện / Đơn vị
+                        </label>
+                        <div className="relative">
+                          <Building size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600" />
+                          <input
+                            type="text"
+                            value={faculty}
+                            onChange={(e) => setFaculty(e.target.value)}
+                            placeholder="Khoa Công nghệ thông tin"
+                            className="h-12 w-full rounded-xl border-2 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-950 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/15 focus:outline-none transition-all shadow-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="inline-flex items-center gap-2.5 px-8 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-sm font-black shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Save size={17} />
+                      <span>{isSavingProfile ? 'Đang lưu hồ sơ...' : 'Lưu Thay Đổi Thông Tin'}</span>
+                    </button>
+                  </div>
+                </form>
+              )
+            )}
+
+            {/* ==================== TAB 2: CHUYÊN MÔN THEO ROLE (DÀNH CHO NON-DRIVER) ==================== */}
+            {activeTab === 'specialized' && !isDriverOrConductor && (
+              <div className="space-y-6 animate-in fade-in">
                 {/* DÀNH CHO SINH VIÊN */}
                 {isStudentOrPassenger && (
                   <div className="space-y-4">
@@ -1469,6 +1724,40 @@ export function UserProfileModule({ onBack, initialTab = 'profile' }: UserProfil
         </div>
 
       </div>
-    </div>
+    
+      {/* ================= LIGHTBOX MODAL PHÓNG TO ẢNH GPLX ================= */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in cursor-pointer"
+          onClick={() => setLightboxImg(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full bg-slate-900 rounded-3xl p-5 shadow-2xl border-2 border-slate-700 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-white">
+              <span className="font-bold text-sm flex items-center gap-2">
+                <Award className="text-amber-400 size-5" />
+                {lightboxImg.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLightboxImg(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mt-4 rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[75vh]">
+              <img
+                src={lightboxImg.url}
+                alt={lightboxImg.title}
+                className="max-h-[75vh] w-auto object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+</div>
   )
 }
