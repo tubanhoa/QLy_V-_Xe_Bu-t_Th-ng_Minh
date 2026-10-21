@@ -223,7 +223,8 @@ export class NotificationService {
   }): Promise<boolean> {
     const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
     const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
-    const subject = `${subjectPrefix}[SmartBus ICTU] Mã xác thực OTP đặt lại mật khẩu sinh viên (${params.otpCode})`;
+    const nowTime = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const subject = `${subjectPrefix}[OTP: ${params.otpCode}] Mã xác thực đặt lại mật khẩu sinh viên ICTU (${nowTime})`;
     const expMinutes = params.expiresInMinutes || 10;
 
     const html = `
