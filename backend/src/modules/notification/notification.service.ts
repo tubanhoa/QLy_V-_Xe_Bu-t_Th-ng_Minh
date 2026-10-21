@@ -187,16 +187,22 @@ export class NotificationService {
       return { actualTo: forcedRedirect, isRedirected: true, originalEmail: trimmed };
     }
 
-    // Chỉ chuyển hướng an toàn các domain test/dummy giả lập
-    const isMockDummyDomain =
+    const lower = trimmed.toLowerCase();
+    // Tự động nhận diện các tài khoản hạt giống (seed/demo) hoặc địa chỉ giả lập không tồn tại trên máy chủ email thực:
+    // Ví dụ: student.an@ictu.edu.vn, driver.hung@..., test.*, @example.com, @test.com, @dummy.com
+    const isMockOrSeedAccount =
+      lower.startsWith('student.an@') ||
+      lower.startsWith('driver.hung@') ||
+      lower.startsWith('test.') ||
+      lower.includes('mock') ||
       trimmed.endsWith('@example.com') ||
       trimmed.endsWith('@test.com') ||
       trimmed.endsWith('@dummy.com');
 
-    if (isMockDummyDomain) {
+    if (isMockOrSeedAccount) {
       const fallbackAdmin = (process.env.SMTP_USER || '').trim() || 'ductrandanh06@gmail.com';
       this.logger.log(
-        `[NotificationService] Địa chỉ mock/dummy (${trimmed}) được chuyển hướng an toàn về admin: ${fallbackAdmin}`,
+        `[NotificationService] Tài khoản mẫu thử nghiệm (${trimmed}) được chuyển hướng an toàn về admin/tester: ${fallbackAdmin} (tránh Bounce 550 Address Not Found)`,
       );
       return { actualTo: fallbackAdmin, isRedirected: true, originalEmail: trimmed };
     }
@@ -260,6 +266,12 @@ export class NotificationService {
               ${params.studentId ? `Mã sinh viên: <strong>${params.studentId}</strong><br/>` : ''}
               Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản sinh viên của bạn.
             </div>
+            
+            ${redirectInfo.isRedirected ? `
+            <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #92400e; line-height: 1.5;">
+              <strong>ℹ️ Chế độ tài khoản mẫu (Demo):</strong> Email này được gửi cho tài khoản mẫu <code>${redirectInfo.originalEmail}</code> (không có hòm thư thực tế trên máy chủ mail ICTU). Hệ thống tự động chuyển tiếp về hòm thư này để bạn nhận mã OTP và kiểm thử trực tiếp.
+            </div>
+            ` : ''}
             
             <div class="otp-card">
               <div class="otp-label">MÃ XÁC THỰC BẢO MẬT (OTP)</div>
