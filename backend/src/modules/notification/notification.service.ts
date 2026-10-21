@@ -172,33 +172,130 @@ export class NotificationService {
 
   /**
    * Chuẩn hóa và bảo vệ địa chỉ email người nhận:
-   * Chuyển hướng các địa chỉ mock/test không có hòm thư thực tế ngoài đời (@ictu.edu.vn demo, @example.com...)
-   * về email của quản trị viên/tester (process.env.SMTP_USER) để:
-   * 1. Ngăn chặn 100% lỗi Google Mail "Address not found" (550 Mail Delivery Subsystem Bounce).
-   * 2. Đảm bảo tester nhận được email thực tế ngay trên điện thoại để kiểm thử giao diện.
+   * 1. Nếu có biến môi trường SMTP_REDIRECT_ALL_TO (dành riêng cho debug cá nhân), chuyển toàn bộ thư về email đó.
+   * 2. Chỉ chuyển hướng các domain test/dummy không có máy chủ mail thực (như @example.com, @test.com, @dummy.com).
+   * 3. Tất cả email của sinh viên ICTU (@ictu.edu.vn), email cá nhân (Gmail, Outlook...) ĐƯỢC GỬI TRỰC TIẾP tới người nhận thực tế.
    */
   resolveTargetEmail(recipientEmail: string): { actualTo: string; isRedirected: boolean; originalEmail: string } {
     const trimmed = (recipientEmail || '').trim();
-    const adminTestEmail = (process.env.SMTP_USER || '').trim() || 'ductrandanh06@gmail.com';
+    const forcedRedirect = (process.env.SMTP_REDIRECT_ALL_TO || '').trim();
 
-    // Nhận diện các domain và địa chỉ hạt giống (seed/mock) không có tài khoản Google Workspace thật
-    const isMockOrTestEmail =
-      trimmed.endsWith('@ictu.edu.vn') ||
-      trimmed.endsWith('@smartbus.ictu.vn') ||
-      trimmed.endsWith('@example.com') ||
-      trimmed.endsWith('@test.com') ||
-      trimmed.toLowerCase().includes('student.an') ||
-      trimmed.toLowerCase().includes('driver.hung') ||
-      trimmed.toLowerCase().includes('test.');
-
-    if (isMockOrTestEmail && trimmed.toLowerCase() !== adminTestEmail.toLowerCase()) {
+    if (forcedRedirect && forcedRedirect.includes('@')) {
       this.logger.log(
-        `[NotificationService] Chuyển hướng email từ địa chỉ thử nghiệm ${trimmed} -> Hòm thư quản trị viên thực tế ${adminTestEmail}`,
+        `[NotificationService] Cấu hình SMTP_REDIRECT_ALL_TO kích hoạt: Chuyển hướng ${trimmed} -> ${forcedRedirect}`,
       );
-      return { actualTo: adminTestEmail, isRedirected: true, originalEmail: trimmed };
+      return { actualTo: forcedRedirect, isRedirected: true, originalEmail: trimmed };
     }
 
+    // Chỉ chuyển hướng an toàn các domain test/dummy giả lập
+    const isMockDummyDomain =
+      trimmed.endsWith('@example.com') ||
+      trimmed.endsWith('@test.com') ||
+      trimmed.endsWith('@dummy.com');
+
+    if (isMockDummyDomain) {
+      const fallbackAdmin = (process.env.SMTP_USER || '').trim() || 'ductrandanh06@gmail.com';
+      this.logger.log(
+        `[NotificationService] Địa chỉ mock/dummy (${trimmed}) được chuyển hướng an toàn về admin: ${fallbackAdmin}`,
+      );
+      return { actualTo: fallbackAdmin, isRedirected: true, originalEmail: trimmed };
+    }
+
+    // Gửi trực tiếp đến hòm thư thực tế của người dùng/sinh viên
     return { actualTo: trimmed, isRedirected: false, originalEmail: trimmed };
+  }
+
+  /**
+   * Gửi Email mã OTP đặt lại mật khẩu chuẩn nhận diện Đại học CNTT & TT Thái Nguyên (ICTU)
+   */
+  async sendPasswordResetOtpEmail(params: {
+    recipientEmail: string;
+    studentName: string;
+    studentId?: string;
+    otpCode: string;
+    expiresInMinutes?: number;
+  }): Promise<boolean> {
+    const redirectInfo = this.resolveTargetEmail(params.recipientEmail);
+    const subjectPrefix = redirectInfo.isRedirected ? `[Demo: ${params.recipientEmail}] ` : '';
+    const subject = `${subjectPrefix}[SmartBus ICTU] Mã xác thực OTP đặt lại mật khẩu sinh viên (${params.otpCode})`;
+    const expMinutes = params.expiresInMinutes || 10;
+
+    const html = `
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="vi">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Mã OTP Đặt Lại Mật Khẩu - SmartBus ICTU</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 20px 8px; color: #1e293b; }
+          .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #005A36 0%, #0d9488 100%); color: #ffffff; padding: 28px 24px; text-align: center; }
+          .header .org { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-bottom: 6px; }
+          .header h1 { margin: 0 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
+          .header .sub { font-size: 13px; opacity: 0.92; margin-top: 4px; }
+          .content { padding: 28px 24px; }
+          .greeting { font-size: 15px; color: #0f172a; margin-bottom: 16px; line-height: 1.6; }
+          .greeting strong { color: #005A36; }
+          .otp-card { background: #f0fdf4; border: 2px dashed #059669; border-radius: 14px; padding: 22px 20px; text-align: center; margin: 24px 0; }
+          .otp-label { font-size: 12px; font-weight: 800; color: #065f46; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+          .otp-number { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 34px; font-weight: 900; color: #005A36; letter-spacing: 10px; margin: 8px 0; }
+          .otp-sub { font-size: 13px; color: #047857; margin-top: 6px; font-weight: 600; }
+          .warning-box { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #92400e; line-height: 1.5; margin: 20px 0; }
+          .info-list { font-size: 13.5px; color: #475569; line-height: 1.8; margin: 16px 0; }
+          .cta-btn { display: inline-block; background: #005A36; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 14px; margin-top: 10px; }
+          .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="org">ĐẠI HỌC THÁI NGUYÊN &bull; TRƯỜNG ĐH CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG</div>
+            <h1>Xác Thực Đặt Lại Mật Khẩu</h1>
+            <div class="sub">Hệ Thống Xe Buýt Thông Minh ICTU SmartBus</div>
+          </div>
+          <div class="content">
+            <div class="greeting">
+              Kính gửi sinh viên: <strong>${params.studentName || 'Sinh viên ICTU'}</strong><br/>
+              ${params.studentId ? `Mã sinh viên: <strong>${params.studentId}</strong><br/>` : ''}
+              Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản sinh viên của bạn.
+            </div>
+            
+            <div class="otp-card">
+              <div class="otp-label">MÃ XÁC THỰC BẢO MẬT (OTP)</div>
+              <div class="otp-number">${params.otpCode}</div>
+              <div class="otp-sub">Mã này có hiệu lực trong vòng ${expMinutes} phút</div>
+            </div>
+
+            <div class="warning-box">
+              <strong>Lưu ý bảo mật:</strong> Tuyệt đối không chia sẻ mã xác thực này cho bất kỳ ai, kể cả nhân viên hỗ trợ kỹ thuật hoặc quản trị viên nhà trường.
+            </div>
+
+            <div class="info-list">
+              &bull; Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc liên hệ ngay với Văn phòng Quản lý xe buýt ICTU để bảo vệ tài khoản.<br/>
+              &bull; Sau khi xác thực OTP, bạn sẽ được chuyển đến bước tạo mật khẩu mới.
+            </div>
+
+            <div style="text-align: center; margin: 24px 0 10px 0;">
+              <a href="http://localhost:3000/login" class="cta-btn">Quay lại Trang Đăng Nhập ICTU</a>
+            </div>
+          </div>
+          <div class="footer">
+            <strong>Trường Đại học Công nghệ Thông tin & Truyền thông (ICTU)</strong><br />
+            Đường Z115, Xã Quyết Thắng, TP. Thái Nguyên, Tỉnh Thái Nguyên<br />
+            Hotline điều hành: 1900 8899 &bull; Hỗ trợ: support@smartbus.ictu.edu.vn
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendMail({
+      to: redirectInfo.actualTo,
+      subject,
+      html,
+      text: `Mã xác thực OTP đặt lại mật khẩu của bạn là: ${params.otpCode}. Mã có hiệu lực trong ${expMinutes} phút.`,
+    });
   }
 
   /**
