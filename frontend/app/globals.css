@@ -448,24 +448,25 @@ div[class*="nextjs-toast"] {
   position: absolute;
   top: 0;
   left: 0;
-  border-radius: 20px;
+  border-radius: 16px;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.65) 0%,
-    rgba(255, 255, 255, 0.28) 100%
+    rgba(255, 255, 255, 0.60) 0%,
+    rgba(255, 255, 255, 0.25) 100%
   );
   box-shadow: 
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(0, 60, 30, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    inset 0 -1px 0 rgba(0, 60, 30, 0.05),
     0 8px 24px -4px rgba(0, 50, 25, 0.16);
-  border: 1.5px solid rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.75);
   pointer-events: none;
   z-index: 2;
+  will-change: transform, width, height, opacity;
   transition: 
-    transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    width 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    height 350ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 200ms ease;
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease;
 }
 
 /* Individual Tiles within Quick Access Dock */
@@ -577,10 +578,15 @@ div[class*="nextjs-toast"] {
 @media (prefers-reduced-motion: reduce) {
   .dock-glass-liquid,
   .dock-tile-glass,
-  .dock-glass-slider,
   .dock-glass-spotlight {
     transition: none !important;
     transform: none !important;
+    animation: none !important;
+  }
+
+  /* Slider MUST preserve inline translated transform to snap to hovered card without animation */
+  .dock-glass-slider {
+    transition: none !important;
     animation: none !important;
   }
 }

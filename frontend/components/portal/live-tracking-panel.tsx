@@ -423,6 +423,9 @@ export function LiveTrackingPanel({
           setSelectedPickup(name)
           haptic.play('select')
         }}
+        onStartSimulator={startSimulator}
+        onStopSimulator={stopSimulator}
+        simulatorStatus={simulatorStatus}
       />
 
       {/* 2. GRAB/XANHSM STYLE BOTTOM SHEET RIDE CARD */}

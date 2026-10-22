@@ -12,7 +12,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, Not } from 'typeorm';
+import { Repository, Between, In, Not, ILike } from 'typeorm';
 import { TripEntity } from '../../database/entities/trip.entity.js';
 import { RouteEntity } from '../../database/entities/route.entity.js';
 import { VehicleEntity } from '../../database/entities/vehicle.entity.js';
@@ -1711,7 +1711,7 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const searchCode = ticketCode || passCode;
-    const ticket = await this.ticketRepository.findOne({
+    let ticket = await this.ticketRepository.findOne({
       where: { ticketCode: searchCode },
       relations: {
         booking: {
@@ -1724,6 +1724,62 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
         seat: true,
       },
     });
+
+    // Tra cứu thông minh: Hỗ trợ mã vé gõ tắt 6 ký tự cuối hoặc mã đặt chỗ (BK-...)
+    if (!ticket) {
+      // 1. Thử với các tiền tố chuẩn
+      const prefixedCodes = [
+        `TKT-ICTU-${searchCode}`,
+        `TKT-${searchCode}`,
+      ];
+      ticket = await this.ticketRepository.findOne({
+        where: prefixedCodes.map((code) => ({ ticketCode: code })),
+        relations: {
+          booking: {
+            trip: {
+              route: true,
+              vehicle: true,
+              driver: true,
+            },
+          },
+          seat: true,
+        },
+      });
+    }
+
+    if (!ticket) {
+      // 2. Thử tra cứu theo mã đặt chỗ (bookingCode)
+      ticket = await this.ticketRepository.findOne({
+        where: { booking: { bookingCode: searchCode } },
+        relations: {
+          booking: {
+            trip: {
+              route: true,
+              vehicle: true,
+              driver: true,
+            },
+          },
+          seat: true,
+        },
+      });
+    }
+
+    if (!ticket && searchCode.length >= 4) {
+      // 3. Thử tìm kiếm mờ ILike theo đuôi mã vé
+      ticket = await this.ticketRepository.findOne({
+        where: { ticketCode: ILike(`%${searchCode}%`) },
+        relations: {
+          booking: {
+            trip: {
+              route: true,
+              vehicle: true,
+              driver: true,
+            },
+          },
+          seat: true,
+        },
+      });
+    }
 
     if (!ticket) {
       // Fallback thử tìm trong monthly_passes nếu mã không có tiền tố MP

@@ -33,6 +33,9 @@ import {
   Info,
   Check,
   ChevronRight,
+  Play,
+  Square,
+  FastForward,
 } from 'lucide-react'
 import type { LiveLocation, StationEtaItem } from '@/lib/types/tracking'
 
@@ -45,6 +48,9 @@ interface LiveBusMapProps {
   userDeviceLocation?: { latitude: number; longitude: number } | null
   onLocateMe?: () => void
   onSelectPickupStation?: (stationName: string) => void
+  onStartSimulator?: (speedMultiplier?: number) => void
+  onStopSimulator?: () => void
+  simulatorStatus?: any
 }
 
 // 6 mốc trạm chuẩn dọc tuyến 01 TP. Thái Nguyên trên bản đồ SVG (ViewBox: 800 x 360)
@@ -66,6 +72,9 @@ export function LiveBusMap({
   userDeviceLocation,
   onLocateMe,
   onSelectPickupStation,
+  onStartSimulator,
+  onStopSimulator,
+  simulatorStatus,
 }: LiveBusMapProps) {
   const [mapMode, setMapMode] = useState<'vector' | 'satellite'>('vector')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -179,8 +188,50 @@ export function LiveBusMap({
           )}
         </div>
 
-        {/* Right: Compact Icon Button Group */}
-        <div className="pointer-events-auto flex items-center gap-1 bg-slate-900/90 backdrop-blur-md border border-white/10 p-1 rounded-xl shadow-md">
+        {/* Right: Compact Icon Button Group & Floating Simulator Pill */}
+        <div className="pointer-events-auto flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md border border-white/10 p-1 rounded-xl shadow-md">
+          {/* Nút Điều Khiển Nhanh GPS Simulator (1-Click Run/Stop & Tốc độ) */}
+          {onStartSimulator && onStopSimulator && (
+            <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded-lg border border-white/10">
+              {isSimulating ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={onStopSimulator}
+                    className="px-2 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="Dừng mô phỏng xe buýt"
+                  >
+                    <Square size={10} className="fill-current" />
+                    <span>Dừng</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentMult = simulatorStatus?.speedMultiplier || 1
+                      const nextMult = currentMult === 1 ? 2 : currentMult === 2 ? 5 : 1
+                      onStartSimulator(nextMult)
+                    }}
+                    className="px-1.5 py-1 rounded-md bg-white/15 hover:bg-white/25 text-amber-300 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                    title="Đổi tốc độ mô phỏng (1x -> 2x -> 5x)"
+                  >
+                    {simulatorStatus?.speedMultiplier || 1}x
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onStartSimulator(2)}
+                  className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                  title="Chạy mô phỏng xe buýt di chuyển ngay lập tức"
+                >
+                  <Play size={10} className="fill-current" />
+                  <span>Chạy demo</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Nút Định vị tôi (HTML5 Geolocation) */}
           {onLocateMe && (
             <button

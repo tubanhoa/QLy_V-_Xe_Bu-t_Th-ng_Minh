@@ -21,6 +21,11 @@ import {
   Clock,
   MapPin,
   FileCheck,
+  FileUp,
+  RotateCcw,
+  ArrowRight,
+  Laptop,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { driverService, DriverTripItem } from '@/lib/services/driver.service'
 import { driverHardware } from '@/lib/utils/driver-hardware'
@@ -77,8 +82,13 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
   const [availableTrips, setAvailableTrips] = useState<DriverTripItem[]>([])
 
   // Quản lý Camera Scanner bằng html5-qrcode
+  const [hasWebcam, setHasWebcam] = useState<boolean | null>(null)
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [autoResetSeconds, setAutoResetSeconds] = useState<number | null>(null)
+  const autoResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoResetIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const html5QrCodeRef = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastScannedCodeRef = useRef<{ code: string; time: number } | null>(null)
@@ -87,6 +97,74 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
   const [checkedInHistory, setCheckedInHistory] = useState<
     Record<string, { scannedAt: string; passengerName: string; seatNumber?: string; count: number }>
   >({})
+
+  // Hàm chuyển nhanh sang lượt soát vé tiếp theo
+  const resetScanner = useCallback(() => {
+    if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current)
+    if (autoResetIntervalRef.current) clearInterval(autoResetIntervalRef.current)
+    setAutoResetSeconds(null)
+    setScanResult(null)
+    setManualCode('')
+  }, [])
+
+  // Tự động kiểm tra máy tính có webcam hay không
+  useEffect(() => {
+    async function checkCamera() {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          const videoDevices = devices.filter((d) => d.kind === 'videoinput')
+          setHasWebcam(videoDevices.length > 0)
+        } catch {
+          setHasWebcam(false)
+        }
+      } else {
+        setHasWebcam(false)
+      }
+    }
+    checkCamera()
+  }, [])
+
+  // Đếm ngược 6 giây tự động làm sạch màn hình để tài xế tiếp tục soát lượt kế tiếp
+  useEffect(() => {
+    if (scanResult) {
+      setAutoResetSeconds(6)
+      if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current)
+      if (autoResetIntervalRef.current) clearInterval(autoResetIntervalRef.current)
+
+      autoResetIntervalRef.current = setInterval(() => {
+        setAutoResetSeconds((prev) => (prev && prev > 1 ? prev - 1 : 1))
+      }, 1000)
+
+      autoResetTimerRef.current = setTimeout(() => {
+        resetScanner()
+      }, 6000)
+    } else {
+      if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current)
+      if (autoResetIntervalRef.current) clearInterval(autoResetIntervalRef.current)
+      setAutoResetSeconds(null)
+    }
+
+    return () => {
+      if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current)
+      if (autoResetIntervalRef.current) clearInterval(autoResetIntervalRef.current)
+    }
+  }, [scanResult, resetScanner])
+
+  // Lắng nghe phím Space / Enter để chuyển nhanh sang khách tiếp theo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.code === 'Space' || e.key === ' ' || e.key === 'Enter') && scanResult && !isVerifying) {
+        const target = e.target as HTMLElement
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          e.preventDefault()
+          resetScanner()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [scanResult, isVerifying, resetScanner])
 
   useEffect(() => {
     async function fetchTrip() {
@@ -470,8 +548,25 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
         {/* CỘT TRÁI: CAMERA SCANNER & NHẬP MÃ THỦ CÔNG */}
         <div className="lg:col-span-6 flex flex-col gap-4">
           <div className="rounded-2xl bg-white dark:bg-card p-4 sm:p-5 border border-slate-200/90 dark:border-border shadow-xs space-y-4">
-            {/* Viewport Camera Quét QR */}
-            <div className="relative overflow-hidden rounded-xl bg-slate-950 text-white border border-slate-800">
+            {/* Viewport Quét QR: Tự động thích ứng nếu không có Webcam */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault()
+                setIsDragging(true)
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={async (e) => {
+                e.preventDefault()
+                setIsDragging(false)
+                const file = e.dataTransfer.files?.[0]
+                if (file && file.type.startsWith('image/')) {
+                  await handleScanImageFile(file)
+                }
+              }}
+              className={`relative overflow-hidden rounded-xl bg-slate-950 text-white border transition-all ${
+                isDragging ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-800'
+              }`}
+            >
               <div className="relative mx-auto flex aspect-square w-full max-w-[260px] flex-col items-center justify-center">
                 {/* Vùng gắn stream camera thật của html5-qrcode */}
                 <div
@@ -479,16 +574,31 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
                   className={`size-full ${isCameraActive ? 'block' : 'hidden'}`}
                 />
 
-                {/* Giao diện chờ khi camera tắt */}
+                {/* Giao diện chờ khi camera tắt HOẶC máy tính không có webcam */}
                 {!isCameraActive && (
-                  <div className="flex flex-col items-center justify-center p-4 text-center">
-                    <div className="size-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400 mb-3">
-                      <QrCode size={32} />
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-4 text-center cursor-pointer group size-full"
+                    title="Bấm để tải tệp ảnh mã QR hoặc kéo thả vào đây"
+                  >
+                    <div className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400 mb-2.5 group-hover:scale-105 group-hover:border-emerald-500/50 transition-all">
+                      {hasWebcam === false ? <FileUp size={28} /> : <QrCode size={28} />}
                     </div>
-                    <p className="text-xs font-bold text-slate-200">Camera Quét Mã QR</p>
-                    <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
-                      Bật camera webcam hoặc tải ảnh mã vé để hệ thống tự động quét
+
+                    <p className="text-xs font-bold text-slate-200">
+                      {hasWebcam === false ? 'Khu Vực Quét Vé Điện Tử' : 'Camera Quét Mã QR'}
                     </p>
+
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-[210px] leading-relaxed">
+                      {hasWebcam === false
+                        ? 'Kéo thả ảnh QR vào đây hoặc bấm Ctrl + V để dán ảnh chụp vé từ email'
+                        : 'Bật camera webcam hoặc tải ảnh mã vé để hệ thống tự động nhận diện'}
+                    </p>
+
+                    <span className="inline-flex items-center gap-1 mt-2.5 px-2.5 py-1 rounded-lg bg-white/10 text-emerald-300 text-[10px] font-semibold group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                      <ImageIcon size={11} />
+                      <span>Chọn ảnh QR từ máy</span>
+                    </span>
                   </div>
                 )}
 
@@ -512,47 +622,64 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
               </div>
 
               {/* Thông báo lỗi camera nếu có */}
-              {cameraError && (
+              {cameraError && hasWebcam !== false && (
                 <div className="p-2.5 bg-rose-950/90 border-t border-rose-800 text-[11px] text-rose-200 text-center">
                   {cameraError}
                 </div>
               )}
             </div>
 
-            {/* Các nút hành động: Bật Camera & Tải ảnh QR */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={toggleCamera}
-                className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                  isCameraActive
-                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
-                    : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow-xs'
-                }`}
-              >
-                {isCameraActive ? (
-                  <>
-                    <CameraOff size={14} />
-                    <span>Tắt Camera</span>
-                  </>
-                ) : (
-                  <>
-                    <Camera size={14} />
-                    <span>Bật Camera Quét</span>
-                  </>
-                )}
-              </button>
+            {/* Các nút hành động: Tự thích ứng theo thiết bị */}
+            {hasWebcam === false ? (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-10 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  <Upload size={14} />
+                  <span>Tải ảnh mã vé QR (hoặc bấm Ctrl + V)</span>
+                </button>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-muted-foreground">
+                  <Laptop size={12} />
+                  <span>Chế độ máy tính: Tối ưu cho việc tải ảnh QR hoặc gõ mã vé</span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCamera}
+                  className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    isCameraActive
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300'
+                      : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700 shadow-xs'
+                  }`}
+                >
+                  {isCameraActive ? (
+                    <>
+                      <CameraOff size={14} />
+                      <span>Tắt Camera</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={14} />
+                      <span>Bật Camera Quét</span>
+                    </>
+                  )}
+                </button>
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-muted dark:hover:bg-muted/80 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-border"
-                title="Tải tệp ảnh vé hoặc nhấn Ctrl+V để dán ảnh QR"
-              >
-                <Upload size={14} />
-                <span>Tải / Dán ảnh QR</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-muted dark:hover:bg-muted/80 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-border"
+                  title="Tải tệp ảnh vé hoặc nhấn Ctrl+V để dán ảnh QR"
+                >
+                  <Upload size={14} />
+                  <span>Tải / Dán ảnh QR</span>
+                </button>
+              </div>
+            )}
 
             {/* Form nhập mã vé thủ công */}
             <div className="pt-2 border-t border-slate-100 dark:border-border">
@@ -728,6 +855,28 @@ export function DriverScanner({ onBack, tripId }: DriverScannerProps) {
                   )}
                 </div>
               )}
+
+              {/* Thanh điều khiển Chuyển tiếp & Đếm ngược tự động làm sạch */}
+              <div className="pt-3 mt-3 border-t border-slate-200/80 dark:border-border flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  <RotateCcw size={12} className={autoResetSeconds ? 'animate-spin text-emerald-600' : ''} />
+                  <span>
+                    {autoResetSeconds !== null
+                      ? `Tự động chuyển tiếp sau ${autoResetSeconds}s`
+                      : 'Sẵn sàng soát vé tiếp theo'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetScanner}
+                  className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                  title="Nhấn phím Space hoặc Enter để chuyển nhanh sang khách tiếp theo"
+                >
+                  <span>Soát vé tiếp theo</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200/90 dark:border-border bg-white dark:bg-card p-6 shadow-xs text-center space-y-2">
