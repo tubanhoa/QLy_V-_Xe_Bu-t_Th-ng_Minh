@@ -92,8 +92,7 @@ export class BookingService {
   async searchTrips(dto: SearchTripsDto) {
     let targetDateStr = dto?.date?.trim();
     if (!targetDateStr) {
-      const now = new Date();
-      targetDateStr = now.toISOString().split('T')[0];
+      targetDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     } else {
       const isIsoFormat = /^\d{4}-\d{2}-\d{2}$/.test(targetDateStr);
       if (!isIsoFormat || isNaN(Date.parse(targetDateStr))) {
@@ -110,8 +109,8 @@ export class BookingService {
       }
     }
 
-    const startOfDay = new Date(`${targetDateStr}T00:00:00`);
-    const endOfDay = new Date(`${targetDateStr}T23:59:59.999`);
+    const startOfDay = new Date(`${targetDateStr}T00:00:00+07:00`);
+    const endOfDay = new Date(`${targetDateStr}T23:59:59.999+07:00`);
 
     const query = this.tripRepository
       .createQueryBuilder('trip')
@@ -203,7 +202,10 @@ export class BookingService {
       const createdTimeMs = trip.createdAt ? new Date(trip.createdAt).getTime() : 0;
       const isNew = isAdhoc || (nowMs - createdTimeMs <= 24 * 60 * 60 * 1000);
       const isBookable =
-        trip.status === TripStatus.SCHEDULED || trip.status === TripStatus.BOARDING;
+        (trip.status === TripStatus.SCHEDULED ||
+          trip.status === TripStatus.BOARDING ||
+          trip.status === TripStatus.IN_PROGRESS) &&
+        availableSeats > 0;
 
       return {
         id: trip.id,

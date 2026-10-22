@@ -42,6 +42,7 @@ export class SeedService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       await this.runSeed();
+      // Đã tắt bỏ việc tự động sinh hàng loạt chuyến xe trong SeedService theo chuẩn nghiệp vụ mới
     } catch (err: any) {
       this.logger.error(`Error during initial database seed: ${err.message}`);
     }
@@ -301,113 +302,7 @@ export class SeedService implements OnApplicationBootstrap {
     }
 
     // 6. Rolling Window Seed (Lăn ngày tự động): Hôm nay + 3 ngày tới
-    // Đảm bảo luôn có các chuyến xe SCHEDULED từ 06:00 đến 19:30 mỗi ngày
-    const driver =
-      (await this.userRepo.findOne({ where: { email: 'driver.nam@smartbus.ictu.vn' } })) ||
-      (await this.userRepo.findOne({ where: { roleId: roleMap.get(Role.DRIVER)?.id } }));
-
-    const routeCT01 = route1 || (await this.routeRepo.findOne({ where: { routeCode: 'CT-01' } }));
-    const routeCT02 = route2 || (await this.routeRepo.findOne({ where: { routeCode: 'CT-02' } }));
-
-    // Khung giờ chạy cho tuyến CT-01: Cách nhau 45 phút từ 06:00 đến 19:30 (19 chuyến/ngày)
-    const ct01Schedule = [
-      { h: 6, m: 0 }, { h: 6, m: 45 },
-      { h: 7, m: 30 }, { h: 8, m: 15 },
-      { h: 9, m: 0 }, { h: 9, m: 45 },
-      { h: 10, m: 30 }, { h: 11, m: 15 },
-      { h: 12, m: 0 }, { h: 12, m: 45 },
-      { h: 13, m: 30 }, { h: 14, m: 15 },
-      { h: 15, m: 0 }, { h: 15, m: 45 },
-      { h: 16, m: 30 }, { h: 17, m: 15 },
-      { h: 18, m: 0 }, { h: 18, m: 45 },
-      { h: 19, m: 30 },
-    ];
-
-    // Khung giờ chạy cho tuyến CT-02: Cách nhau 45 phút từ 06:30 đến 19:15 (18 chuyến/ngày)
-    const ct02Schedule = [
-      { h: 6, m: 30 }, { h: 7, m: 15 },
-      { h: 8, m: 0 }, { h: 8, m: 45 },
-      { h: 9, m: 30 }, { h: 10, m: 15 },
-      { h: 11, m: 0 }, { h: 11, m: 45 },
-      { h: 12, m: 30 }, { h: 13, m: 15 },
-      { h: 14, m: 0 }, { h: 14, m: 45 },
-      { h: 15, m: 30 }, { h: 16, m: 15 },
-      { h: 17, m: 0 }, { h: 17, m: 45 },
-      { h: 18, m: 30 }, { h: 19, m: 15 },
-    ];
-
-    const todayDate = new Date();
-    for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
-      const targetDate = new Date(todayDate);
-      targetDate.setDate(todayDate.getDate() + dayOffset);
-      const y = targetDate.getFullYear();
-      const m = targetDate.getMonth();
-      const d = targetDate.getDate();
-
-      const startOfDay = new Date(y, m, d, 0, 0, 0, 0);
-      const endOfDay = new Date(y, m, d, 23, 59, 59, 999);
-
-      const existingTripsCount = await this.tripRepo
-        .createQueryBuilder('trip')
-        .where('trip.departureTime BETWEEN :start AND :end', {
-          start: startOfDay,
-          end: endOfDay,
-        })
-        .andWhere('trip.status = :status', { status: TripStatus.SCHEDULED })
-        .getCount();
-
-      if (existingTripsCount < 10) {
-        const tripsToCreate: TripEntity[] = [];
-
-        // Tạo chuyến cho CT-01
-        if (routeCT01 && vehicles.length > 0) {
-          for (let i = 0; i < ct01Schedule.length; i++) {
-            const time = ct01Schedule[i];
-            const dep = new Date(y, m, d, time.h, time.m, 0, 0);
-            const arr = new Date(dep.getTime() + 45 * 60 * 1000);
-            const vehicle = vehicles[i % Math.min(2, vehicles.length)];
-
-            tripsToCreate.push(
-              this.tripRepo.create({
-                routeId: routeCT01.id,
-                vehicleId: vehicle.id,
-                driverId: driver?.id,
-                departureTime: dep,
-                arrivalTime: arr,
-                status: TripStatus.SCHEDULED,
-              }),
-            );
-          }
-        }
-
-        // Tạo chuyến cho CT-02
-        if (routeCT02 && vehicles.length > 1) {
-          for (let i = 0; i < ct02Schedule.length; i++) {
-            const time = ct02Schedule[i];
-            const dep = new Date(y, m, d, time.h, time.m, 0, 0);
-            const arr = new Date(dep.getTime() + 40 * 60 * 1000);
-            const vehicle = vehicles.length >= 3 ? vehicles[1 + (i % 2)] : vehicles[1];
-
-            tripsToCreate.push(
-              this.tripRepo.create({
-                routeId: routeCT02.id,
-                vehicleId: vehicle.id,
-                driverId: driver?.id,
-                departureTime: dep,
-                arrivalTime: arr,
-                status: TripStatus.SCHEDULED,
-              }),
-            );
-          }
-        }
-
-        if (tripsToCreate.length > 0) {
-          await this.tripRepo.save(tripsToCreate);
-          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          this.logger.log(`Seeded ${tripsToCreate.length} rolling window trips for date ${dateStr} (CT-01 & CT-02)`);
-        }
-      }
-    }
+    await this.ensureRollingWindowTrips();
 
     // 7. Seed Vouchers (Đồng bộ đầy đủ voucher thực tế & voucher hết hạn)
     const vouchersToSeed = [
@@ -484,6 +379,132 @@ export class SeedService implements OnApplicationBootstrap {
     }
 
     this.logger.log('Database seeding check completed successfully!');
+  }
+
+  /**
+   * Tự động sinh lịch trình chạy xe (Rolling window) cho các tuyến chính (CT-01, CT-02)
+   * Đảm bảo hôm nay và 3 ngày tới luôn có ít nhất 10 chuyến xe SCHEDULED để sinh viên luôn tra cứu & đặt vé được
+   */
+  public async ensureRollingWindowTrips() {
+    try {
+      const driver =
+        (await this.userRepo.findOne({ where: { email: 'driver.nam@smartbus.ictu.vn' } })) ||
+        (await this.userRepo.findOne({
+          where: { role: { name: Role.DRIVER }, status: UserStatus.ACTIVE },
+          relations: { role: true },
+        }));
+
+      const routeCT01 = await this.routeRepo.findOne({ where: { routeCode: 'CT-01' } });
+      const routeCT02 = await this.routeRepo.findOne({ where: { routeCode: 'CT-02' } });
+      const vehicles = await this.vehicleRepo.find({
+        where: { status: VehicleStatus.ACTIVE },
+        order: { createdAt: 'ASC' },
+      });
+
+      if (!routeCT01 && !routeCT02) return;
+
+      const ct01Schedule = [
+        { h: 6, m: 0 }, { h: 6, m: 45 },
+        { h: 7, m: 30 }, { h: 8, m: 15 },
+        { h: 9, m: 0 }, { h: 9, m: 45 },
+        { h: 10, m: 30 }, { h: 11, m: 15 },
+        { h: 12, m: 0 }, { h: 12, m: 45 },
+        { h: 13, m: 30 }, { h: 14, m: 15 },
+        { h: 15, m: 0 }, { h: 15, m: 45 },
+        { h: 16, m: 30 }, { h: 17, m: 15 },
+        { h: 18, m: 0 }, { h: 18, m: 45 },
+        { h: 19, m: 30 },
+      ];
+
+      const ct02Schedule = [
+        { h: 6, m: 30 }, { h: 7, m: 15 },
+        { h: 8, m: 0 }, { h: 8, m: 45 },
+        { h: 9, m: 30 }, { h: 10, m: 15 },
+        { h: 11, m: 0 }, { h: 11, m: 45 },
+        { h: 12, m: 30 }, { h: 13, m: 15 },
+        { h: 14, m: 0 }, { h: 14, m: 45 },
+        { h: 15, m: 30 }, { h: 16, m: 15 },
+        { h: 17, m: 0 }, { h: 17, m: 45 },
+        { h: 18, m: 30 }, { h: 19, m: 15 },
+      ];
+
+      const todayDate = new Date();
+      for (let dayOffset = 0; dayOffset < 4; dayOffset++) {
+        const targetDate = new Date(todayDate);
+        targetDate.setDate(todayDate.getDate() + dayOffset);
+        const y = targetDate.getFullYear();
+        const m = targetDate.getMonth();
+        const d = targetDate.getDate();
+
+        const startOfDay = new Date(y, m, d, 0, 0, 0, 0);
+        const endOfDay = new Date(y, m, d, 23, 59, 59, 999);
+
+        const existingTripsCount = await this.tripRepo
+          .createQueryBuilder('trip')
+          .where('trip.departureTime BETWEEN :start AND :end', {
+            start: startOfDay,
+            end: endOfDay,
+          })
+          .andWhere('trip.status = :status', { status: TripStatus.SCHEDULED })
+          .getCount();
+
+        if (existingTripsCount < 10) {
+          const tripsToCreate: TripEntity[] = [];
+
+          // Tuyến CT-01
+          if (routeCT01 && vehicles.length > 0) {
+            for (let i = 0; i < ct01Schedule.length; i++) {
+              const time = ct01Schedule[i];
+              const dep = new Date(y, m, d, time.h, time.m, 0, 0);
+              const arr = new Date(dep.getTime() + 45 * 60 * 1000);
+              const vehicle = vehicles[i % Math.min(2, vehicles.length)];
+
+              tripsToCreate.push(
+                this.tripRepo.create({
+                  routeId: routeCT01.id,
+                  vehicleId: vehicle.id,
+                  driverId: driver?.id,
+                  departureTime: dep,
+                  arrivalTime: arr,
+                  status: TripStatus.SCHEDULED,
+                  tripType: 'regular',
+                }),
+              );
+            }
+          }
+
+          // Tuyến CT-02
+          if (routeCT02 && vehicles.length > 1) {
+            for (let i = 0; i < ct02Schedule.length; i++) {
+              const time = ct02Schedule[i];
+              const dep = new Date(y, m, d, time.h, time.m, 0, 0);
+              const arr = new Date(dep.getTime() + 40 * 60 * 1000);
+              const vehicle = vehicles.length >= 3 ? vehicles[1 + (i % 2)] : vehicles[1];
+
+              tripsToCreate.push(
+                this.tripRepo.create({
+                  routeId: routeCT02.id,
+                  vehicleId: vehicle.id,
+                  driverId: driver?.id,
+                  departureTime: dep,
+                  arrivalTime: arr,
+                  status: TripStatus.SCHEDULED,
+                  tripType: 'regular',
+                }),
+              );
+            }
+          }
+
+          if (tripsToCreate.length > 0) {
+            await this.tripRepo.save(tripsToCreate);
+            const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            this.logger.log(`[SeedService] Tự động sinh ${tripsToCreate.length} chuyến xe rolling window cho ngày ${dateStr} (CT-01 & CT-02)`);
+          }
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`[SeedService] Không thể tự động sinh rolling trips: ${err.message}`);
+    }
   }
 }
 

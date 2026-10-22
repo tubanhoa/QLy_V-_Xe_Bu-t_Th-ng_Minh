@@ -51,8 +51,18 @@ export function TripSearchModal({
   initialDestination = '',
   initialDate = '',
 }: TripSearchModalProps) {
-  // Lấy ngày hôm nay theo format YYYY-MM-DD
-  const todayStr = new Date().toISOString().split('T')[0]
+  // Lấy ngày hôm nay theo format YYYY-MM-DD theo múi giờ Việt Nam (Asia/Ho_Chi_Minh)
+  const todayStr = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    } catch {
+      const now = new Date()
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const d = String(now.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+  }, [])
 
   const [origin, setOrigin] = useState(initialOrigin)
   const [destination, setDestination] = useState(initialDestination)
@@ -74,7 +84,7 @@ export function TripSearchModal({
   const bookableTripsCount = useMemo(() => {
     return trips.filter((t) => {
       if (t.isBookable !== undefined) return t.isBookable
-      return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+      return t.status === 'scheduled' || t.status === 'boarding' || t.status === 'in_progress' || !t.status
     }).length
   }, [trips])
 
@@ -96,7 +106,7 @@ export function TripSearchModal({
     if (filterType === 'bookable') {
       result = result.filter((t) => {
         if (t.isBookable !== undefined) return t.isBookable
-        return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+        return t.status === 'scheduled' || t.status === 'boarding' || t.status === 'in_progress' || !t.status
       })
     } else if (filterType === 'soon') {
       const now = new Date()
@@ -253,7 +263,7 @@ export function TripSearchModal({
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 overscroll-contain animate-in fade-in duration-150"
     >
-      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-4xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform">
+      <div className="relative w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-5xl overflow-hidden rounded-none sm:rounded-3xl bg-white shadow-2xl border-0 sm:border border-slate-100 flex flex-col will-change-transform">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-emerald-50 via-white to-teal-50 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
@@ -750,10 +760,14 @@ export function TripSearchModal({
               const isAlmostFull = availableSeats > 0 && availableSeats <= 5
               const isSoldOut = availableSeats === 0
 
+              const depDate = new Date(trip.departureTime).getTime()
+              const arrDate = trip.arrivalTime ? new Date(trip.arrivalTime).getTime() : depDate + 30 * 60 * 1000
+              const estimatedTripMins = Math.max(1, Math.round((arrDate - depDate) / (60 * 1000)))
+
               const isTripBookable =
                 trip.isBookable !== undefined
                   ? trip.isBookable
-                  : trip.status === 'scheduled' || trip.status === 'boarding' || !trip.status
+                  : trip.status === 'scheduled' || trip.status === 'boarding' || trip.status === 'in_progress' || !trip.status
 
               return (
                 <div
@@ -766,40 +780,49 @@ export function TripSearchModal({
                   )}
                 >
                   {/* Top Header Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={cn(
-                            'rounded-xl px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider',
-                            !isTripBookable ? 'bg-slate-500' : 'bg-[#005A36]',
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 pb-3 border-b border-slate-100">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {/* Cột mã tuyến & Trạng thái ghế */}
+                      <div className="flex flex-col gap-1.5 shrink-0 items-start">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={cn(
+                              'rounded-xl px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider inline-block text-center',
+                              !isTripBookable ? 'bg-slate-500' : 'bg-[#005A36]',
+                            )}
+                          >
+                            {trip.routeCode}
+                          </span>
+                          {trip.status === 'in_progress' && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap shadow-2xs">
+                              <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                              <span>Đang chạy</span>
+                            </span>
                           )}
-                        >
-                          {trip.routeCode}
-                        </span>
+                        </div>
 
                         {/* Pill trạng thái ghế hoặc trạng thái xuất bến */}
                         {!isTripBookable ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300 whitespace-nowrap">
                             {trip.status === 'completed' ? (
-                              <Flag size={11} className="text-slate-500 shrink-0" />
+                              <Flag size={10} className="text-slate-500 shrink-0" />
                             ) : trip.status === 'cancelled' ? (
-                              <Ban size={11} className="text-rose-500 shrink-0" />
+                              <Ban size={10} className="text-rose-500 shrink-0" />
                             ) : (
-                              <Bus size={11} className="text-slate-500 shrink-0" />
+                              <Bus size={10} className="text-slate-500 shrink-0" />
                             )}
                             <span>
                               {trip.status === 'completed'
-                                ? 'Đã hoàn thành lộ trình'
+                                ? 'Đã hoàn thành'
                                 : trip.status === 'cancelled'
-                                  ? 'Đã hủy chuyến'
+                                  ? 'Đã hủy'
                                   : 'Đã xuất bến'}
                             </span>
                           </span>
                         ) : (
                           <span
                             className={cn(
-                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black border transition-all',
+                              'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black border transition-all whitespace-nowrap',
                               isSoldOut
                                 ? 'bg-rose-50 text-rose-700 border-rose-200'
                                 : isAlmostFull
@@ -813,7 +836,7 @@ export function TripSearchModal({
                                 isSoldOut ? 'bg-rose-600' : isAlmostFull ? 'bg-amber-500' : 'bg-emerald-600',
                               )}
                             />
-                            <span className="whitespace-nowrap">
+                            <span>
                               {isSoldOut
                                 ? 'Hết chỗ'
                                 : isAlmostFull
@@ -823,28 +846,37 @@ export function TripSearchModal({
                           </span>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
-                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#005A36] transition-colors truncate">
+
+                      {/* Thông tin lộ trình & phương tiện */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <h4
+                            className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#005A36] transition-colors leading-snug line-clamp-1"
+                            title={trip.routeName}
+                          >
                             {trip.routeName}
                           </h4>
                           <span className="shrink-0 whitespace-nowrap inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-[#005A36] border border-emerald-200/60">
                             <Zap size={10} className="fill-[#005A36]" /> Xe Buýt Điện
                           </span>
                         </div>
-                        <span className="text-[11px] font-medium text-slate-500 block truncate">
-                          Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong> · Sức chứa: {totalSeats} ghế ngồi
-                        </span>
+                        <div className="text-[11px] font-medium text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span>Biển số: <strong className="text-slate-700">{trip.vehiclePlate || '20B-EV'}</strong></span>
+                          <span>•</span>
+                          <span>Sức chứa: {totalSeats} ghế ngồi</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-baseline sm:flex-col sm:items-end gap-2 sm:gap-0.5 shrink-0">
-                      <div className="text-lg sm:text-xl font-black text-[#005A36]">
+                    {/* Cột giá vé & ưu đãi sinh viên — Đảm bảo luôn trọn vẹn, không bao giờ bị cắt xén */}
+                    <div className="flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-start gap-1 sm:gap-1 shrink-0 pl-2">
+                      <div className="text-lg sm:text-xl font-black text-[#005A36] whitespace-nowrap tracking-tight">
                         {Number(trip.basePrice).toLocaleString('vi-VN')}đ
                       </div>
-                      <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-800 border border-emerald-200 shrink-0 whitespace-nowrap">
-                        <Sparkles size={11} className="text-emerald-600" />
-                        <span>SV ICTU: {Number(trip.studentPrice).toLocaleString('vi-VN')}đ (-50%)</span>
+                      <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-800 border border-emerald-200/80 shrink-0 whitespace-nowrap shadow-2xs">
+                        <Sparkles size={11} className="text-emerald-600 shrink-0" />
+                        <span>SV ICTU: {Number(trip.studentPrice).toLocaleString('vi-VN')}đ</span>
+                        <span className="text-[10px] text-emerald-600 font-bold">(-50%)</span>
                       </div>
                     </div>
                   </div>
@@ -865,7 +897,7 @@ export function TripSearchModal({
                       <div className="shrink-0 px-1 sm:px-2 flex flex-col items-center w-20 sm:w-28 md:w-36">
                         <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold text-slate-500 mb-1 whitespace-nowrap">
                           <Clock size={10} className="text-slate-400" />
-                          <span>45p dự kiến</span>
+                          <span>{estimatedTripMins}p dự kiến</span>
                         </div>
                         <div className="w-full h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-[#005A36] rounded-full relative flex items-center justify-center shadow-xs">
                           <div className="size-4 sm:size-5 rounded-full bg-white border-2 border-[#005A36] text-[#005A36] flex items-center justify-center shadow-xs">
@@ -873,7 +905,7 @@ export function TripSearchModal({
                           </div>
                         </div>
                         <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium mt-1 truncate max-w-[80px] sm:max-w-[120px]">
-                          Cố định
+                          Tuyến cố định
                         </span>
                       </div>
                       {/* Arrival & Destination */}

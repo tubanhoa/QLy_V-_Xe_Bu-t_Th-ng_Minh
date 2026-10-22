@@ -27,6 +27,7 @@ import {
   BulkUpdateRouteStationsDto,
 } from './dto/transit.dto.js';
 import { TicketStatus, TripStatus, VehicleStatus, UserStatus } from '../../common/constants/status.constant.js';
+import { Role } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class RoutesService {
@@ -264,9 +265,132 @@ export class RoutesService {
       await this.routeStationRepository.save(stopsToSave);
     }
 
-    this.logger.log(
-      `[RoutesService.create] Đã tạo tuyến xe mới thành công: ${savedRoute.routeCode} (${savedRoute.name}). Chuyến xe sẽ được tạo thủ công theo nhu cầu demo.`,
-    );
+    // TỰ ĐỘNG SINH CHUỖI CHUYẾN XE THEO THỜI GIAN THỰC (REALTIME DEMO RUNTIME)
+    // Nghiệp vụ: Khi Admin tạo tuyến mới, hệ thống tự động sinh chuỗi chuyến xe trong ngày bắt đầu từ
+    // thời điểm hiện tại (+10 phút) theo đúng tần suất (frequencyMinutes) để sinh viên có thể xem và đặt vé ngay.
+    try {
+      const now = new Date();
+      const durationMin =
+        dto.estimatedDurationMinutes && dto.estimatedDurationMinutes > 0
+          ? dto.estimatedDurationMinutes
+          : 35;
+      const intervalMin =
+        dto.frequencyMinutes && dto.frequencyMinutes > 0
+          ? dto.frequencyMinutes
+          : 20;
+
+      // Tự động gán xe buýt và tài xế khả dụng nếu không truyền lên
+      let assignedVehId = dto.assignedVehicleId;
+      let assignedDrvId = dto.assignedDriverId;
+
+      if (!assignedVehId) {
+        const defaultVehicle = await this.vehicleRepository.findOne({
+          where: { status: VehicleStatus.ACTIVE },
+          order: { createdAt: 'ASC' },
+        });
+        if (defaultVehicle) assignedVehId = defaultVehicle.id;
+      }
+
+      if (!assignedDrvId) {
+        const defaultDriver = await this.userRepository.findOne({
+          where: { role: { name: Role.DRIVER }, status: UserStatus.ACTIVE },
+          relations: { role: true },
+          order: { createdAt: 'ASC' },
+        });
+        if (defaultDriver) assignedDrvId = defaultDriver.id;
+      }
+
+      const todayVn = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now);
+
+      // Giờ xuất bến: Thời điểm hiện tại + 10 phút (làm tròn lên mốc 5 phút gần nhất)
+      let nextDepTime = new Date(now.getTime() + 10 * 60 * 1000);
+      const currentMins = nextDepTime.getMinutes();
+      const roundedMins = Math.ceil(currentMins / 5) * 5;
+      nextDepTime.setMinutes(roundedMins, 0, 0);
+
+      // Xác định giờ kết thúc theo operatingEnd trong ngày hôm nay
+      let endDepTime: Date;
+      if (dto.operatingEnd) {
+        const [endH, endM] = dto.operatingEnd.split(':').map(Number);
+        endDepTime = new Date(`${todayVn}T${String(endH || 23).padStart(2, '0')}:${String(endM || 59).padStart(2, '0')}:00+07:00`);
+      } else {
+        endDepTime = new Date(`${todayVn}T23:59:00+07:00`);
+      }
+
+      // Đảm bảo sinh tối thiểu 3 chuyến (và tối đa 12 chuyến) ngay cả khi tạo tuyến vào ban đêm hoặc gần giờ đóng tuyến
+      const minTrips = 3;
+      const maxTrips = 12;
+      const tripsToCreate: TripEntity[] = [];
+
+      let tripIndex = 0;
+      while ((nextDepTime.getTime() <= endDepTime.getTime() || tripIndex < minTrips) && tripIndex < maxTrips) {
+        const dep = new Date(nextDepTime);
+        const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
+
+        // Chuyến đầu tiên gán xe và tài xế đã chọn để sẵn sàng chạy và soát vé ngay
+        const tripVehId = tripIndex === 0 ? assignedVehId : undefined;
+        const tripDrvId = tripIndex === 0 ? assignedDrvId : undefined;
+
+        tripsToCreate.push(
+          this.tripRepository.create({
+            routeId: savedRoute.id,
+            vehicleId: tripVehId || undefined,
+            driverId: tripDrvId || undefined,
+            departureTime: dep,
+            arrivalTime: arr,
+            status: TripStatus.SCHEDULED,
+            tripType: 'regular',
+            note: tripIndex === 0
+              ? `Chuyến khởi động mẫu thời gian thực của tuyến ${savedRoute.routeCode}`
+              : `Chuyến kế tiếp theo tần suất ${intervalMin} phút của tuyến ${savedRoute.routeCode}`,
+          }),
+        );
+
+        tripIndex++;
+        nextDepTime = new Date(nextDepTime.getTime() + intervalMin * 60 * 1000);
+      }
+
+      let savedTrips: TripEntity[] = [];
+      if (tripsToCreate.length > 0) {
+        savedTrips = await this.tripRepository.save(tripsToCreate);
+        this.logger.log(
+          `[RoutesService.create] Đã tự động sinh ${savedTrips.length} chuyến xe thời gian thực cho tuyến ${savedRoute.routeCode} (${savedRoute.name}) xuất bến từ ${savedTrips[0].departureTime.toLocaleTimeString('vi-VN')} đến ${savedTrips[savedTrips.length - 1].departureTime.toLocaleTimeString('vi-VN')}`
+        );
+      }
+
+      const firstTrip = savedTrips[0];
+      // Gửi thông báo phân công cho Tài xế nếu có
+      if (assignedDrvId && firstTrip && this.notificationCenterService) {
+        try {
+          const vehicle = assignedVehId
+            ? await this.vehicleRepository.findOne({ where: { id: assignedVehId } })
+            : null;
+          const licensePlate = vehicle?.licensePlate || 'Xe buýt ICTU';
+
+          const summaryTitle = `📋 Phân công tuyến mới: ${savedRoute.routeCode} (${savedRoute.name})`;
+          const summaryMsg = `Bạn đã được phân công phụ trách chuyến xe khởi động của tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) xuất bến lúc ${firstTrip.departureTime.toLocaleTimeString('vi-VN')}. Vui lòng kiểm tra ứng dụng tài xế.`;
+
+          await this.notificationCenterService.saveNotification({
+            userId: assignedDrvId,
+            type: 'TRIP_ASSIGNED',
+            title: summaryTitle,
+            message: summaryMsg,
+            deepLink: '/portal/driver',
+            data: {
+              routeId: savedRoute.id,
+              routeCode: savedRoute.routeCode,
+              routeName: savedRoute.name,
+              tripId: firstTrip.id,
+              licensePlate,
+            },
+          });
+        } catch (notifErr: any) {
+          this.logger.warn(`[RoutesService.create] Lỗi khi gửi thông báo phân công: ${notifErr?.message}`);
+        }
+      }
+    } catch (tripErr: any) {
+      this.logger.warn(`[RoutesService.create] Lỗi khi tự động sinh chuyến xe: ${tripErr?.message}`);
+    }
 
     return this.findById(savedRoute.id);
   }
@@ -289,6 +413,35 @@ export class RoutesService {
       ...(dto.fareRules !== undefined && { fareRules: dto.fareRules }),
       ...(dto.status && { status: dto.status }),
     });
+
+    // Đồng bộ lại giờ đến (arrivalTime) cho các chuyến tương lai khi thay đổi thời lượng tuyến
+    if (dto.estimatedDurationMinutes !== undefined && dto.estimatedDurationMinutes > 0) {
+      try {
+        const now = new Date();
+        const futureTrips = await this.tripRepository
+          .createQueryBuilder('trip')
+          .where('trip.routeId = :routeId', { routeId: id })
+          .andWhere('trip.departureTime > :now', { now })
+          .andWhere('trip.status NOT IN (:...doneStatuses)', {
+            doneStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
+          })
+          .getMany();
+
+        if (futureTrips.length > 0) {
+          for (const trip of futureTrips) {
+            trip.arrivalTime = new Date(
+              new Date(trip.departureTime).getTime() + dto.estimatedDurationMinutes * 60 * 1000,
+            );
+          }
+          await this.tripRepository.save(futureTrips);
+          this.logger.log(
+            `[RoutesService.update] Đã đồng bộ lại giờ đến (arrivalTime) cho ${futureTrips.length} chuyến tương lai theo thời gian hành trình mới (${dto.estimatedDurationMinutes} phút)`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn(`[RoutesService.update] Không thể cập nhật giờ đến chuyến tương lai: ${err?.message}`);
+      }
+    }
 
     if (dto.stops) {
       await this.routeStationRepository.delete({ routeId: id });
@@ -400,6 +553,10 @@ export class RoutesService {
 
   async bulkUpdateStations(routeId: string, dto: BulkUpdateRouteStationsDto) {
     await this.findById(routeId);
+
+    if (!dto.stops || dto.stops.length < 2) {
+      throw new BadRequestException('Lộ trình tuyến xe bắt buộc phải có ít nhất 2 trạm dừng (Điểm đầu & Điểm cuối)!');
+    }
 
     // Xóa các trạm cũ
     await this.routeStationRepository.delete({ routeId });

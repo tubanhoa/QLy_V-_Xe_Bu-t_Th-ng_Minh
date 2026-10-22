@@ -485,6 +485,23 @@ export function RouteFormModal({
     }
   }
 
+  // Lấy giờ hiện tại theo thời gian thực để thiết lập Mở tuyến demo ngay lập tức
+  const handleSetCurrentTime = () => {
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const nowStr = `${hh}:${mm}:00`
+    setOperatingStart(nowStr)
+
+    // Nếu giờ đóng tuyến trước hoặc bằng giờ mở tuyến, tự động đặt đóng tuyến đến cuối ngày (23:59:00)
+    const [endH, endM] = operatingEnd.split(':').map(Number)
+    const endMinutes = (endH || 0) * 60 + (endM || 0)
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+    if (endMinutes <= nowMinutes) {
+      setOperatingEnd('23:59:00')
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
@@ -586,6 +603,12 @@ export function RouteFormModal({
 
         const res = await transitService.createRoute(payload)
         if (res.success && res.data) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ictu:route-created', { detail: res.data }))
+            try {
+              localStorage.setItem('ictu_route_created_ts', Date.now().toString())
+            } catch {}
+          }
           onSuccess(res.data)
           onClose()
         } else {
@@ -1048,40 +1071,81 @@ export function RouteFormModal({
               </div>
 
               {/* Giờ xuất bến, giờ đóng tuyến & tần suất */}
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                    Mở tuyến
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                      Mở tuyến
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSetCurrentTime}
+                      className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                      title="Lấy giờ hiện tại theo thời gian thực để demo ngay"
+                    >
+                      <Clock size={11} />
+                      <span>Hiện tại (Now)</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={operatingStart}
                     onChange={(e) => setOperatingStart(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                    placeholder="HH:mm:ss"
+                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                    Đóng tuyến
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                      Đóng tuyến
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOperatingEnd('23:59:00')}
+                      className="text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:underline cursor-pointer"
+                      title="Đặt đóng tuyến đến hết ngày"
+                    >
+                      <span>Hết ngày</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={operatingEnd}
                     onChange={(e) => setOperatingEnd(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                    placeholder="HH:mm:ss"
+                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                    Tần suất
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                      Tần suất
+                    </label>
+                    <div className="flex items-center gap-1">
+                      {[15, 20, 30].map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setFrequencyMinutes(f)}
+                          className={`text-[9px] font-black px-1.5 py-0.2 rounded transition-all cursor-pointer ${
+                            frequencyMinutes === f
+                              ? 'bg-emerald-600 text-white shadow-2xs'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200'
+                          }`}
+                        >
+                          {f}p
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
                       min="5"
                       value={frequencyMinutes}
                       onChange={(e) => setFrequencyMinutes(Number(e.target.value))}
-                      className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                      className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-600"
                     />
                     <span className="text-[10px] text-slate-400">ph</span>
                   </div>
@@ -1220,7 +1284,7 @@ export function RouteFormModal({
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
                     <UserCheck size={15} className="text-emerald-600" />
-                    <span>Phân Quyền Tài Xế & Gán Phương Tiện Khởi Tạo</span>
+                    <span>Phương Tiện & Tài Xế Khởi Tạo Mẫu (Ca Chạy Ngày Đầu Tiên)</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1332,7 +1396,7 @@ export function RouteFormModal({
                   </div>
 
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
-                    ✓ Khởi tạo tuyến xe mới và phân quyền vận hành ban đầu. Lịch trình chi tiết và điều phối xe sẽ được quản lý tại phân hệ Lịch Trình &amp; Điều Xe.
+                    ✓ Hệ thống tự động sinh chuỗi chuyến xe thời gian thực bắt đầu sau 10 phút tính từ thời điểm hiện tại theo đúng tần suất {frequencyMinutes} phút/chuyến. Phương tiện &amp; Tài xế được gán sẵn cho ca chạy đầu tiên để người dùng đăng nhập tài khoản sinh viên và đặt vé thử nghiệm ngay!
                   </p>
                 </div>
               )}

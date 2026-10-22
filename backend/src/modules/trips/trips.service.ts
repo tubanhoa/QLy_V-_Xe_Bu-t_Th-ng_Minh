@@ -78,15 +78,18 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
   async autoCloseCompletedTrips(): Promise<number> {
     try {
       const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      // Đệm 30 phút sau khi đến bến cuối mới tự động chuyển sang hoàn thành
+      const bufferTime = new Date(now.getTime() - 30 * 60 * 1000);
+      const todayVn = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now);
+      const startOfToday = new Date(`${todayVn}T00:00:00+07:00`);
 
       const overdueTrips = await this.tripRepository
         .createQueryBuilder('trip')
         .where('trip.status NOT IN (:...finishedStatuses)', {
           finishedStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
         })
-        .andWhere('(trip.arrivalTime <= :now OR trip.departureTime < :startOfToday)', {
-          now,
+        .andWhere('(trip.arrivalTime <= :bufferTime OR trip.departureTime < :startOfToday)', {
+          bufferTime,
           startOfToday,
         })
         .getMany();
@@ -374,12 +377,42 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
     // Estimate trip duration in minutes from route distance or default 45 mins
     const estimatedTripMinutes = route.distanceKm ? Math.round(Number(route.distanceKm) * 2.5) : 45;
 
+    // RÀNG BUỘC CHỐNG SINH TRÙNG CHUYẾN (Duplicate Prevention):
+    // Lấy danh sách các chuyến xe hiện có của tuyến này trong ngày để không sinh đè
+    const targetStart = new Date(`${dto.date}T00:00:00`);
+    const targetEnd = new Date(`${dto.date}T23:59:59.999`);
+    const startRange = new Date(targetStart.getTime() - 12 * 3600 * 1000);
+    const endRange = new Date(targetEnd.getTime() + 12 * 3600 * 1000);
+
+    const existingTrips = await this.tripRepository.find({
+      where: {
+        routeId: route.id,
+        status: Not(TripStatus.CANCELLED),
+        departureTime: Between(startRange, endRange),
+      },
+    });
+
+    let skippedCount = 0;
+
     while (currentMinutes <= endMinutes) {
       const depHour = Math.floor(currentMinutes / 60);
       const depMin = currentMinutes % 60;
 
       const departureTime = new Date(baseDate);
       departureTime.setHours(depHour, depMin, 0, 0);
+
+      // Kiểm tra nếu đã có chuyến của tuyến này trong khung giờ lệch dưới 10 phút
+      const depTimeMs = departureTime.getTime();
+      const isDuplicate = existingTrips.some((et) => {
+        const etMs = new Date(et.departureTime).getTime();
+        return Math.abs(etMs - depTimeMs) < 10 * 60 * 1000;
+      });
+
+      if (isDuplicate) {
+        skippedCount++;
+        currentMinutes += intervalMinutes;
+        continue;
+      }
 
       const arrivalTime = new Date(departureTime);
       arrivalTime.setMinutes(arrivalTime.getMinutes() + estimatedTripMinutes);
@@ -397,19 +430,40 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       currentMinutes += intervalMinutes;
     }
 
-    const savedTrips = await this.tripRepository.save(tripsToSave);
+    let savedTrips: TripEntity[] = [];
+    if (tripsToSave.length > 0) {
+      savedTrips = await this.tripRepository.save(tripsToSave);
+    }
 
     if (this.auditService) {
       this.auditService.log({
         action: 'GENERATE_SCHEDULE',
         resourceName: 'trips',
-        changes: { routeCode: route.routeCode, routeName: route.name, date: dto.date, count: savedTrips.length },
+        changes: {
+          routeCode: route.routeCode,
+          routeName: route.name,
+          date: dto.date,
+          createdCount: savedTrips.length,
+          skippedCount,
+        },
       }).catch(() => {});
     }
 
+    if (savedTrips.length === 0 && skippedCount > 0) {
+      return {
+        success: true,
+        message: `Tất cả ${skippedCount} khung giờ trong ngày ${dto.date} của tuyến ${route.routeCode} đã có chuyến xe vận hành. Hệ thống tự động ngăn chặn sinh trùng chuyến.`,
+        count: 0,
+        skippedCount,
+        trips: [],
+      };
+    }
+
     return {
-      message: `Đã tự động sinh ${savedTrips.length} chuyến xe định kỳ (chờ phân công) cho ngày ${dto.date}`,
+      success: true,
+      message: `Đã tự động sinh thêm ${savedTrips.length} chuyến xe mới (đã bỏ qua ${skippedCount} chuyến đã có sẵn) cho ngày ${dto.date}`,
       count: savedTrips.length,
+      skippedCount,
       trips: savedTrips,
     };
   }
@@ -2108,4 +2162,66 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       message: `Đã dọn dẹp triệt để ${tripIds.length} chuyến xe tự động thuộc các tuyến đã xóa khỏi cơ sở dữ liệu.`,
     };
   }
+
+  /**
+   * Dọn dẹp toàn bộ chuyến xe hoàn thành/đã hủy, chuyến xe trùng lặp giờ chạy,
+   * và các chuyến thuộc tuyến không còn hoạt động để làm sạch dữ liệu demo.
+   */
+  async cleanCompletedAndDuplicateTrips(): Promise<{
+    success: boolean;
+    deletedCount: number;
+    message: string;
+  }> {
+    const targetTrips = await this.tripRepository.query(`
+      SELECT id FROM trips
+      WHERE status IN ('completed', 'cancelled')
+         OR route_id IN (SELECT id FROM routes WHERE status IN ('inactive', 'deleted'))
+         OR id IN (
+            SELECT id FROM (
+              SELECT id, ROW_NUMBER() OVER (PARTITION BY route_id, departure_time ORDER BY created_at DESC, id DESC) as rn
+              FROM trips
+              WHERE status = 'scheduled'
+            ) sub
+            WHERE rn > 1
+         )
+    `);
+
+    if (!targetTrips || targetTrips.length === 0) {
+      return {
+        success: true,
+        deletedCount: 0,
+        message: 'Không có chuyến xe cũ hoặc chuyến xe trùng lặp nào cần dọn dẹp.',
+      };
+    }
+
+    const tripIds = targetTrips.map((t: any) => t.id);
+
+    // Xóa an toàn các phụ thuộc theo cascade
+    await this.tripRepository.query('UPDATE feedback SET trip_id = NULL WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM seat_holds WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM vehicle_tracking WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    await this.tripRepository.query('DELETE FROM trip_incidents WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+
+    // Dọn dẹp bookings test của các chuyến này
+    const bookings = await this.tripRepository.query('SELECT id FROM bookings WHERE trip_id = ANY($1)', [tripIds]);
+    if (bookings && bookings.length > 0) {
+      const bIds = bookings.map((b: any) => b.id);
+      await this.tripRepository.query('DELETE FROM refund_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payment_logs WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM invoices WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = ANY($1))', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM payments WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM tickets WHERE booking_id = ANY($1)', [bIds]).catch(() => {});
+      await this.tripRepository.query('DELETE FROM bookings WHERE trip_id = ANY($1)', [tripIds]).catch(() => {});
+    }
+
+    // Xóa các chuyến xe
+    await this.tripRepository.query('DELETE FROM trips WHERE id = ANY($1)', [tripIds]);
+
+    return {
+      success: true,
+      deletedCount: tripIds.length,
+      message: `Đã dọn dẹp triệt để ${tripIds.length} chuyến xe cũ, trùng lặp và thuộc tuyến ngưng hoạt động khỏi hệ thống.`,
+    };
+  }
 }
+
