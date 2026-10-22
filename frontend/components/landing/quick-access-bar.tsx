@@ -130,12 +130,11 @@ export function QuickAccessBar({
     const item = itemRefs.current[index]
     if (!scrollContainer || !item) return
 
-    // Position relative to scrollRef (offsetParent), unaffected by CSS transforms
-    const padding = 4
-    const x = item.offsetLeft - padding
-    const y = item.offsetTop - padding
-    const width = item.offsetWidth + padding * 2
-    const height = item.offsetHeight + padding * 2
+    // Position relative to scrollRef (offsetParent), aligned with card rounded-2xl bounds
+    const x = item.offsetLeft
+    const y = item.offsetTop
+    const width = item.offsetWidth
+    const height = item.offsetHeight
 
     setIndicator({
       x,
@@ -283,11 +282,11 @@ export function QuickAccessBar({
             ref={scrollRef}
             className="relative flex md:grid md:grid-cols-5 gap-2 lg:gap-3 items-stretch overflow-x-auto md:overflow-visible no-scrollbar p-1"
           >
-            {/* Sliding Pill Indicator: perfectly covers card from top of badge to bottom of subtitle + 4px padding */}
+            {/* Sliding Pill Indicator: perfectly covers card from top of badge to bottom of subtitle */}
             <div
               className="dock-glass-slider"
               style={{
-                transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+                transform: `translate3d(${indicator.x}px, ${indicator.y}px, 0)`,
                 width: `${indicator.width}px`,
                 height: `${indicator.height}px`,
                 opacity: indicator.opacity,
