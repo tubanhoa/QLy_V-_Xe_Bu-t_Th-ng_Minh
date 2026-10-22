@@ -78,15 +78,18 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
   async autoCloseCompletedTrips(): Promise<number> {
     try {
       const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      // Đệm 30 phút sau khi đến bến cuối mới tự động chuyển sang hoàn thành
+      const bufferTime = new Date(now.getTime() - 30 * 60 * 1000);
+      const todayVn = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now);
+      const startOfToday = new Date(`${todayVn}T00:00:00+07:00`);
 
       const overdueTrips = await this.tripRepository
         .createQueryBuilder('trip')
         .where('trip.status NOT IN (:...finishedStatuses)', {
           finishedStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
         })
-        .andWhere('(trip.arrivalTime <= :now OR trip.departureTime < :startOfToday)', {
-          now,
+        .andWhere('(trip.arrivalTime <= :bufferTime OR trip.departureTime < :startOfToday)', {
+          bufferTime,
           startOfToday,
         })
         .getMany();

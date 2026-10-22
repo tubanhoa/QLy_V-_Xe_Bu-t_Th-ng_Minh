@@ -265,13 +265,19 @@ export class RoutesService {
       await this.routeStationRepository.save(stopsToSave);
     }
 
-    // TỰ ĐỘNG SINH DUY NHẤT 1 CHUYẾN XE MẪU THEO THỜI GIAN THỰC (DEMO RUNTIME)
-    // Nghiệp vụ: Khi Admin tạo tuyến mới, hệ thống chỉ sinh đúng 1 chuyến xe đang sẵn sàng
-    // xuất bến sau 15 phút để hành khách/sinh viên đặt vé và tài xế vào ca demo ngay.
-    // Khi chuyến xe chạy hết lộ trình (arrivalTime <= now), hệ thống sẽ tự động đóng (COMPLETED).
+    // TỰ ĐỘNG SINH CHUỖI CHUYẾN XE THEO THỜI GIAN THỰC (REALTIME DEMO RUNTIME)
+    // Nghiệp vụ: Khi Admin tạo tuyến mới, hệ thống tự động sinh chuỗi chuyến xe trong ngày bắt đầu từ
+    // thời điểm hiện tại (+10 phút) theo đúng tần suất (frequencyMinutes) để sinh viên có thể xem và đặt vé ngay.
     try {
       const now = new Date();
-      const durationMin = dto.estimatedDurationMinutes && dto.estimatedDurationMinutes > 0 ? dto.estimatedDurationMinutes : 35;
+      const durationMin =
+        dto.estimatedDurationMinutes && dto.estimatedDurationMinutes > 0
+          ? dto.estimatedDurationMinutes
+          : 35;
+      const intervalMin =
+        dto.frequencyMinutes && dto.frequencyMinutes > 0
+          ? dto.frequencyMinutes
+          : 20;
 
       // Tự động gán xe buýt và tài xế khả dụng nếu không truyền lên
       let assignedVehId = dto.assignedVehicleId;
@@ -294,29 +300,67 @@ export class RoutesService {
         if (defaultDriver) assignedDrvId = defaultDriver.id;
       }
 
-      // Giờ xuất bến: Thời điểm hiện tại + 15 phút (làm tròn lên mốc 5 phút gần nhất)
-      const depTime = new Date(now.getTime() + 15 * 60 * 1000);
-      depTime.setSeconds(0, 0);
-      const arrTime = new Date(depTime.getTime() + durationMin * 60 * 1000);
+      const todayVn = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now);
 
-      const demoTrip = this.tripRepository.create({
-        routeId: savedRoute.id,
-        vehicleId: assignedVehId || undefined,
-        driverId: assignedDrvId || undefined,
-        departureTime: depTime,
-        arrivalTime: arrTime,
-        status: TripStatus.SCHEDULED,
-        tripType: 'regular',
-        note: `Chuyến xe khởi động tự động của tuyến ${savedRoute.routeCode}`,
-      });
+      // Giờ xuất bến: Thời điểm hiện tại + 10 phút (làm tròn lên mốc 5 phút gần nhất)
+      let nextDepTime = new Date(now.getTime() + 10 * 60 * 1000);
+      const currentMins = nextDepTime.getMinutes();
+      const roundedMins = Math.ceil(currentMins / 5) * 5;
+      nextDepTime.setMinutes(roundedMins, 0, 0);
 
-      await this.tripRepository.save(demoTrip);
-      this.logger.log(
-        `[RoutesService.create] Đã tạo 1 chuyến xe khởi động duy nhất cho tuyến: ${savedRoute.routeCode} (${savedRoute.name}) xuất bến lúc ${depTime.toLocaleTimeString('vi-VN')}`,
-      );
+      // Xác định giờ kết thúc theo operatingEnd trong ngày hôm nay
+      let endDepTime: Date;
+      if (dto.operatingEnd) {
+        const [endH, endM] = dto.operatingEnd.split(':').map(Number);
+        endDepTime = new Date(`${todayVn}T${String(endH || 23).padStart(2, '0')}:${String(endM || 59).padStart(2, '0')}:00+07:00`);
+      } else {
+        endDepTime = new Date(`${todayVn}T23:59:00+07:00`);
+      }
 
+      // Đảm bảo sinh tối thiểu 3 chuyến (và tối đa 12 chuyến) ngay cả khi tạo tuyến vào ban đêm hoặc gần giờ đóng tuyến
+      const minTrips = 3;
+      const maxTrips = 12;
+      const tripsToCreate: TripEntity[] = [];
+
+      let tripIndex = 0;
+      while ((nextDepTime.getTime() <= endDepTime.getTime() || tripIndex < minTrips) && tripIndex < maxTrips) {
+        const dep = new Date(nextDepTime);
+        const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
+
+        // Chuyến đầu tiên gán xe và tài xế đã chọn để sẵn sàng chạy và soát vé ngay
+        const tripVehId = tripIndex === 0 ? assignedVehId : undefined;
+        const tripDrvId = tripIndex === 0 ? assignedDrvId : undefined;
+
+        tripsToCreate.push(
+          this.tripRepository.create({
+            routeId: savedRoute.id,
+            vehicleId: tripVehId || undefined,
+            driverId: tripDrvId || undefined,
+            departureTime: dep,
+            arrivalTime: arr,
+            status: TripStatus.SCHEDULED,
+            tripType: 'regular',
+            note: tripIndex === 0
+              ? `Chuyến khởi động mẫu thời gian thực của tuyến ${savedRoute.routeCode}`
+              : `Chuyến kế tiếp theo tần suất ${intervalMin} phút của tuyến ${savedRoute.routeCode}`,
+          }),
+        );
+
+        tripIndex++;
+        nextDepTime = new Date(nextDepTime.getTime() + intervalMin * 60 * 1000);
+      }
+
+      let savedTrips: TripEntity[] = [];
+      if (tripsToCreate.length > 0) {
+        savedTrips = await this.tripRepository.save(tripsToCreate);
+        this.logger.log(
+          `[RoutesService.create] Đã tự động sinh ${savedTrips.length} chuyến xe thời gian thực cho tuyến ${savedRoute.routeCode} (${savedRoute.name}) xuất bến từ ${savedTrips[0].departureTime.toLocaleTimeString('vi-VN')} đến ${savedTrips[savedTrips.length - 1].departureTime.toLocaleTimeString('vi-VN')}`
+        );
+      }
+
+      const firstTrip = savedTrips[0];
       // Gửi thông báo phân công cho Tài xế nếu có
-      if (assignedDrvId && this.notificationCenterService) {
+      if (assignedDrvId && firstTrip && this.notificationCenterService) {
         try {
           const vehicle = assignedVehId
             ? await this.vehicleRepository.findOne({ where: { id: assignedVehId } })
@@ -324,7 +368,7 @@ export class RoutesService {
           const licensePlate = vehicle?.licensePlate || 'Xe buýt ICTU';
 
           const summaryTitle = `📋 Phân công tuyến mới: ${savedRoute.routeCode} (${savedRoute.name})`;
-          const summaryMsg = `Bạn đã được phân công phụ trách chuyến xe khởi động của tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) xuất bến lúc ${depTime.toLocaleTimeString('vi-VN')}. Vui lòng kiểm tra ứng dụng tài xế.`;
+          const summaryMsg = `Bạn đã được phân công phụ trách chuyến xe khởi động của tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) xuất bến lúc ${firstTrip.departureTime.toLocaleTimeString('vi-VN')}. Vui lòng kiểm tra ứng dụng tài xế.`;
 
           await this.notificationCenterService.saveNotification({
             userId: assignedDrvId,
@@ -336,7 +380,7 @@ export class RoutesService {
               routeId: savedRoute.id,
               routeCode: savedRoute.routeCode,
               routeName: savedRoute.name,
-              tripId: demoTrip.id,
+              tripId: firstTrip.id,
               licensePlate,
             },
           });

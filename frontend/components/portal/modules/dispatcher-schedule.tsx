@@ -244,7 +244,12 @@ export function DispatcherSchedule() {
 
   // Thiết lập ngày mặc định cho modal generate
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
+    let today: string
+    try {
+      today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    } catch {
+      today = new Date().toISOString().split('T')[0]
+    }
     setGenDate(today)
 
     // Thiết lập giờ khởi hành mặc định cho modal adhoc (1 giờ nữa)
@@ -937,7 +942,7 @@ export function DispatcherSchedule() {
     if (dateFilter) {
       if (!s.departureTime) return false
       try {
-        const tripDateStr = new Date(s.departureTime).toISOString().split('T')[0]
+        const tripDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(s.departureTime))
         if (tripDateStr !== dateFilter) return false
       } catch {
         return false

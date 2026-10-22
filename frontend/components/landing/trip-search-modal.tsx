@@ -51,8 +51,18 @@ export function TripSearchModal({
   initialDestination = '',
   initialDate = '',
 }: TripSearchModalProps) {
-  // Lấy ngày hôm nay theo format YYYY-MM-DD
-  const todayStr = new Date().toISOString().split('T')[0]
+  // Lấy ngày hôm nay theo format YYYY-MM-DD theo múi giờ Việt Nam (Asia/Ho_Chi_Minh)
+  const todayStr = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+    } catch {
+      const now = new Date()
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const d = String(now.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+  }, [])
 
   const [origin, setOrigin] = useState(initialOrigin)
   const [destination, setDestination] = useState(initialDestination)
@@ -74,7 +84,7 @@ export function TripSearchModal({
   const bookableTripsCount = useMemo(() => {
     return trips.filter((t) => {
       if (t.isBookable !== undefined) return t.isBookable
-      return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+      return t.status === 'scheduled' || t.status === 'boarding' || t.status === 'in_progress' || !t.status
     }).length
   }, [trips])
 
@@ -96,7 +106,7 @@ export function TripSearchModal({
     if (filterType === 'bookable') {
       result = result.filter((t) => {
         if (t.isBookable !== undefined) return t.isBookable
-        return t.status === 'scheduled' || t.status === 'boarding' || !t.status
+        return t.status === 'scheduled' || t.status === 'boarding' || t.status === 'in_progress' || !t.status
       })
     } else if (filterType === 'soon') {
       const now = new Date()
@@ -757,7 +767,7 @@ export function TripSearchModal({
               const isTripBookable =
                 trip.isBookable !== undefined
                   ? trip.isBookable
-                  : trip.status === 'scheduled' || trip.status === 'boarding' || !trip.status
+                  : trip.status === 'scheduled' || trip.status === 'boarding' || trip.status === 'in_progress' || !trip.status
 
               return (
                 <div
@@ -774,14 +784,22 @@ export function TripSearchModal({
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       {/* Cột mã tuyến & Trạng thái ghế */}
                       <div className="flex flex-col gap-1.5 shrink-0 items-start">
-                        <span
-                          className={cn(
-                            'rounded-xl px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider inline-block text-center',
-                            !isTripBookable ? 'bg-slate-500' : 'bg-[#005A36]',
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={cn(
+                              'rounded-xl px-3 py-1.5 text-xs font-black text-white shadow-xs tracking-wider inline-block text-center',
+                              !isTripBookable ? 'bg-slate-500' : 'bg-[#005A36]',
+                            )}
+                          >
+                            {trip.routeCode}
+                          </span>
+                          {trip.status === 'in_progress' && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap shadow-2xs">
+                              <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                              <span>Đang chạy</span>
+                            </span>
                           )}
-                        >
-                          {trip.routeCode}
-                        </span>
+                        </div>
 
                         {/* Pill trạng thái ghế hoặc trạng thái xuất bến */}
                         {!isTripBookable ? (
