@@ -27,6 +27,7 @@ import {
   BulkUpdateRouteStationsDto,
 } from './dto/transit.dto.js';
 import { TicketStatus, TripStatus, VehicleStatus, UserStatus } from '../../common/constants/status.constant.js';
+import { Role } from '../../common/constants/roles.constant.js';
 
 @Injectable()
 export class RoutesService {
@@ -264,9 +265,146 @@ export class RoutesService {
       await this.routeStationRepository.save(stopsToSave);
     }
 
-    this.logger.log(
-      `[RoutesService.create] Đã tạo tuyến xe mới thành công: ${savedRoute.routeCode} (${savedRoute.name}). Chuyến xe sẽ được tạo thủ công theo nhu cầu demo.`,
-    );
+    // TỰ ĐỘNG SINH LỊCH TRÌNH CHUYẾN XE (Rolling 7-day schedule)
+    // Tự động sinh chuyến theo giờ mở tuyến (operatingStart), giờ đóng tuyến (operatingEnd), và tần suất (frequencyMinutes)
+    try {
+      const startStr = dto.operatingStart || '06:00:00';
+      const endStr = dto.operatingEnd || '21:00:00';
+      const [startH, startM] = startStr.split(':').map((v) => parseInt(v, 10) || 0);
+      const [endH, endM] = endStr.split(':').map((v) => parseInt(v, 10) || 0);
+      const freqMin = dto.frequencyMinutes && dto.frequencyMinutes > 0 ? dto.frequencyMinutes : 30;
+
+      let startTotalMin = startH * 60 + startM;
+      let endTotalMin = endH * 60 + endM;
+
+      // Hỗ trợ trường hợp giờ chạy mở lúc 00:00 hoặc chạy đêm
+      if (endTotalMin <= startTotalMin) {
+        endTotalMin = 24 * 60;
+      }
+
+      const dailyTimeSlots: Array<{ h: number; m: number }> = [];
+      let curMin = startTotalMin;
+      while (curMin <= endTotalMin && dailyTimeSlots.length < 30) {
+        const h = Math.floor(curMin / 60) % 24;
+        const m = curMin % 60;
+        dailyTimeSlots.push({ h, m });
+        curMin += freqMin;
+      }
+
+      if (dailyTimeSlots.length === 0) {
+        dailyTimeSlots.push({ h: startH, m: startM });
+      }
+
+      const durationMin = dto.estimatedDurationMinutes || 30;
+      const tripsToCreate: TripEntity[] = [];
+      const now = new Date();
+
+      // Tự động gán xe buýt và tài xế khả dụng nếu không truyền lên
+      let assignedVehId = dto.assignedVehicleId;
+      let assignedDrvId = dto.assignedDriverId;
+
+      if (!assignedVehId) {
+        const defaultVehicle = await this.vehicleRepository.findOne({
+          where: { status: VehicleStatus.ACTIVE },
+          order: { createdAt: 'ASC' },
+        });
+        if (defaultVehicle) assignedVehId = defaultVehicle.id;
+      }
+
+      if (!assignedDrvId) {
+        const defaultDriver = await this.userRepository.findOne({
+          where: { role: { name: Role.DRIVER }, status: UserStatus.ACTIVE },
+          relations: { role: true },
+          order: { createdAt: 'ASC' },
+        });
+        if (defaultDriver) assignedDrvId = defaultDriver.id;
+      }
+
+      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + dayOffset);
+
+        for (const slot of dailyTimeSlots) {
+          const dep = new Date(targetDate);
+          dep.setHours(slot.h, slot.m, 0, 0);
+          const arr = new Date(dep.getTime() + durationMin * 60 * 1000);
+
+          const trip = new TripEntity();
+          trip.routeId = savedRoute.id;
+          if (assignedVehId) trip.vehicleId = assignedVehId;
+          if (assignedDrvId) trip.driverId = assignedDrvId;
+          trip.departureTime = dep;
+          trip.arrivalTime = arr;
+          // Nếu chuyến đã quá khứ hơn 30 phút thì đánh dấu COMPLETED, ngược lại là SCHEDULED
+          trip.status =
+            dep.getTime() < now.getTime() - 30 * 60 * 1000
+              ? TripStatus.COMPLETED
+              : TripStatus.SCHEDULED;
+          trip.tripType = 'regular';
+          tripsToCreate.push(trip);
+        }
+      }
+
+      // ĐẶC BIỆT DÀNH CHO DEMO: Đảm bảo ngày hôm nay luôn có ít nhất 1 chuyến khởi hành sắp tới (sau 20 phút)
+      const hasUpcomingToday = tripsToCreate.some(
+        (t) =>
+          t.departureTime.toDateString() === now.toDateString() &&
+          t.departureTime.getTime() > now.getTime() + 5 * 60 * 1000,
+      );
+
+      if (!hasUpcomingToday) {
+        const demoDep = new Date(now.getTime() + 20 * 60 * 1000); // 20 phút tới
+        const demoArr = new Date(demoDep.getTime() + durationMin * 60 * 1000);
+        const demoTrip = new TripEntity();
+        demoTrip.routeId = savedRoute.id;
+        if (assignedVehId) demoTrip.vehicleId = assignedVehId;
+        if (assignedDrvId) demoTrip.driverId = assignedDrvId;
+        demoTrip.departureTime = demoDep;
+        demoTrip.arrivalTime = demoArr;
+        demoTrip.status = TripStatus.SCHEDULED;
+        demoTrip.tripType = 'regular';
+        tripsToCreate.push(demoTrip);
+      }
+
+      if (tripsToCreate.length > 0) {
+        await this.tripRepository.save(tripsToCreate);
+        this.logger.log(
+          `[RoutesService.create] Đã tự động khởi tạo ${tripsToCreate.length} chuyến xe trong 7 ngày tới cho tuyến: ${savedRoute.routeCode} (${savedRoute.name})`,
+        );
+
+        // Gửi thông báo phân công cho Tài xế nếu có
+        if (assignedDrvId && this.notificationCenterService) {
+          try {
+            const vehicle = assignedVehId
+              ? await this.vehicleRepository.findOne({ where: { id: assignedVehId } })
+              : null;
+            const licensePlate = vehicle?.licensePlate || 'Xe buýt ICTU';
+
+            const summaryTitle = `📋 Phân công tuyến mới: ${savedRoute.routeCode} (${savedRoute.name})`;
+            const summaryMsg = `Bạn đã được phân công phụ trách tuyến ${savedRoute.routeCode} - ${savedRoute.name} (Phương tiện: ${licensePlate}) với tổng cộng ${tripsToCreate.length} ca chạy trong 7 ngày tới. Vui lòng kiểm tra lịch trình làm việc trên ứng dụng.`;
+
+            await this.notificationCenterService.saveNotification({
+              userId: assignedDrvId,
+              type: 'TRIP_ASSIGNED',
+              title: summaryTitle,
+              message: summaryMsg,
+              deepLink: '/portal/driver',
+              data: {
+                routeId: savedRoute.id,
+                routeCode: savedRoute.routeCode,
+                routeName: savedRoute.name,
+                licensePlate,
+                totalTripsCreated: tripsToCreate.length,
+              },
+            });
+          } catch (notifErr: any) {
+            this.logger.warn(`[RoutesService.create] Lỗi khi gửi thông báo phân công: ${notifErr?.message}`);
+          }
+        }
+      }
+    } catch (tripErr: any) {
+      this.logger.warn(`[RoutesService.create] Lỗi khi tự động sinh chuyến xe: ${tripErr?.message}`);
+    }
 
     return this.findById(savedRoute.id);
   }
