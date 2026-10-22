@@ -776,10 +776,9 @@ export function DispatcherSchedule() {
       })
 
       if (res.success) {
-        showToast(
-          `Đã sinh tự động ${res.data?.length || 0} chuyến định kỳ (chờ điều xe)!`,
-          'success'
-        )
+        const msg = res.message || `Đã hoàn tất sinh lịch trình cho ngày ${genDate}!`
+        const toastType = (res.data?.count === 0 && (res.data?.skippedCount || 0) > 0) ? 'info' : 'success'
+        showToast(msg, toastType)
         setIsGenerateModalOpen(false)
         await loadTrips()
       } else {

@@ -331,8 +331,14 @@ export class RoutesService {
 
           const trip = new TripEntity();
           trip.routeId = savedRoute.id;
-          if (assignedVehId) trip.vehicleId = assignedVehId;
-          if (assignedDrvId) trip.driverId = assignedDrvId;
+          // CHUẨN HÓA NGHIỆP VỤ ĐIỀU PHỐI:
+          // Ngày đầu tiên (dayOffset === 0) gán xe và tài xế mẫu phục vụ kiểm thử và demo ngay.
+          // Các ngày tiếp theo (dayOffset > 0) để trống xe và tài xế (SCHEDULED chờ phân công)
+          // để Điều hành viên sắp xếp ca trực xoay vòng, tránh khóa cứng tài xế 15h/ngày cả tuần.
+          if (dayOffset === 0) {
+            if (assignedVehId) trip.vehicleId = assignedVehId;
+            if (assignedDrvId) trip.driverId = assignedDrvId;
+          }
           trip.departureTime = dep;
           trip.arrivalTime = arr;
           // Nếu chuyến đã quá khứ hơn 30 phút thì đánh dấu COMPLETED, ngược lại là SCHEDULED
@@ -427,6 +433,35 @@ export class RoutesService {
       ...(dto.fareRules !== undefined && { fareRules: dto.fareRules }),
       ...(dto.status && { status: dto.status }),
     });
+
+    // Đồng bộ lại giờ đến (arrivalTime) cho các chuyến tương lai khi thay đổi thời lượng tuyến
+    if (dto.estimatedDurationMinutes !== undefined && dto.estimatedDurationMinutes > 0) {
+      try {
+        const now = new Date();
+        const futureTrips = await this.tripRepository
+          .createQueryBuilder('trip')
+          .where('trip.routeId = :routeId', { routeId: id })
+          .andWhere('trip.departureTime > :now', { now })
+          .andWhere('trip.status NOT IN (:...doneStatuses)', {
+            doneStatuses: [TripStatus.COMPLETED, TripStatus.CANCELLED],
+          })
+          .getMany();
+
+        if (futureTrips.length > 0) {
+          for (const trip of futureTrips) {
+            trip.arrivalTime = new Date(
+              new Date(trip.departureTime).getTime() + dto.estimatedDurationMinutes * 60 * 1000,
+            );
+          }
+          await this.tripRepository.save(futureTrips);
+          this.logger.log(
+            `[RoutesService.update] Đã đồng bộ lại giờ đến (arrivalTime) cho ${futureTrips.length} chuyến tương lai theo thời gian hành trình mới (${dto.estimatedDurationMinutes} phút)`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn(`[RoutesService.update] Không thể cập nhật giờ đến chuyến tương lai: ${err?.message}`);
+      }
+    }
 
     if (dto.stops) {
       await this.routeStationRepository.delete({ routeId: id });
@@ -538,6 +573,10 @@ export class RoutesService {
 
   async bulkUpdateStations(routeId: string, dto: BulkUpdateRouteStationsDto) {
     await this.findById(routeId);
+
+    if (!dto.stops || dto.stops.length < 2) {
+      throw new BadRequestException('Lộ trình tuyến xe bắt buộc phải có ít nhất 2 trạm dừng (Điểm đầu & Điểm cuối)!');
+    }
 
     // Xóa các trạm cũ
     await this.routeStationRepository.delete({ routeId });

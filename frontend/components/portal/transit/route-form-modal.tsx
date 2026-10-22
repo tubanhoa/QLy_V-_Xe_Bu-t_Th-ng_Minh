@@ -1220,7 +1220,7 @@ export function RouteFormModal({
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
                     <UserCheck size={15} className="text-emerald-600" />
-                    <span>Phân Quyền Tài Xế & Gán Phương Tiện Khởi Tạo</span>
+                    <span>Phương Tiện & Tài Xế Khởi Tạo Mẫu (Ca Chạy Ngày Đầu Tiên)</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1332,7 +1332,7 @@ export function RouteFormModal({
                   </div>
 
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
-                    ✓ Hệ thống tự động kích hoạt chế độ sinh chuyến xe tự động (Rolling 7 ngày) theo khung giờ hoạt động và giãn cách, kèm tự động phân công xe &amp; tài xế để hành khách tra cứu và đặt vé ngay lập tức!
+                    ✓ Hệ thống tự động kích hoạt sinh lịch trình Rolling 7 ngày. Phương tiện &amp; Tài xế được gán mẫu cho ca chạy ngày đầu tiên để người dùng kiểm thử / đặt vé ngay; các ngày tiếp theo sẽ ở trạng thái Chờ điều phối để Điều hành viên linh hoạt bố trí xoay vòng trên Bảng Lịch Trình.
                   </p>
                 </div>
               )}
