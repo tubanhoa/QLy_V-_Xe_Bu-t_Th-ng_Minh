@@ -70,6 +70,16 @@ export class TripsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.MANAGER)
   @ApiBearerAuth('JWT')
+  @Post('admin/cleanup-completed-and-duplicate-trips')
+  @ApiOperation({ summary: 'Dọn dẹp các chuyến xe cũ, trùng lặp và thuộc tuyến ngưng hoạt động (Admin, Manager)' })
+  async cleanCompletedAndDuplicateTrips() {
+    return this.tripsService.cleanCompletedAndDuplicateTrips();
+  }
+
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @ApiBearerAuth('JWT')
   @Post('generate')
   @ApiOperation({ summary: 'Tự động sinh lịch trình chạy xe theo ngày (Manager, Admin)' })
   async generateSchedule(@Body() dto: GenerateTripsDto) {

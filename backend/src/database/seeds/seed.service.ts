@@ -42,7 +42,7 @@ export class SeedService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       await this.runSeed();
-      await this.ensureRollingWindowTrips();
+      // Đã tắt bỏ việc tự động sinh hàng loạt chuyến xe trong SeedService theo chuẩn nghiệp vụ mới
     } catch (err: any) {
       this.logger.error(`Error during initial database seed: ${err.message}`);
     }

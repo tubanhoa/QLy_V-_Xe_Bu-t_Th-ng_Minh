@@ -425,6 +425,32 @@ class TripService {
       }
     }
   }
+
+  /** Dọn dẹp toàn bộ chuyến xe cũ, trùng lặp và thuộc tuyến ngưng hoạt động */
+  async cleanCompletedAndDuplicateTrips(): Promise<TripApiResponse<{ deletedCount: number } | null>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/trips/admin/cleanup-completed-and-duplicate-trips`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        return {
+          success: false,
+          data: null,
+          message: json?.message || 'Không thể dọn dẹp các chuyến xe cũ và trùng lặp',
+        }
+      }
+      return json
+    } catch (err: any) {
+      return {
+        success: false,
+        data: null,
+        message: err.message || 'Lỗi kết nối máy chủ',
+      }
+    }
+  }
 }
 
 export const tripService = new TripService()
+

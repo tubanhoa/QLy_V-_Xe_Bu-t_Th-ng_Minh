@@ -68,7 +68,7 @@ export function DispatcherSchedule() {
   const [viewMode, setViewMode] = useState<'grid' | 'gantt' | 'roster'>('grid')
 
   // Bộ lọc
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('scheduled')
   const [tripTypeFilter, setTripTypeFilter] = useState<'all' | 'regular' | 'adhoc'>('all')
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned' | 'assigned'>('all')
   const [routeFilter, setRouteFilter] = useState<string>('all')
@@ -831,6 +831,38 @@ export function DispatcherSchedule() {
   }
 
   const [isCleaningOrphanTrips, setIsCleaningOrphanTrips] = useState(false)
+  const [isCleaningCompletedAndDuplicateTrips, setIsCleaningCompletedAndDuplicateTrips] = useState(false)
+
+  // Xử lý dọn dẹp toàn bộ chuyến xe cũ (đã kết thúc/hủy), chuyến trùng lặp và tuyến không hoạt động
+  const handleCleanCompletedAndDuplicateTrips = () => {
+    setConfirmDialog({
+      title: 'Dọn dẹp chuyến xe cũ & trùng lặp (1-Click Clean)',
+      message:
+        'Hệ thống sẽ quét và dọn dẹp triệt để các chuyến xe đã hoàn thành/hủy, các chuyến xe trùng lặp giờ chạy và các chuyến thuộc tuyến ngưng hoạt động. Thao tác này giúp giao diện điều hành gọn gàng, chuẩn xác cho demo.',
+      confirmText: 'Dọn dẹp ngay',
+      cancelText: 'Hủy bỏ',
+      variant: 'warning',
+      onConfirm: async () => {
+        setIsCleaningCompletedAndDuplicateTrips(true)
+        try {
+          const res = await tripService.cleanCompletedAndDuplicateTrips()
+          if (res.success) {
+            showToast(
+              res.message || 'Đã dọn dẹp thành công các chuyến xe cũ và trùng lặp!',
+              'success'
+            )
+            await loadTrips()
+          } else {
+            showToast(res.message || 'Không thể dọn dẹp các chuyến xe cũ và trùng lặp', 'error')
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Lỗi khi dọn dẹp chuyến xe cũ và trùng lặp', 'error')
+        } finally {
+          setIsCleaningCompletedAndDuplicateTrips(false)
+        }
+      },
+    })
+  }
 
   // Xử lý dọn dẹp toàn bộ chuyến xe mồ côi của các tuyến đã xóa
   const handleCleanOrphanTrips = () => {
@@ -1076,6 +1108,21 @@ export function DispatcherSchedule() {
               />
               <span>{isCleaningOrphanTrips ? 'Đang dọn dẹp...' : 'Dọn Chuyến Tuyến Đã Xóa'}</span>
             </button>
+
+            {/* Nút Dọn Chuyến Cũ & Trùng Lặp */}
+            <button
+              onClick={handleCleanCompletedAndDuplicateTrips}
+              disabled={isCleaningCompletedAndDuplicateTrips || loading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Dọn dẹp triệt để các chuyến xe cũ đã kết thúc, chuyến xe trùng lặp giờ chạy và tuyến ngưng hoạt động"
+            >
+              <Sparkles
+                size={13}
+                className={isCleaningCompletedAndDuplicateTrips ? 'animate-spin' : 'text-amber-600 dark:text-amber-400'}
+              />
+              <span>{isCleaningCompletedAndDuplicateTrips ? 'Đang dọn dẹp...' : 'Dọn Chuyến Cũ & Trùng Lặp'}</span>
+            </button>
+
 
             {/* Nút Refresh */}
             <button
