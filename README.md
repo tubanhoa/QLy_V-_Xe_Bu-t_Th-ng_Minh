@@ -41,62 +41,7 @@ Hệ thống giải quyết triệt để các hạn chế của mô hình xe bu
 * **Giám Sát Vận Hành Thời Gian Thực (Real-Time Telemetry & Geofencing)**: Thu nhận và lọc nhiễu tọa độ GPS của đoàn xe, tự động kích hoạt thông báo đẩy khi xe tiến vào vùng bán kính tiếp cận trạm dừng.
 * **Đối Soát & Thanh Toán Tự Động (Deterministic Settlement)**: Đồng bộ hai chiều với Cổng thanh toán quốc gia VNPay Sandbox, tự động thu hồi ghế chưa thanh toán khi quá hạn giữ chỗ 10 phút.
 
----
-
-## 2. Đặc Tả Thuật Toán & Cơ Sở Toán Học
-
-### 2.1. Cơ Chế Khóa Phân Tán Nguyên Tử (Distributed Mutual Exclusion)
-Để đảm bảo hai hoặc nhiều tiến trình song song không thể đồng thời chiếm dụng cùng một vị trí ghế $S_k$ trên chuyến xe $T_i$, hệ thống áp dụng kỹ thuật Distributed Lock trên Redis:
-
-$$\text{LockKey} = \text{format}(\text{"seat\_lock:trip:}\%s\text{:seat:}\%s\text{", } T_i, S_k)$$
-
-Lệnh kiểm tra và xác lập khóa được thực thi dưới dạng nguyên tử đơn nhịp (Single-roundtrip Atomic Operation):
-```
-SET seat_lock:{tripId}:{seatNumber} {userId} NX PX 600000
-```
-Trong đó:
-* `NX`: Chỉ thiết lập giá trị nếu khóa chưa từng tồn tại trên bộ nhớ.
-* `PX 600000`: Thiết lập thời gian sống tự động (Time-To-Live - TTL) chính xác 600.000 mili-giây (10 phút).
-* **Định Lý An Toàn Tương Hỗ**: Giả sử hai tiến trình $C_1, C_2$ đồng thời gửi yêu cầu chiếm khóa tại thời điểm $t$. Do đặc tính đơn luồng xử lý lệnh tuần tự của Redis, chỉ duy nhất một lệnh được trả về `OK` (thành công), lệnh còn lại nhận về giá trị `nil`, kích hoạt phản hồi lỗi HTTP 409 Conflict ngay lập tức mà không gây tải cho cơ sở dữ liệu quan hệ.
-
-### 2.2. Tính Toán Khoảng Cách Trắc Địa Theo Lượng Giác Cầu (Công Thức Haversine)
-Khoảng cách thực tế giữa hai trạm dừng trên mặt elip Trái Đất (bán kính trung bình $R = 6.371,0088\text{ km}$) được tính toán theo công thức Haversine:
-
-$$\Delta\phi = \phi_2 - \phi_1, \quad \Delta\lambda = \lambda_2 - \lambda_1$$
-
-$$a = \sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right)$$
-
-$$c = 2 \cdot \arctan2\left(\sqrt{a}, \sqrt{1 - a}\right)$$
-
-$$d = R \cdot c$$
-
-Trong đó $\phi_1, \phi_2$ là vĩ độ và $\lambda_1, \lambda_2$ là kinh độ của hai trạm dừng tính theo radian. Giá trị khoảng cách $d$ được đưa vào biểu thức xác định giá vé theo cự ly thực tế:
-
-$$\text{GiáVé}(d) = \max\left(\text{GiáSàn}, \text{GiáSàn} + \lfloor d - d_{\text{cơbản}} \rfloor \times \text{ĐơnGiáMỗiKm}\right)$$
-
-### 2.3. Chữ Ký Số Toàn Vẹn Của Vé Điện Tử (HMAC-SHA256)
-Chuỗi dữ liệu định danh của mỗi vé điện tử được đóng gói thành tải tin chuẩn $P$:
-
-$$P = \text{MãVé} \parallel \text{MãChuyến} \parallel \text{SốGhế} \parallel \text{MãHànhKhách} \parallel \text{ThờiĐiểmPhátHành}$$
-
-$$\text{ChữKý} = \text{HMAC-SHA256}(K_{\text{bí\_mật}}, P)$$
-
-Khi thiết bị di động của tài xế quét mã QR, hệ thống giải mã tải tin và tự tái tính toán chuỗi đại diện (Message Digest). Nếu $\text{HMAC}_{\text{tính\_toán}} \neq \text{ChữKý}_{\text{nhận\_được}}$, yêu cầu bị bác bỏ ngay tại tầng logic mà không cần truy vấn cơ sở dữ liệu.
-
-### 2.4. Thuật Toán Lọc Nhiễu Động Học Cho Tọa Độ GPS
-Nhằm triệt tiêu hiện tượng tọa độ bị trôi dạt do phản xạ sóng trong đô thị, các gói tin định vị $(p_t, t)$ được thẩm định thông qua ràng buộc vận tốc động học:
-
-$$v_{\text{tính\_toán}} = \frac{\text{KhoảngCách}(p_t, p_{t-1})}{\Delta t}$$
-
-$$\text{TrạngThái} = \begin{cases} 
-\text{HỢP\_LỆ}, & \text{khi } v_{\text{tính\_toán}} \le 150\text{ km/h} \text{ và } \Delta t \ge 1\text{ s} \\
-\text{LOẠI\_BỎ\_NHIỄU}, & \text{khi } v_{\text{tính\_toán}} > 150\text{ km/h} \\
-\text{MẤT\_TÍN\_HIỆU}, & \text{khi } \Delta t > 60\text{ s}
-\end{cases}$$
-
----
-
-## 3. Sơ Đồ 1: Kiến Trúc Phân Tầng Hệ Thống (Mô Hình C4)
+## 2. Sơ Đồ 1: Kiến Trúc Phân Tầng Hệ Thống (Mô Hình C4)
 
 Kiến trúc hệ thống được xây dựng theo mô hình Micro-monolith phân tầng nghiêm ngặt, kết hợp xử lý sự kiện bất đồng bộ và bộ nhớ đệm phân tán:
 
@@ -168,7 +113,7 @@ graph TB
 
 ---
 
-## 4. Sơ Đồ 2: Cơ Sở Dữ Liệu Thực Thể Quan Hệ (ERD)
+## 3. Sơ Đồ 2: Cơ Sở Dữ Liệu Thực Thể Quan Hệ (ERD)
 
 Cơ sở dữ liệu quan hệ được chuẩn hóa theo tiêu chuẩn Chuẩn 3 (3NF) nhằm đảm bảo toàn vẹn giao dịch tài chính, ngăn ngừa dị thường cập nhật và thực thi đầy đủ ràng buộc khóa ngoại:
 
@@ -327,7 +272,7 @@ erDiagram
 
 ---
 
-## 5. Sơ Đồ 3: Quy Trình Giữ Chỗ & Khóa Phân Tán (Distributed Seat-Lock)
+## 4. Sơ Đồ 3: Quy Trình Giữ Chỗ & Khóa Phân Tán (Distributed Seat-Lock)
 
 Luồng giao dịch tuần tự mô tả chi tiết các bước xác lập trạng thái giữa bộ nhớ đệm phân tán, cơ sở dữ liệu quan hệ, cổng thanh toán quốc gia và hệ thống thông báo:
 
@@ -387,7 +332,7 @@ sequenceDiagram
 
 ---
 
-## 6. Sơ Đồ 4: Luồng Xử Lý Định Vị GPS & Cảnh Báo Geofencing Thời Gian Thực
+## 5. Sơ Đồ 4: Luồng Xử Lý Định Vị GPS & Cảnh Báo Geofencing Thời Gian Thực
 
 Hạ tầng viễn thông thu nhận dữ liệu không gian tần số cao từ phương tiện và tính toán vùng bao quanh trạm dừng cố định:
 
@@ -418,7 +363,7 @@ flowchart TD
 
 ---
 
-## 7. Sơ Đồ 5: Máy Trạng Thái Soát Vé QR & Cơ Chế Chống Gian Lận
+## 6. Sơ Đồ 5: Máy Trạng Thái Soát Vé QR & Cơ Chế Chống Gian Lận
 
 Sơ đồ máy trạng thái dưới đây thể hiện quy trình thẩm định 3 lớp nghiêm ngặt được thực thi trên thiết bị quét của phụ xe/tài xế tại cửa xe:
 
@@ -449,7 +394,7 @@ stateDiagram-v2
 
 ---
 
-## 8. Sơ Đồ 6: Cấu Trúc Mã Nguồn Monorepo Hướng Tính Năng
+## 7. Sơ Đồ 6: Cấu Trúc Mã Nguồn Monorepo Hướng Tính Năng
 
 Dự án tuân thủ kiến trúc **Monorepo Tách Biệt Sạch Sẽ (Clean Separation Monorepo)**, phân lập hoàn toàn mã nguồn giao diện người dùng với lõi xử lý nghiệp vụ backend:
 
@@ -500,7 +445,7 @@ graph LR
 
 ---
 
-## 9. Ma Trận Phân Quyền Truy Cập (RBAC Matrix)
+## 8. Ma Trận Phân Quyền Truy Cập (RBAC Matrix)
 
 Cơ chế phân quyền được bảo vệ nghiêm ngặt ở cả tầng định tuyến HTTP (`RolesGuard`) và tầng truy vấn dữ liệu theo 4 cấp độ người dùng:
 
@@ -523,7 +468,7 @@ Cơ chế phân quyền được bảo vệ nghiêm ngặt ở cả tầng đị
 
 ---
 
-## 10. Chính Sách Hoàn Tiền & Đổi Vé Tự Động
+## 9. Chính Sách Hoàn Tiền & Đổi Vé Tự Động
 
 Để bảo vệ quyền lợi chính đáng của hành khách đồng thời hạn chế tình trạng đặt giữ chỗ ảo gây lãng phí ghế ngồi, hệ thống áp dụng biểu phí hoàn vé tự động:
 
@@ -550,21 +495,21 @@ Bất kể chuyến xe sắp khởi hành, nếu vé được hủy trong vòng 
 
 ---
 
-## 11. Hướng Dẫn Cài Đặt & Triển Khai Hệ Thống
+## 10. Hướng Dẫn Cài Đặt & Triển Khai Hệ Thống
 
-### 11.1. Yêu Cầu Môi Trường Tiên Quyết
+### 10.1. Yêu Cầu Môi Trường Tiên Quyết
 * **Môi trường thực thi**: Node.js phiên bản `v20.x`, `v22.x` hoặc `v24.x LTS`.
 * **Trình quản lý gói**: `npm` (tích hợp sẵn theo Node.js) hoặc `pnpm`.
 * **Hệ quản trị cơ sở dữ liệu**: PostgreSQL 16 trở lên có cài đặt tiện ích mở rộng PostGIS và uuid-ossp (khuyên dùng dịch vụ Cloud Supabase).
 * **Bộ nhớ đệm phân tán**: Redis Server phiên bản 6.0 trở lên hoặc Upstash Redis.
 
-### 11.2. Cài Đặt Các Thư Viện Phụ Thuộc
+### 10.2. Cài Đặt Các Thư Viện Phụ Thuộc
 Chạy câu lệnh cài đặt tự động cho cả hai phân hệ Frontend và Backend từ thư mục gốc của dự án:
 ```bash
 npm --prefix backend install && npm --prefix frontend install
 ```
 
-### 11.3. Cấu Hình Biến Môi Trường (`backend/.env`)
+### 10.3. Cấu Hình Biến Môi Trường (`backend/.env`)
 Sao chép mẫu cấu hình và khai báo các thông số vận hành tại tệp `backend/.env`:
 ```ini
 # Cấu hình Cổng Dịch Vụ
@@ -595,7 +540,7 @@ MAIL_PASS=xxxx-xxxx-xxxx-xxxx
 MAIL_FROM="Smart Bus ICTU" <smartbus.ictu@gmail.com>
 ```
 
-### 11.4. Khởi Chạy Ứng Dụng
+### 10.4. Khởi Chạy Ứng Dụng
 ```bash
 # Lựa chọn 1: Khởi chạy song song cả Frontend (Cổng 3000) và Backend (Cổng 3001)
 npm run dev
@@ -604,7 +549,7 @@ npm run dev
 start-dev.bat
 ```
 
-### 11.5. Biên Dịch Đóng Gói Bản Phát Hành (Production Build)
+### 10.5. Biên Dịch Đóng Gói Bản Phát Hành (Production Build)
 Kiểm tra tính toàn vẹn của mã nguồn trước khi triển khai:
 ```bash
 # Biên dịch Backend NestJS sang mã Javascript tối ưu
@@ -616,7 +561,7 @@ npm --prefix frontend run build
 
 ---
 
-## 12. Báo Cáo Kiểm Thử Tự Động & Chỉ Số Chất Lượng
+## 11. Báo Cáo Kiểm Thử Tự Động & Chỉ Số Chất Lượng
 
 Toàn bộ hệ sinh thái mã nguồn được kiểm soát chất lượng bởi **36 bộ kiểm thử tự động** viết trên nền Vitest, xác thực 100% các hợp đồng giao dịch, ràng buộc dữ liệu và xử lý ngoại lệ biên:
 
@@ -662,7 +607,7 @@ BẢNG TỔNG KẾT KIỂM THỬ TỰ ĐỘNG VITEST (36/36 FILE ĐẠT TIÊU CH
 
 ---
 
-## 13. Thông Tin Bản Quyền & Đơn Vị Quản Lý
+## 12. Thông Tin Bản Quyền & Đơn Vị Quản Lý
 
 * **Cơ quan chủ quản**: Trường Đại học Công nghệ Thông tin và Truyền thông (ICTU) - Đại học Thái Nguyên
 * **Khoa phụ trách chuyên môn**: Khoa Công nghệ Thông tin & Khoa Kỹ thuật Phần mềm
