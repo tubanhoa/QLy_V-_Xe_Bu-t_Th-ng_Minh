@@ -477,7 +477,21 @@ export class RoutesService {
 
     if (activeTicketsCount > 0 && !force) {
       throw new ConflictException(
-        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Bạn có thể chọn "Xóa Cưỡng Chế" nếu đây là dữ liệu thử nghiệm, hoặc chuyển trạng thái sang tạm ngưng (inactive).',
+        'Tuyến đường đã phát sinh giao dịch đặt vé của hành khách. Vui lòng chuyển trạng thái sang tạm ngưng (inactive) thay vì xóa.',
+      );
+    }
+
+    // 2. RÀNG BUỘC TOÀN VẸN VỚI CHUYẾN XE (TripEntity)
+    const activeTripsCount = await this.tripRepository.count({
+      where: {
+        routeId: id,
+        status: In([TripStatus.SCHEDULED, TripStatus.IN_PROGRESS, TripStatus.BOARDING, TripStatus.DEPARTED]),
+      },
+    });
+
+    if (activeTripsCount > 0 && !force) {
+      throw new ConflictException(
+        'Tuyến đường đang có chuyến xe hoạt động hoặc đã lên lịch chạy. Bạn có thể chọn "Xóa Cưỡng Chế" nếu đây là dữ liệu thử nghiệm, hoặc chuyển trạng thái sang tạm ngưng (inactive).',
       );
     }
 

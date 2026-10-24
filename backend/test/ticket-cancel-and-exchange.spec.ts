@@ -56,6 +56,7 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
   const tripMidId = 'trip-mid-18h-uuid';
   const tripNearId = 'trip-near-5h-uuid';
   const tripUrgentId = 'trip-urgent-1h-uuid';
+  const tripTooLateId = 'trip-toolate-5m-uuid';
   const tripNewId = 'trip-new-destination-uuid';
 
   const mockRoute = {
@@ -117,7 +118,16 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
       id: tripUrgentId,
       routeId: mockRouteId,
       vehicleId: mockVehicle1Id,
-      departureTime: new Date(nowMs + 1 * 60 * 60 * 1000), // 1 giờ tới (<2h)
+      departureTime: new Date(nowMs + 1 * 60 * 60 * 1000), // 1 giờ tới (15m - 2h)
+      status: TripStatus.SCHEDULED,
+      route: mockRoute,
+      vehicle: mockVehicle1,
+    },
+    [tripTooLateId]: {
+      id: tripTooLateId,
+      routeId: mockRouteId,
+      vehicleId: mockVehicle1Id,
+      departureTime: new Date(nowMs + 5 * 60 * 1000), // 5 phút tới (<15m)
       status: TripStatus.SCHEDULED,
       route: mockRoute,
       vehicle: mockVehicle1,
@@ -506,7 +516,12 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
   });
 
   // Helper tạo vé nhanh
-  const createMockTicketForTrip = (tripId: string, status: TicketStatus = TicketStatus.PAID, price = 10000) => {
+  const createMockTicketForTrip = (
+    tripId: string,
+    status: TicketStatus = TicketStatus.PAID,
+    price = 10000,
+    createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000),
+  ) => {
     const bookingId = `bk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const ticketId = `tkt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const ticketCode = `TKT-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -520,6 +535,7 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
       totalPrice: price,
       user: mockUser1,
       trip: mockTrips[tripId],
+      bookingTime: createdAt,
     };
     storedBookings.push(booking);
 
@@ -531,7 +547,7 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
       passengerName: 'Nguyễn Văn A',
       originalPrice: price,
       status,
-      createdAt: new Date(),
+      createdAt,
     };
     storedTickets.push(ticket);
 
@@ -581,9 +597,9 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
     expect(res.body.data.exchangeFeeAmount).toBe(0);
   });
 
-  // TEST 2: Kiểm tra chính sách trong khoảng 12h - 24h
-  it('[TC-02] Kiểm tra chính sách hủy/đổi vé trong khoảng 12h - 24h -> Phí hủy 10%, hoàn tiền 90%, phí đổi 5%', async () => {
-    const { ticketId } = createMockTicketForTrip(tripMidId, TicketStatus.PAID, 10000);
+  // TEST 2: Kiểm tra chính sách trong khoảng 2h - 12h
+  it('[TC-02] Kiểm tra chính sách hủy/đổi vé trong khoảng 2h - 12h -> Phí hủy 10%, hoàn tiền 90%, phí đổi 5%', async () => {
+    const { ticketId } = createMockTicketForTrip(tripNearId, TicketStatus.PAID, 10000);
 
     const res = await request(app.getHttpServer())
       .get(`/api/v1/booking/tickets/${ticketId}/cancellation-policy`)
@@ -600,9 +616,9 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
     expect(res.body.data.exchangeFeeAmount).toBe(500);
   });
 
-  // TEST 3: Kiểm tra chính sách trong khoảng 2h - 12h
-  it('[TC-03] Kiểm tra chính sách hủy/đổi vé trong khoảng 2h - 12h -> Phí hủy 20%, hoàn tiền 80%, phí đổi 10%', async () => {
-    const { ticketId } = createMockTicketForTrip(tripNearId, TicketStatus.PAID, 10000);
+  // TEST 3: Kiểm tra chính sách trong khoảng 15 phút - 2h
+  it('[TC-03] Kiểm tra chính sách hủy/đổi vé trong khoảng 15 phút - 2h -> Phí hủy 20%, hoàn tiền 80%, phí đổi 10%', async () => {
+    const { ticketId } = createMockTicketForTrip(tripUrgentId, TicketStatus.PAID, 10000);
 
     const res = await request(app.getHttpServer())
       .get(`/api/v1/booking/tickets/${ticketId}/cancellation-policy`)
@@ -619,9 +635,9 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
     expect(res.body.data.exchangeFeeAmount).toBe(1000);
   });
 
-  // TEST 4: Từ chối hủy/đổi vé khi thời gian khởi hành còn dưới 2 giờ
-  it('[TC-04] Từ chối hủy hoặc đổi vé khi thời gian khởi hành còn dưới 2 giờ -> 400 Bad Request', async () => {
-    const { ticketId } = createMockTicketForTrip(tripUrgentId, TicketStatus.PAID, 10000);
+  // TEST 4: Từ chối hủy/đổi vé khi thời gian khởi hành còn dưới 15 phút
+  it('[TC-04] Từ chối hủy hoặc đổi vé khi thời gian khởi hành còn dưới 15 phút -> 400 Bad Request', async () => {
+    const { ticketId } = createMockTicketForTrip(tripTooLateId, TicketStatus.PAID, 10000);
 
     // Kiểm tra policy báo canCancel = false
     const policyRes = await request(app.getHttpServer())
@@ -638,7 +654,7 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
       .send({ reason: 'Bận đột xuất' })
       .expect(400);
 
-    expect(cancelRes.body.message).toContain('tối thiểu 2 tiếng');
+    expect(cancelRes.body.message).toContain('15 phút');
   });
 
   // TEST 5: Từ chối hủy vé đã soát vé lên xe (CHECKED_IN) hoặc vé đã bị hủy
@@ -687,7 +703,7 @@ describe('Ticket Cancellation, Refund & Exchange Flow HTTP Integration Tests', (
   // TEST 7: Tự động hoàn tiền và gửi Email xác nhận hủy vé
   it('[TC-07] Tự động hoàn tiền vào CSDL thanh toán (payment.status = REFUNDED) và gửi Email xác nhận hủy vé', async () => {
     notificationService.clearHistory();
-    const { ticketId, ticketCode, bookingId } = createMockTicketForTrip(tripMidId, TicketStatus.PAID, 10000);
+    const { ticketId, ticketCode, bookingId } = createMockTicketForTrip(tripNearId, TicketStatus.PAID, 10000);
 
     const res = await request(app.getHttpServer())
       .post(`/api/v1/booking/tickets/${ticketId}/cancel`)

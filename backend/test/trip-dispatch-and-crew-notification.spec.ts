@@ -58,6 +58,7 @@ describe('Trips Dispatch & Crew Notification (Tác vụ hoàn thiện điều ph
       undefined,
       undefined,
       undefined,
+      undefined,
       mockNotificationCenterService,
       mockFcmService,
     );

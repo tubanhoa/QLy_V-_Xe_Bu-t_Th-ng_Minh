@@ -10,9 +10,10 @@ import { SeedService } from '../src/database/seeds/seed.service.js';
 describe('Auth Register Integration Tests', () => {
   let app: INestApplication;
 
-  // Generate unique email for each test run to avoid conflicts
+  // Generate unique email and phone for each test run to avoid conflicts
   const uniqueSuffix = Date.now();
   const testEmail = `integration-test-${uniqueSuffix}@ictu.edu.vn`;
+  const testPhone = `09${String(uniqueSuffix).slice(-8)}`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -67,7 +68,7 @@ describe('Auth Register Integration Tests', () => {
           email: testEmail,
           password: 'Password@123',
           fullName: 'Integration Test User',
-          phoneNumber: '0987654321',
+          phoneNumber: testPhone,
         })
         .expect(201);
 
@@ -94,6 +95,7 @@ describe('Auth Register Integration Tests', () => {
           email: testEmail, // Same email as above
           password: 'Password@123',
           fullName: 'Duplicate User',
+          phoneNumber: `09${String(Date.now() + 100).slice(-8)}`,
         })
         .expect(409);
 

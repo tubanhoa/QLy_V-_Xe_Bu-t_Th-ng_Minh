@@ -47,11 +47,14 @@ describe('Quản lý Phụ xe và Ràng buộc Phân công Điều phối (Condu
       mockTripRepo = { findOne: vi.fn() };
       mockTicketRepo = { findOne: vi.fn() };
 
+      const mockAuditService = { log: vi.fn().mockResolvedValue({}) } as any;
+
       usersService = new UsersService(
         mockUserRepo,
         mockRoleRepo,
         mockTripRepo,
         mockTicketRepo,
+        mockAuditService,
       );
     });
 
@@ -202,6 +205,7 @@ describe('Quản lý Phụ xe và Ràng buộc Phân công Điều phối (Condu
         mockSeatRepo,
         mockTicketRepo,
         mockUserRepo,
+        undefined,
         undefined,
         undefined,
         undefined,

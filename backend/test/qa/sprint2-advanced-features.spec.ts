@@ -23,6 +23,7 @@ import { TrackingController } from '../../src/modules/tracking/tracking.controll
 import { TrackingService } from '../../src/modules/tracking/tracking.service.js';
 import { InvoiceService } from '../../src/modules/invoice/invoice.service.js';
 import { NotificationService } from '../../src/modules/notification/notification.service.js';
+import { NotificationCenterService } from '../../src/modules/notification/notification-center.service.js';
 
 import { TripEntity } from '../../src/database/entities/trip.entity.js';
 import { RouteEntity } from '../../src/database/entities/route.entity.js';
@@ -206,13 +207,35 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
     vehicle: mockVehicle,
   };
 
+  const tripTooLate = {
+    id: 'trip-toolate-5m',
+    routeId: mockRoute.id,
+    vehicleId: mockVehicle.id,
+    departureTime: new Date(nowMs + 5 * 60 * 1000),
+    arrivalTime: new Date(nowMs + 65 * 60 * 1000),
+    status: TripStatus.SCHEDULED,
+    route: mockRoute,
+    vehicle: mockVehicle,
+  };
+
+  const tripCompleted = {
+    id: 'trip-completed-uuid',
+    routeId: mockRoute.id,
+    vehicleId: mockVehicle.id,
+    departureTime: new Date(nowMs - 2 * 60 * 60 * 1000),
+    arrivalTime: new Date(nowMs - 1 * 60 * 60 * 1000),
+    status: TripStatus.COMPLETED,
+    route: mockRoute,
+    vehicle: mockVehicle,
+  };
+
   beforeAll(async () => {
     storedUsers.push(mockUserPassenger, mockAdminUser);
     storedRoutes.push(mockRoute);
     storedStations.push(mockSt1, mockSt2, mockSt3);
     storedRouteStations.push(rs1, rs2, rs3);
     storedVehicles.push(mockVehicle);
-    storedTrips.push(tripFar, tripMid, tripNear, tripUrgent, tripNewExchange);
+    storedTrips.push(tripFar, tripMid, tripNear, tripUrgent, tripTooLate, tripCompleted, tripNewExchange);
 
     // 28 Ghế
     for (let r = 1; r <= 7; r++) {
@@ -227,6 +250,13 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
     }
 
     const mockTripRepo = {
+      save: (trip: any) => {
+        const idx = storedTrips.findIndex((t) => t.id === trip.id);
+        if (idx >= 0) storedTrips[idx] = { ...storedTrips[idx], ...trip };
+        else storedTrips.push(trip);
+        return Promise.resolve(trip);
+      },
+      update: () => Promise.resolve({ affected: 1 }),
       findOne: (opts: any) => {
         const t = storedTrips.find((item) => item.id === opts?.where?.id);
         if (t) {
@@ -499,16 +529,26 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
         const fb = storedFeedbacks.find((item) => item.id === opts?.where?.id);
         return Promise.resolve(fb || null);
       },
-      createQueryBuilder: () => ({
-        innerJoinAndSelect: function () { return this; },
-        leftJoinAndSelect: function () { return this; },
-        where: function () { return this; },
-        andWhere: function () { return this; },
-        orderBy: function () { return this; },
-        skip: function () { return this; },
-        take: function () { return this; },
-        getManyAndCount: () => Promise.resolve([storedFeedbacks, storedFeedbacks.length]),
-      }),
+      createQueryBuilder: () => {
+        let whereId: string | null = null;
+        return {
+          innerJoinAndSelect: function () { return this; },
+          leftJoinAndSelect: function () { return this; },
+          where: function (clause: string, params: any) {
+            if (params?.id) whereId = params.id;
+            return this;
+          },
+          andWhere: function () { return this; },
+          orderBy: function () { return this; },
+          skip: function () { return this; },
+          take: function () { return this; },
+          getManyAndCount: () => Promise.resolve([storedFeedbacks, storedFeedbacks.length]),
+          getOne: () => {
+            const found = whereId ? storedFeedbacks.find((f) => f.id === whereId) : storedFeedbacks[0];
+            return Promise.resolve(found || null);
+          },
+        };
+      },
     };
 
     const mockTrackingRepo = {
@@ -537,6 +577,13 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
         TrackingService,
         InvoiceService,
         NotificationService,
+        {
+          provide: NotificationCenterService,
+          useValue: {
+            saveNotification: () => Promise.resolve({}),
+            sendNotification: () => Promise.resolve({}),
+          },
+        },
         { provide: getRepositoryToken(TripEntity), useValue: mockTripRepo },
         { provide: getRepositoryToken(RouteEntity), useValue: { findOne: () => Promise.resolve(mockRoute) } },
         { provide: getRepositoryToken(RouteStationEntity), useValue: { find: () => Promise.resolve(storedRouteStations) } },
@@ -601,7 +648,12 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
   });
 
   // Helper tạo vé nhanh
-  const createMockTicket = (tripId: string, status: TicketStatus = TicketStatus.PAID, price = 15000) => {
+  const createMockTicket = (
+    tripId: string,
+    status: TicketStatus = TicketStatus.PAID,
+    price = 15000,
+    createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000),
+  ) => {
     const bookingId = `bkg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const ticketId = `tkt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const ticketCode = `TKT-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -615,6 +667,7 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
       totalAmount: price,
       user: mockUserPassenger,
       trip: storedTrips.find((t) => t.id === tripId),
+      bookingTime: createdAt,
     };
     storedBookings.push(booking);
 
@@ -627,7 +680,7 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
       passengerName: 'Hoàng Thị Khách',
       originalPrice: price,
       status,
-      createdAt: new Date(),
+      createdAt,
     };
     storedTickets.push(ticket);
 
@@ -676,9 +729,9 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
       });
     });
 
-    describe('[TC-REFUND-02] Hủy vé trước giờ khởi hành từ 12h - 24h', () => {
-      it('Happy Path: Khởi hành từ 12h - 24h -> Khấu trừ phí quy định (10%-20%), hoàn tiền (80%-90%)', async () => {
-        const { ticketId } = createMockTicket(tripMid.id, TicketStatus.PAID, 15000);
+    describe('[TC-REFUND-02] Hủy vé trước giờ khởi hành từ 2h - 12h', () => {
+      it('Happy Path: Khởi hành từ 2h - 12h -> Khấu trừ phí quy định (10%-20%), hoàn tiền (80%-90%)', async () => {
+        const { ticketId } = createMockTicket(tripNear.id, TicketStatus.PAID, 15000);
 
         const policyRes = await request(app.getHttpServer())
           .get(`/api/v1/booking/tickets/${ticketId}/cancellation-policy`)
@@ -700,9 +753,9 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
       });
     });
 
-    describe('[TC-REFUND-03] Hủy vé trước giờ khởi hành từ 4h - 12h (hoặc 2h - 12h)', () => {
-      it('Happy Path: Khởi hành từ 2h - 12h -> Khấu trừ phí quy định (20%-50%), hoàn tiền (50%-80%)', async () => {
-        const { ticketId } = createMockTicket(tripNear.id, TicketStatus.PAID, 15000);
+    describe('[TC-REFUND-03] Hủy vé trước giờ khởi hành từ 15 phút - 2h', () => {
+      it('Happy Path: Khởi hành từ 15 phút - 2h -> Khấu trừ phí quy định (20%-50%), hoàn tiền (50%-80%)', async () => {
+        const { ticketId } = createMockTicket(tripUrgent.id, TicketStatus.PAID, 15000);
 
         const policyRes = await request(app.getHttpServer())
           .get(`/api/v1/booking/tickets/${ticketId}/cancellation-policy`)
@@ -723,9 +776,9 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
       });
     });
 
-    describe('[TC-REFUND-04] Hủy vé trước giờ khởi hành < 2h hoặc sau khi xe đã chạy', () => {
-      it('Unhappy Path: Thời gian khởi hành còn dưới 2 giờ -> Từ chối hoàn tiền (0%), thông báo quy định vận tải', async () => {
-        const { ticketId } = createMockTicket(tripUrgent.id, TicketStatus.PAID, 15000);
+    describe('[TC-REFUND-04] Hủy vé trước giờ khởi hành < 15 phút hoặc sau khi xe đã chạy', () => {
+      it('Unhappy Path: Thời gian khởi hành còn dưới 15 phút -> Từ chối hoàn tiền (0%), thông báo quy định vận tải', async () => {
+        const { ticketId } = createMockTicket(tripTooLate.id, TicketStatus.PAID, 15000);
 
         const policyRes = await request(app.getHttpServer())
           .get(`/api/v1/booking/tickets/${ticketId}/cancellation-policy`)
@@ -740,7 +793,7 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
           .expect(400);
 
         expect(cancelRes.body.statusCode).toBe(400);
-        expect(cancelRes.body.message).toContain('tối thiểu 2 tiếng');
+        expect(cancelRes.body.message).toContain('15 phút');
       });
 
       it('Edge Case: Từ chối hủy vé đã soát vé lên xe (CHECKED_IN) -> HTTP 400 Bad Request', async () => {
@@ -864,7 +917,7 @@ describe('Sprint 2 Automation Test Suite - Advanced Features [QA Specification]'
         const res = await request(app.getHttpServer())
           .post('/api/v1/feedback')
           .send({
-            tripId: tripFar.id,
+            tripId: tripCompleted.id,
             ratingScore: 5,
             content: 'Xe buýt điện chạy rất êm, tài xế lái an toàn và đúng giờ!',
             category: 'service',
