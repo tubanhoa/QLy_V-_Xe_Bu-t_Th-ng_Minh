@@ -1,6 +1,6 @@
 # Smart Bus Ticketing System (SBTS) - ICTU
-## Enterprise Intelligent Transit & Automated Ticketing Platform
-**Thai Nguyen University of Information and Communication Technology (ICTU)**
+## Hệ Thống Đặt Vé & Quản Lý Vận Tải Xe Buýt Thông Minh Cấp Doanh Nghiệp
+**Trường Đại học Công nghệ Thông tin và Truyền thông (ICTU) - Đại học Thái Nguyên**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3.3-000000?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.0.0-20232A?style=flat-square&logo=react)](https://react.dev/)
@@ -9,60 +9,58 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20Supabase-336791?style=flat-square&logo=postgresql)](https://supabase.com/)
 [![Redis](https://img.shields.io/badge/Redis-Upstash%20Distributed-DC382D?style=flat-square&logo=redis)](https://redis.io/)
 [![Vitest](https://img.shields.io/badge/Vitest-36%20Suites%20Passed%20(322%2F322)-729B1B?style=flat-square&logo=vitest)](https://vitest.dev/)
-[![Architecture](https://img.shields.io/badge/Architecture-Clean%20Feature--Driven%20Monorepo-005A36?style=flat-square)](https://github.com/tubanhoa/QLy_V-_Xe_Bu-t_Th-ng_Minh)
-[![Compliance](https://img.shields.io/badge/Security-HMAC--SHA256%20%7C%20RBAC%20Tier--4-blue?style=flat-square)](https://github.com/tubanhoa/QLy_V-_Xe_Bu-t_Th-ng_Minh)
+[![KienTruc](https://img.shields.io/badge/KienTruc-Monorepo%20Clean%20Architecture-005A36?style=flat-square)](https://github.com/tubanhoa/QLy_V-_Xe_Bu-t_Th-ng_Minh)
+[![BaoMat](https://img.shields.io/badge/BaoMat-HMAC--SHA256%20%7C%20RBAC%20Cap%204-blue?style=flat-square)](https://github.com/tubanhoa/QLy_V-_Xe_Bu-t_Th-ng_Minh)
 
 ---
 
-## Table of Contents
-1. [Executive Summary & Core Objectives](#1-executive-summary--core-objectives)
-2. [Algorithmic & Mathematical Specifications](#2-algorithmic--mathematical-specifications)
-3. [System Architecture (C4 Component Model)](#3-system-architecture-c4-component-model)
-4. [Relational Database Schema & Entity Relationships (ERD)](#4-relational-database-schema--entity-relationships-erd)
-5. [Distributed Seat Reservation & Concurrency Control Flow](#5-distributed-seat-reservation--concurrency-control-flow)
-6. [Real-time Telemetry & Geofencing Event Engine](#6-real-time-telemetry--geofencing-event-engine)
-7. [Cryptographic QR Verification & State Machine](#7-cryptographic-qr-verification--state-machine)
-8. [Clean Monorepo & Modular Codebase Structure](#8-clean-monorepo--modular-codebase-structure)
-9. [Role-Based Access Control (RBAC) Specification](#9-role-based-access-control-rbac-specification)
-10. [Automated Cancellation & Flexible Refund Policy](#10-automated-cancellation--flexible-refund-policy)
-11. [Installation, Environment & Deployment Runbook](#11-installation-environment--deployment-runbook)
-12. [Automated Test Suite Execution & Quality Metrics](#12-automated-test-suite-execution--quality-metrics)
-13. [Institutional Governance & Licensing](#13-institutional-governance--licensing)
+## Mục Lục Tổng Hợp
+1. [Tổng Quan Dự Án & Mục Tiêu Kỹ Thuật](#1-tổng-quan-dự-án--mục-tiêu-kỹ-thuật)
+2. [Đặc Tả Thuật Toán & Cơ Sở Toán Học](#2-đặc-tả-thuật-toán--cơ-sở-toán-học)
+3. [Sơ Đồ 1: Kiến Trúc Phân Tầng Hệ Thống (Mô Hình C4)](#3-sơ-đồ-1-kiến-trúc-phân-tầng-hệ-thống-mô-hình-c4)
+4. [Sơ Đồ 2: Cơ Sở Dữ Liệu Thực Thể Quan Hệ (ERD)](#4-sơ-đồ-2-cơ-sở-dữ-liệu-thực-thể-quan-hệ-erd)
+5. [Sơ Đồ 3: Quy Trình Giữ Chỗ & Khóa Phân Tán (Distributed Seat-Lock)](#5-sơ-đồ-3-quy-trình-giữ-chỗ--khóa-phân-tán-distributed-seat-lock)
+6. [Sơ Đồ 4: Luồng Xử Lý Định Vị GPS & Cảnh Báo Geofencing Thời Gian Thực](#6-sơ-đồ-4-luồng-xử-lý-định-vị-gps--cảnh-báo-geofencing-thời-gian-thực)
+7. [Sơ Đồ 5: Máy Trạng Thái Soát Vé QR & Cơ Chế Chống Gian Lận](#7-sơ-đồ-5-máy-trạng-thái-soát-vé-qr--cơ-chế-chống-gian-lận)
+8. [Sơ Đồ 6: Cấu Trúc Mã Nguồn Monorepo Hướng Tính Năng](#8-sơ-đồ-6-cấu-trúc-mã-nguồn-monorepo-hướng-tính-năng)
+9. [Ma Trận Phân Quyền Truy Cập (RBAC Matrix)](#9-ma-trận-phân-quyền-truy-cập-rbac-matrix)
+10. [Chính Sách Hoàn Tiền & Đổi Vé Tự Động](#10-chính-sách-hoàn-tiền--đổi-vé-tự-động)
+11. [Hướng Dẫn Cài Đặt & Triển Khai Hệ Thống](#11-hướng-dẫn-cài-đặt--triển-khai-hệ-thống)
+12. [Báo Cáo Kiểm Thử Tự Động & Chỉ Số Chất Lượng](#12-báo-cáo-kiểm-thử-tự-động--chỉ-số-chất-lượng)
+13. [Thông Tin Bản Quyền & Đơn Vị Quản Lý](#13-thông-tin-bản-quyền--đơn-vị-quản-lý)
 
 ---
 
-## 1. Executive Summary & Core Objectives
+## 1. Tổng Quan Dự Án & Mục Tiêu Kỹ Thuật
 
-The **Smart Bus Ticketing System (SBTS)** is an enterprise-grade commuter transit management and digital ticketing solution designed and engineered for the **Thai Nguyen University of Information and Communication Technology (ICTU)** ecosystem.
+**Hệ Thống Đặt Vé & Quản Lý Xe Buýt Thông Minh (SBTS)** là giải pháp chuyển đổi số toàn diện cho mạng lưới giao thông đưa đón sinh viên, giảng viên và cán bộ tại **Trường Đại học Công nghệ Thông tin & Truyền thông - Đại học Thái Nguyên (ICTU)**.
 
-The system addresses the operational friction, concurrency bottlenecks, and physical queue overhead associated with traditional suburban university shuttle lines. By integrating modern distributed systems patterns, SBTS guarantees sub-second seat reservation, multi-tenant role isolation, cryptographic fare verification, and continuous real-time fleet positioning.
-
-### Core Engineering Tenets
-* **Strict Concurrency Safety**: Guaranteed mutual exclusion on individual seat allocations during flash-booking periods via atomic distributed lock primitives.
-* **Cryptographic Tamper-Resistance**: Zero-trust ticket emission backed by HMAC-SHA256 signatures, ensuring offline and online verification fidelity.
-* **High Availability & Fault Isolation**: Monorepo decoupling separating edge presentation logic (Next.js 16) from business-critical transactional pipelines (NestJS 11).
-* **Deterministic Financial Settlements**: Dual-layer reconciliation integrating national banking gateway webhooks (VNPay Sandbox) with automatic fallback reversal.
+Hệ thống giải quyết triệt để các hạn chế của mô hình xe buýt truyền thống thông qua việc áp dụng các tiêu chuẩn kỹ thuật phần mềm cấp công nghiệp:
+* **Khóa Chỗ Phân Tán Chống Xung Đột (Concurrency Safety)**: Triệt tiêu hoàn toàn hiện tượng tranh chấp ghế (Race Condition) trong các đợt cao điểm đăng ký chuyến nhờ cơ chế khóa nguyên tử phân tán trên nền Redis.
+* **Xác Thực Mật Mã Không Phụ Thuộc Mạng (Zero-Trust Cryptographic Validation)**: Vé điện tử được ký số bảo mật bằng thuật toán HMAC-SHA256, hỗ trợ thiết bị quét của tài xế kiểm tra tính toàn vẹn ngay cả khi mất kết nối mạng.
+* **Giám Sát Vận Hành Thời Gian Thực (Real-Time Telemetry & Geofencing)**: Thu nhận và lọc nhiễu tọa độ GPS của đoàn xe, tự động kích hoạt thông báo đẩy khi xe tiến vào vùng bán kính tiếp cận trạm dừng.
+* **Đối Soát & Thanh Toán Tự Động (Deterministic Settlement)**: Đồng bộ hai chiều với Cổng thanh toán quốc gia VNPay Sandbox, tự động thu hồi ghế chưa thanh toán khi quá hạn giữ chỗ 10 phút.
 
 ---
 
-## 2. Algorithmic & Mathematical Specifications
+## 2. Đặc Tả Thuật Toán & Cơ Sở Toán Học
 
-### 2.1. Distributed Mutual Exclusion (Seat Allocation Concurrency)
-To eliminate race conditions when multiple concurrent threads target seat allocation $S_k$ on trip $T_i$, SBTS enforces a Distributed Lock backed by Redis atomic commands:
+### 2.1. Cơ Chế Khóa Phân Tán Nguyên Tử (Distributed Mutual Exclusion)
+Để đảm bảo hai hoặc nhiều tiến trình song song không thể đồng thời chiếm dụng cùng một vị trí ghế $S_k$ trên chuyến xe $T_i$, hệ thống áp dụng kỹ thuật Distributed Lock trên Redis:
 
 $$\text{LockKey} = \text{format}(\text{"seat\_lock:trip:}\%s\text{:seat:}\%s\text{", } T_i, S_k)$$
 
-The lock acquisition executes as an atomic single-roundtrip operation:
+Lệnh kiểm tra và xác lập khóa được thực thi dưới dạng nguyên tử đơn nhịp (Single-roundtrip Atomic Operation):
 ```
 SET seat_lock:{tripId}:{seatNumber} {userId} NX PX 600000
 ```
-Where:
-* `NX`: Sets the key if and only if it does not already exist.
-* `PX 600000`: Sets a deterministic Time-To-Live (TTL) of 600,000 milliseconds (10 minutes).
-* **Formal Safety Guarantee**: Let $C_1, C_2$ be two concurrent client processes attempting to acquire the lock at time $t$. Because Redis single-threaded execution guarantees linear serializability of incoming commands, exactly one command evaluates to `OK`, while the subsequent command evaluates to `nil`, triggering an immediate HTTP 409 Conflict rejection.
+Trong đó:
+* `NX`: Chỉ thiết lập giá trị nếu khóa chưa từng tồn tại trên bộ nhớ.
+* `PX 600000`: Thiết lập thời gian sống tự động (Time-To-Live - TTL) chính xác 600.000 mili-giây (10 phút).
+* **Định Lý An Toàn Tương Hỗ**: Giả sử hai tiến trình $C_1, C_2$ đồng thời gửi yêu cầu chiếm khóa tại thời điểm $t$. Do đặc tính đơn luồng xử lý lệnh tuần tự của Redis, chỉ duy nhất một lệnh được trả về `OK` (thành công), lệnh còn lại nhận về giá trị `nil`, kích hoạt phản hồi lỗi HTTP 409 Conflict ngay lập tức mà không gây tải cho cơ sở dữ liệu quan hệ.
 
-### 2.2. Great-Circle Geodesic Distance (Haversine Formulation)
-Station-to-station distances and dynamic fares are computed using the Haversine metric over the WGS 84 ellipsoidal mean radius $R = 6,371.0088\text{ km}$:
+### 2.2. Tính Toán Khoảng Cách Trắc Địa Theo Lượng Giác Cầu (Công Thức Haversine)
+Khoảng cách thực tế giữa hai trạm dừng trên mặt elip Trái Đất (bán kính trung bình $R = 6.371,0088\text{ km}$) được tính toán theo công thức Haversine:
 
 $$\Delta\phi = \phi_2 - \phi_1, \quad \Delta\lambda = \lambda_2 - \lambda_1$$
 
@@ -72,72 +70,72 @@ $$c = 2 \cdot \arctan2\left(\sqrt{a}, \sqrt{1 - a}\right)$$
 
 $$d = R \cdot c$$
 
-Where $\phi_1, \phi_2$ are station latitudes and $\lambda_1, \lambda_2$ are station longitudes in radians. The calculated distance $d$ is subsequently fed into the fare resolution matrix:
+Trong đó $\phi_1, \phi_2$ là vĩ độ và $\lambda_1, \lambda_2$ là kinh độ của hai trạm dừng tính theo radian. Giá trị khoảng cách $d$ được đưa vào biểu thức xác định giá vé theo cự ly thực tế:
 
-$$\text{Fare}(d) = \max\left(\text{BasePrice}, \text{BasePrice} + \lfloor d - d_{\text{base}} \rfloor \times \text{RatePerKm}\right)$$
+$$\text{GiáVé}(d) = \max\left(\text{GiáSàn}, \text{GiáSàn} + \lfloor d - d_{\text{cơbản}} \rfloor \times \text{ĐơnGiáMỗiKm}\right)$$
 
-### 2.3. Cryptographic Ticket Signature Formulation
-Tickets emitted by the settlement pipeline contain a cryptographically verifiable payload $P$:
+### 2.3. Chữ Ký Số Toàn Vẹn Của Vé Điện Tử (HMAC-SHA256)
+Chuỗi dữ liệu định danh của mỗi vé điện tử được đóng gói thành tải tin chuẩn $P$:
 
-$$P = \text{ticketCode} \parallel \text{tripId} \parallel \text{seatNumber} \parallel \text{passengerId} \parallel \text{issuedTimestamp}$$
+$$P = \text{MãVé} \parallel \text{MãChuyến} \parallel \text{SốGhế} \parallel \text{MãHànhKhách} \parallel \text{ThờiĐiểmPhátHành}$$
 
-$$\text{Signature} = \text{HMAC-SHA256}(K_{\text{private}}, P)$$
+$$\text{ChữKý} = \text{HMAC-SHA256}(K_{\text{bí\_mật}}, P)$$
 
-When a mobile scanner reads the QR payload, it recalculates the message digest using the local or server-held secret key $K_{\text{private}}$. If $\text{HMAC}_{\text{computed}} \neq \text{Signature}_{\text{provided}}$, verification is aborted prior to any database read, eliminating database resource exhaustion attacks.
+Khi thiết bị di động của tài xế quét mã QR, hệ thống giải mã tải tin và tự tái tính toán chuỗi đại diện (Message Digest). Nếu $\text{HMAC}_{\text{tính\_toán}} \neq \text{ChữKý}_{\text{nhận\_được}}$, yêu cầu bị bác bỏ ngay tại tầng logic mà không cần truy vấn cơ sở dữ liệu.
 
-### 2.4. Telemetry Anomaly Filtering & Kinematic Thresholds
-To eliminate erratic GPS drift in urban canyons, raw telemetry packets $(p_t, t)$ are validated against kinematic constraints:
+### 2.4. Thuật Toán Lọc Nhiễu Động Học Cho Tọa Độ GPS
+Nhằm triệt tiêu hiện tượng tọa độ bị trôi dạt do phản xạ sóng trong đô thị, các gói tin định vị $(p_t, t)$ được thẩm định thông qua ràng buộc vận tốc động học:
 
-$$v_{\text{calculated}} = \frac{\text{Distance}(p_t, p_{t-1})}{\Delta t}$$
+$$v_{\text{tính\_toán}} = \frac{\text{KhoảngCách}(p_t, p_{t-1})}{\Delta t}$$
 
-$$\text{Status} = \begin{cases} 
-\text{ACCEPTED}, & \text{if } v_{\text{calculated}} \le 150\text{ km/h} \text{ and } \Delta t \ge 1\text{ s} \\
-\text{REJECTED\_OUTLIER}, & \text{if } v_{\text{calculated}} > 150\text{ km/h} \\
-\text{SIGNAL\_LOST}, & \text{if } \Delta t > 60\text{ s}
+$$\text{TrạngThái} = \begin{cases} 
+\text{HỢP\_LỆ}, & \text{khi } v_{\text{tính\_toán}} \le 150\text{ km/h} \text{ và } \Delta t \ge 1\text{ s} \\
+\text{LOẠI\_BỎ\_NHIỄU}, & \text{khi } v_{\text{tính\_toán}} > 150\text{ km/h} \\
+\text{MẤT\_TÍN\_HIỆU}, & \text{khi } \Delta t > 60\text{ s}
 \end{cases}$$
 
 ---
 
-## 3. System Architecture (C4 Component Model)
+## 3. Sơ Đồ 1: Kiến Trúc Phân Tầng Hệ Thống (Mô Hình C4)
 
-The following diagram illustrates the component architecture across the client, gateway, application core, persistence layer, and external partners:
+Kiến trúc hệ thống được xây dựng theo mô hình Micro-monolith phân tầng nghiêm ngặt, kết hợp xử lý sự kiện bất đồng bộ và bộ nhớ đệm phân tán:
 
 ```mermaid
 graph TB
-    subgraph Client_Layer ["Client & Edge Presentation Layer"]
-        WebPassenger["Passenger Web Portal<br/>Next.js 16 App Router / React 19"]
-        MobileDriver["Driver Mobile Scanner<br/>PWA Camera Stream / Offline Storage"]
-        AdminConsole["Operations & Admin Dashboard<br/>Recharts / Leaflet Map / A4 Print"]
+    subgraph Tang_Trinh_Dien ["TẦNG TRÌNH DIỄN (CLIENTS & PRESENTATION LAYER)"]
+        WebPassenger["Cổng Thông Tin Hành Khách<br/>Next.js 16 App Router / React 19"]
+        MobileDriver["Giao Diện Soát Vé Di Động<br/>PWA Camera Scanner / Bộ Nhớ Đệm Offline"]
+        AdminConsole["Bảng Điều Khiển Quản Trị & Vận Hành<br/>Recharts / Bản Đồ Leaflet / Mẫu In A4"]
     end
 
-    subgraph Edge_Gateway ["API Gateway, Edge & Security Layer"]
-        NginxProxy["Reverse Proxy & SSL Termination"]
-        ThrottlerGuard["Rate Limiter & Anti-Spam Guard"]
-        JWTAuthenticator["JWT Auth Guard & Token Rotation"]
-        RBACInterceptor["Role-Based Access Guard"]
+    subgraph Tang_Bao_Mat ["TẦNG CỔNG KẾT NỐI & BẢO MẬT (GATEWAY & SECURITY)"]
+        NginxProxy["Máy Chủ Proxy Ngược & Cắt SSL"]
+        ThrottlerGuard["Bộ Giới Hạn Tần Suất & Chống Spam"]
+        JWTAuthenticator["Bộ Xác Thực JWT & Đảo Token"]
+        RBACInterceptor["Bộ Kiểm Soát Phân Quyền Vai Trò"]
     end
 
-    subgraph Service_Core ["NestJS Application Micro-Monolith"]
-        TransitSvc["Transit & Network Engine<br/>Route Stations, Geo Distance"]
-        TripDispatchSvc["Trip Dispatch & Crew Roster<br/>4-Day Rolling Window Generator"]
-        BookingLockSvc["Booking & Seat-Lock Service<br/>Atomic Distributed Lock Manager"]
-        PaymentSvc["Payment & Reconciliation Engine<br/>VNPay Sandbox, HMAC Hash Validation"]
-        TrackingGateway["Tracking & Telemetry Gateway<br/>WebSocket WSS, Kalman Filter, ETA Radar"]
-        AuditEngine["Audit Logger & Financial Reporter<br/>Change-Set Capture, Excel, PDF"]
-        NotificationHub["Notification Dispatch Hub<br/>FCM Web Push, SMTP PDF Dispatcher"]
+    subgraph Tang_Nghiep_Vu ["TẦNG XỬ LÝ NGHIỆP VỤ (NESTJS MICRO-MONOLITH APPLICATION CORE)"]
+        TransitSvc["Module Quản Lý Mạng Lưới Tuyến<br/>Danh Sách Trạm, Khoảng Cách Haversine"]
+        TripDispatchSvc["Module Điều Phối Lịch Trình & Kíp Lái<br/>Bộ Sinh Lịch Trình Tự Động 4 Ngày"]
+        BookingLockSvc["Dịch Vụ Đặt Vé & Khóa Ghế Phân Tán<br/>Quản Trị Khóa Nguyên Tử 10 Phút"]
+        PaymentSvc["Động Cơ Thanh Toán & Đối Soát<br/>VNPay Sandbox, Xác Minh Mã Băm Bảo Mật"]
+        TrackingGateway["Cổng Định Vị & Theo Dõi Trực Tuyến<br/>WebSocket WSS, Lọc Nhiễu, Ra-đa ETA"]
+        AuditEngine["Bộ Ghi Nhật Ký Hệ Thống & Báo Cáo<br/>Lưu Vết Biến Động, Xuất Excel, Kết Xuất PDF"]
+        NotificationHub["Trung Tâm Điều Phối Thông Báo<br/>Thông Báo Đẩy FCM, Gửi Vé Mail SMTP"]
     end
 
-    subgraph Persistence_Cache ["Persistence & Distributed State"]
-        PostgresCluster[("PostgreSQL 16 (Supabase)<br/>ACID Transactions, Foreign Keys, PostGIS")]
-        RedisCluster[("Redis In-Memory Engine (Upstash)<br/>Distributed Locks, Lat/Lng Cache, Pub/Sub")]
-        FileRepository[("Static File Storage<br/>Identity Proofs, Driver Licenses, Invoices")]
+    subgraph Tang_Luu_Tru ["TẦNG LƯU TRỮ DỮ LIỆU & BỘ NHỚ ĐỆM (PERSISTENCE & CACHE)"]
+        PostgresCluster[("Cơ Sở Dữ Liệu PostgreSQL 16 (Supabase)<br/>Giao Dịch ACID, Ràng Buộc Khóa Ngoại, PostGIS")]
+        RedisCluster[("Động Cơ Bộ Nhớ Đệm Redis (Upstash)<br/>Khóa Phân Tán, Tọa Độ GPS, Xuất/Nhận Tin")]
+        FileRepository[("Kho Lưu Trữ Tệp Tĩnh<br/>Minh Chứng HSSV, Bằng Lái Xe, Hóa Đơn")]
     end
 
-    subgraph External_Services ["External Cloud Infrastructure"]
-        VNPayGateway["VNPay National Payment Gateway"]
-        FirebaseFCM["Firebase Cloud Messaging (FCM)"]
-        SMTPServer["Google SMTP Relay Server"]
-        OSRMEngine["OpenStreetMap / OSRM Engine"]
+    subgraph Dịch_Vu_Ngoai ["DỊCH VỤ NGOÀI & TÍCH HỢP ĐỐI TÁC (EXTERNAL INTEGRATIONS)"]
+        VNPayGateway["Cổng Thanh Toán Quốc Gia VNPay"]
+        FirebaseFCM["Hạ Tầng Thông Báo Đẩy Firebase FCM"]
+        SMTPServer["Máy Chủ Chuyển Tiếp Thư Google SMTP"]
+        OSRMEngine["Hệ Thống Bản Đồ Mã Nguồn Mở OSRM"]
     end
 
     WebPassenger --> NginxProxy
@@ -154,442 +152,442 @@ graph TB
     RBACInterceptor --> AuditEngine
     RBACInterceptor --> NotificationHub
 
-    BookingLockSvc -.->|Acquire / Release Lock| RedisCluster
-    TrackingGateway -.->|Real-time Coordinate Stream| RedisCluster
+    BookingLockSvc -.->|Thiết Lập / Giải Phóng Khóa| RedisCluster
+    TrackingGateway -.->|Truyền Luồng Tọa Độ Trực Tuyến| RedisCluster
     TransitSvc --> PostgresCluster
     TripDispatchSvc --> PostgresCluster
     BookingLockSvc --> PostgresCluster
     PaymentSvc --> PostgresCluster
     AuditEngine --> PostgresCluster
 
-    PaymentSvc <==>|Secure Checksum Verification| VNPayGateway
-    NotificationHub ==>|Web Push Protocol| FirebaseFCM
-    NotificationHub ==>|MIME Multi-part Mail| SMTPServer
-    TrackingGateway ==>|Map Matching / Matrix| OSRMEngine
+    PaymentSvc <==>|Xác Thực Chữ Ký Kiểm Tra| VNPayGateway
+    NotificationHub ==>|Giao Thức Thông Báo Web Push| FirebaseFCM
+    NotificationHub ==>|Gửi Thư Điện Tử Kèm Tệp PDF| SMTPServer
+    TrackingGateway ==>|Ma Trận Đường Đi & Cự Ly| OSRMEngine
 ```
 
 ---
 
-## 4. Relational Database Schema & Entity Relationships (ERD)
+## 4. Sơ Đồ 2: Cơ Sở Dữ Liệu Thực Thể Quan Hệ (ERD)
 
-The relational schema is normalized to Third Normal Form (3NF) to ensure strict transactional integrity, prevent update anomalies, and enforce relational foreign keys.
+Cơ sở dữ liệu quan hệ được chuẩn hóa theo tiêu chuẩn Chuẩn 3 (3NF) nhằm đảm bảo toàn vẹn giao dịch tài chính, ngăn ngừa dị thường cập nhật và thực thi đầy đủ ràng buộc khóa ngoại:
 
 ```mermaid
 erDiagram
-    ROLES ||--o{ USERS : "authorizes"
-    USERS ||--o{ DRIVER_PROFILES : "extends"
-    USERS ||--o{ BOOKINGS : "places"
-    USERS ||--o{ MONTHLY_PASSES : "holds"
-    USERS ||--o{ FEEDBACKS : "evaluates"
-    USERS ||--o{ ACTIVITY_LOGS : "causes"
+    ROLES ||--o{ USERS : "phân_vai_trò"
+    USERS ||--o{ DRIVER_PROFILES : "mở_rộng"
+    USERS ||--o{ BOOKINGS : "thực_hiện"
+    USERS ||--o{ MONTHLY_PASSES : "sở_hữu"
+    USERS ||--o{ FEEDBACKS : "đánh_giá"
+    USERS ||--o{ ACTIVITY_LOGS : "gây_ra"
 
-    ROUTES ||--o{ ROUTE_STATIONS : "sequences"
-    STATIONS ||--o{ ROUTE_STATIONS : "anchors"
-    ROUTES ||--o{ TRIPS : "serves"
+    ROUTES ||--o{ ROUTE_STATIONS : "bao_gồm"
+    STATIONS ||--o{ ROUTE_STATIONS : "neo_vị_trí"
+    ROUTES ||--o{ TRIPS : "vận_hành"
 
-    VEHICLES ||--o{ SEATS : "houses"
-    VEHICLES ||--o{ TRIPS : "assigned"
-    USERS ||--o{ TRIPS : "operates"
+    VEHICLES ||--o{ SEATS : "chứa"
+    VEHICLES ||--o{ TRIPS : "phân_công"
+    USERS ||--o{ TRIPS : "điều_khiển"
 
-    TRIPS ||--o{ BOOKINGS : "manifests"
-    TRIPS ||--o{ TRIP_INCIDENTS : "records"
+    TRIPS ||--o{ BOOKINGS : "danh_sách"
+    TRIPS ||--o{ TRIP_INCIDENTS : "ghi_nhận"
 
-    BOOKINGS ||--o{ TICKETS : "issues"
-    SEATS ||--o{ TICKETS : "occupies"
-    BOOKINGS ||--o{ PAYMENTS : "settles"
-    VOUCHERS ||--o{ BOOKINGS : "deducts"
+    BOOKINGS ||--o{ TICKETS : "phát_hành"
+    SEATS ||--o{ TICKETS : "chỉ_định"
+    BOOKINGS ||--o{ PAYMENTS : "thanh_toán"
+    VOUCHERS ||--o{ BOOKINGS : "khấu_trừ"
 
     ROLES {
-        uuid id PK
-        varchar name "ADMIN | DISPATCHER | DRIVER | PASSENGER"
-        varchar description
-        timestamp created_at
+        uuid id PK "Khóa chính UUID"
+        varchar name "Tên vai trò: ADMIN, DISPATCHER, DRIVER, PASSENGER"
+        varchar description "Mô tả trách nhiệm"
+        timestamp created_at "Thời điểm tạo"
     }
 
     USERS {
-        uuid id PK
-        varchar email UK
-        varchar phone_number
-        varchar password_hash
-        varchar full_name
-        varchar student_id
-        varchar faculty
-        varchar status "active | inactive | pending_approval"
-        uuid role_id FK
+        uuid id PK "Khóa chính UUID"
+        varchar email UK "Email duy nhất"
+        varchar phone_number "Số điện thoại"
+        varchar password_hash "Chuỗi băm mật khẩu Bcrypt"
+        varchar full_name "Họ và tên đầy đủ"
+        varchar student_id "Mã sinh viên ICTU"
+        varchar faculty "Khoa / Đơn vị công tác"
+        varchar status "Trạng thái: active, inactive, pending"
+        uuid role_id FK "Liên kết vai trò"
     }
 
     DRIVER_PROFILES {
-        uuid id PK
-        uuid user_id FK
-        varchar license_number UK
-        varchar license_class "D | E"
-        date license_expiry
-        varchar approval_status "approved | pending | rejected"
+        uuid id PK "Khóa chính hồ sơ lái xe"
+        uuid user_id FK "Liên kết tài khoản"
+        varchar license_number UK "Số giấy phép lái xe"
+        varchar license_class "Hạng bằng lái: D, E"
+        date license_expiry "Ngày hết hạn bằng lái"
+        varchar approval_status "Trạng thái duyệt: approved, pending"
     }
 
     ROUTES {
-        uuid id PK
-        varchar route_code UK "CT-01, CT-02"
-        varchar name
-        varchar origin
-        varchar destination
-        decimal distance_km
-        decimal base_price
-        decimal student_price
-        varchar status "active | inactive | deleted"
+        uuid id PK "Khóa chính tuyến đường"
+        varchar route_code UK "Mã định danh tuyến: CT-01, CT-02"
+        varchar name "Tên gọi tuyến xe buýt"
+        varchar origin "Điểm xuất phát"
+        varchar destination "Điểm kết thúc"
+        decimal distance_km "Tổng cự ly tuyến đường"
+        decimal base_price "Giá vé phổ thông"
+        decimal student_price "Giá vé trợ giá sinh viên"
+        varchar status "Trạng thái: active, inactive, deleted"
     }
 
     STATIONS {
-        uuid id PK
-        varchar name
-        decimal latitude
-        decimal longitude
-        boolean is_hub
-        varchar status "active | inactive"
+        uuid id PK "Khóa chính trạm dừng"
+        varchar name "Tên trạm đón trả khách"
+        decimal latitude "Vĩ độ WGS84"
+        decimal longitude "Kinh độ WGS84"
+        boolean is_hub "Trạm trung chuyển lớn"
+        varchar status "Trạng thái hoạt động"
     }
 
     ROUTE_STATIONS {
-        uuid id PK
-        uuid route_id FK
-        uuid station_id FK
-        int stop_order
-        decimal distance_from_origin_km
-        int estimated_minutes
+        uuid id PK "Khóa chính thứ tự trạm"
+        uuid route_id FK "Liên kết tuyến"
+        uuid station_id FK "Liên kết trạm"
+        int stop_order "Thứ tự ghé đón: 1..N"
+        decimal distance_from_origin_km "Cự ly từ điểm xuất phát"
+        int estimated_minutes "Thời gian hành trình dự kiến"
     }
 
     VEHICLES {
-        uuid id PK
-        varchar license_plate UK
-        varchar model
-        varchar vehicle_type "electric | diesel"
-        int seat_capacity "28"
-        varchar status "active | maintenance | inactive"
+        uuid id PK "Khóa chính phương tiện"
+        varchar license_plate UK "Biển số đăng ký xe"
+        varchar model "Dòng xe vận hành"
+        varchar vehicle_type "Loại xe: electric, diesel"
+        int seat_capacity "Tổng số ghế: 28"
+        varchar status "Trạng thái: active, maintenance"
     }
 
     SEATS {
-        uuid id PK
-        uuid vehicle_id FK
-        varchar seat_number "01A to 07D"
-        int row_number
-        varchar column_label "A | B | C | D"
-        varchar seat_type "standard | priority"
+        uuid id PK "Khóa chính vị trí ghế"
+        uuid vehicle_id FK "Liên kết xe"
+        varchar seat_number "Mã ghế: 01A đến 07D"
+        int row_number "Số hàng: 1 đến 7"
+        varchar column_label "Cột: A, B, C, D"
+        varchar seat_type "Loại ghế: standard, priority"
     }
 
     TRIPS {
-        uuid id PK
-        uuid route_id FK
-        uuid vehicle_id FK
-        uuid driver_id FK
-        timestamp departure_time
-        timestamp arrival_time
-        varchar status "scheduled | boarding | in_progress | completed | cancelled"
+        uuid id PK "Khóa chính chuyến xe"
+        uuid route_id FK "Liên kết tuyến"
+        uuid vehicle_id FK "Liên kết xe buýt"
+        uuid driver_id FK "Liên kết tài xế"
+        timestamp departure_time "Giờ khởi hành"
+        timestamp arrival_time "Giờ dự kiến đến"
+        varchar status "scheduled, boarding, in_progress, completed, cancelled"
     }
 
     BOOKINGS {
-        uuid id PK
-        varchar booking_code UK "ICTU-XXXXXX"
-        uuid user_id FK
-        uuid trip_id FK
-        uuid voucher_id FK
-        decimal original_amount
-        decimal discount_amount
-        decimal final_amount
-        varchar status "pending | confirmed | cancelled | refunded"
+        uuid id PK "Khóa chính đơn đặt"
+        varchar booking_code UK "Mã giao dịch: ICTU-XXXXXX"
+        uuid user_id FK "Liên kết khách hàng"
+        uuid trip_id FK "Liên kết chuyến"
+        uuid voucher_id FK "Liên kết mã giảm giá"
+        decimal original_amount "Số tiền gốc"
+        decimal discount_amount "Số tiền chiết khấu"
+        decimal final_amount "Số tiền thực thanh toán"
+        varchar status "pending, confirmed, cancelled, refunded"
     }
 
     TICKETS {
-        uuid id PK
-        uuid booking_id FK
-        uuid seat_id FK
-        varchar ticket_code UK
-        varchar passenger_name
-        varchar qr_signature "HMAC-SHA256"
-        varchar status "reserved | paid | boarded | cancelled | refunded | expired"
+        uuid id PK "Khóa chính vé điện tử"
+        uuid booking_id FK "Liên kết đơn đặt"
+        uuid seat_id FK "Liên kết vị trí ghế"
+        varchar ticket_code UK "Mã tra cứu vé"
+        varchar passenger_name "Tên hành khách"
+        varchar qr_signature "Chữ ký số kiểm tra HMAC-SHA256"
+        varchar status "reserved, paid, boarded, cancelled, refunded, expired"
     }
 
     PAYMENTS {
-        uuid id PK
-        uuid booking_id FK
-        varchar payment_method "vnpay | student_wallet | cash"
-        varchar transaction_ref UK
-        decimal amount
-        varchar status "pending | completed | failed | refunded"
+        uuid id PK "Khóa chính hóa đơn"
+        uuid booking_id FK "Liên kết đơn đặt"
+        varchar payment_method "vnpay, student_wallet, cash"
+        varchar transaction_ref UK "Mã giao dịch ngân hàng"
+        decimal amount "Số tiền thanh toán"
+        varchar status "pending, completed, failed, refunded"
     }
 
     VOUCHERS {
-        uuid id PK
-        varchar code UK "ICTU2026, VETHANG_50K"
-        varchar discount_type "percentage | fixed_amount"
-        decimal discount_value
-        decimal min_order_value
-        date end_date
-        varchar status "active | expired"
+        uuid id PK "Khóa chính voucher"
+        varchar code UK "Mã khuyến mại: ICTU2026"
+        varchar discount_type "percentage, fixed_amount"
+        decimal discount_value "Giá trị chiết khấu"
+        decimal min_order_value "Giá trị đơn tối thiểu"
+        date end_date "Ngày hết hạn"
+        varchar status "active, expired"
     }
 ```
 
 ---
 
-## 5. Distributed Seat Reservation & Concurrency Control Flow
+## 5. Sơ Đồ 3: Quy Trình Giữ Chỗ & Khóa Phân Tán (Distributed Seat-Lock)
 
-The transactional booking sequence below depicts the state transitions across distributed cache, relational database, external banking gateway, and notification relay:
+Luồng giao dịch tuần tự mô tả chi tiết các bước xác lập trạng thái giữa bộ nhớ đệm phân tán, cơ sở dữ liệu quan hệ, cổng thanh toán quốc gia và hệ thống thông báo:
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Passenger Client
-    participant Frontend as Next.js Web App
-    participant Backend as NestJS Booking Service
-    participant Redis as Redis Lock Engine
-    participant Postgres as PostgreSQL (Supabase)
-    participant Banking as VNPay Payment Gateway
-    participant Mailer as Nodemailer SMTP Relay
+    actor HanhKhach as Hành Khách / Sinh Viên
+    participant UngDungWeb as Cổng Web Next.js
+    participant DichVuDatVe as Dịch Vụ Đặt Vé NestJS
+    participant BoNhoRedis as Động Cơ Khóa Redis
+    participant CSDLPostgres as Cơ Sở Dữ Liệu PostgreSQL
+    participant CongThanhToan as Cổng Thanh Toán VNPay
+    participant DichVuThu as Hệ Thống Gửi Email SMTP
 
-    Client->>Frontend: Select Route, Date, Trip and Seat (e.g. 04C)
-    Frontend->>Backend: POST /api/v1/booking/hold-seat { tripId, seatNumber: "04C" }
+    HanhKhach->>UngDungWeb: Chọn Tuyến, Ngày, Chuyến và Vị trí ghế (VD: 04C)
+    UngDungWeb->>DichVuDatVe: POST /api/v1/booking/hold-seat { tripId, seatNumber: "04C" }
 
     rect rgb(240, 244, 250)
-        Note over Backend,Redis: Atomic Distributed Lock Verification
-        Backend->>Redis: SET seat_lock:tripId:04C userId NX PX 600000
-        alt Seat is currently locked by concurrent user
-            Redis-->>Backend: nil
-            Backend-->>Frontend: 409 Conflict ("Seat 04C is currently locked by another passenger")
-            Frontend-->>Client: Render seat collision alert & refresh grid state
-        else Lock successfully acquired
-            Redis-->>Backend: OK
-            Backend->>Postgres: INSERT INTO bookings, tickets (status = 'reserved')
-            Backend-->>Frontend: 201 Created { bookingId, holdExpiresAt }
-            Frontend-->>Client: Start 10-Minute Countdown Clock
+        Note over DichVuDatVe,BoNhoRedis: Kiểm Tra Khóa Phân Tán Nguyên Tử
+        DichVuDatVe->>BoNhoRedis: SET seat_lock:tripId:04C userId NX PX 600000
+        alt Ghế đang bị khóa bởi hành khách khác
+            BoNhoRedis-->>DichVuDatVe: nil
+            DichVuDatVe-->>UngDungWeb: 409 Conflict ("Vị trí ghế 04C đang được giữ bởi người khác")
+            UngDungWeb-->>HanhKhach: Báo lỗi va chạm ghế & tải lại sơ đồ xe
+        else Xác lập khóa thành công
+            BoNhoRedis-->>DichVuDatVe: OK
+            DichVuDatVe->>CSDLPostgres: INSERT INTO bookings, tickets (status = 'reserved')
+            DichVuDatVe-->>UngDungWeb: 201 Created { bookingId, holdExpiresAt }
+            UngDungWeb-->>HanhKhach: Bắt đầu đếm ngược thời gian 10:00
         end
     end
 
-    Client->>Frontend: Confirm Order & Select VNPay Gateway
-    Frontend->>Backend: POST /api/v1/payment/create-url { bookingId }
-    Backend->>Backend: Generate VNPay payment query with HMAC-SHA512 checksum
-    Backend-->>Frontend: Return VNPay Redirection URL
-    Frontend->>Banking: Redirect client to Secure Checkout Gateway
+    HanhKhach->>UngDungWeb: Xác nhận đơn & Chọn thanh toán Cổng VNPay
+    UngDungWeb->>DichVuDatVe: POST /api/v1/payment/create-url { bookingId }
+    DichVuDatVe->>DichVuDatVe: Sinh chuỗi truy vấn kèm mã băm HMAC-SHA512
+    DichVuDatVe-->>UngDungWeb: Trả về URL chuyển hướng thanh toán
+    UngDungWeb->>CongThanhToan: Chuyển hướng trình duyệt đến Cổng VNPay
 
-    Client->>Banking: Authenticate Banking Credentials & Submit OTP
-    Banking->>Backend: Asynchronous Webhook IPN Callback (GET /api/v1/payment/vnpay-ipn)
+    HanhKhach->>CongThanhToan: Nhập thông tin thẻ ATM Sandbox & xác nhận OTP
+    CongThanhToan->>DichVuDatVe: Webhook IPN Callback bất đồng bộ (GET /api/v1/payment/vnpay-ipn)
 
     rect rgb(240, 250, 240)
-        Note over Backend,Postgres: Settlement & Cryptographic Ticket Activation
-        Backend->>Backend: Verify cryptographic hash (vnp_SecureHash)
-        Backend->>Postgres: UPDATE payments SET status = 'completed'
-        Backend->>Postgres: UPDATE bookings SET status = 'confirmed'
-        Backend->>Postgres: UPDATE tickets SET status = 'paid', qr_signature = HMAC(payload)
-        Backend->>Redis: DEL seat_lock:tripId:04C (Release distributed reservation lock)
-        Backend-->>Banking: HTTP 200 OK { RspCode: "00", Message: "Confirm Success" }
+        Note over DichVuDatVe,CSDLPostgres: Đối Soát Giao Dịch & Kích Hoạt Vé Số Hóa
+        DichVuDatVe->>DichVuDatVe: Xác minh mã băm toàn vẹn (vnp_SecureHash)
+        DichVuDatVe->>CSDLPostgres: UPDATE payments SET status = 'completed'
+        DichVuDatVe->>CSDLPostgres: UPDATE bookings SET status = 'confirmed'
+        DichVuDatVe->>CSDLPostgres: UPDATE tickets SET status = 'paid', qr_signature = HMAC(payload)
+        DichVuDatVe->>BoNhoRedis: DEL seat_lock:tripId:04C (Giải phóng khóa giữ chỗ)
+        DichVuDatVe-->>CongThanhToan: HTTP 200 OK { RspCode: "00", Message: "Xác nhận thành công" }
     end
 
-    Backend->>Mailer: Queue asynchronous dispatch of PDF Ticket & inline QR
-    Mailer-->>Client: Deliver Email Confirmation to Passenger Inbox
-    Banking-->>Frontend: Browser redirect to /payment/result?bookingCode=...
-    Frontend-->>Client: Display Order Confirmation & Encrypted Boarding Pass
+    DichVuDatVe->>DichVuThu: Xếp hàng gửi thư kèm tệp vé điện tử PDF + Mã QR
+    DichVuThu-->>HanhKhach: Hộp thư đến nhận vé: "Đặt vé xe buýt thành công!"
+    CongThanhToan-->>UngDungWeb: Chuyển hướng người dùng về trang /payment/result
+    UngDungWeb-->>HanhKhach: Hiển thị thông báo thành công & Thẻ lên xe điện tử
 ```
 
 ---
 
-## 6. Real-time Telemetry & Geofencing Event Engine
+## 6. Sơ Đồ 4: Luồng Xử Lý Định Vị GPS & Cảnh Báo Geofencing Thời Gian Thực
 
-The telematics subsystem processes high-frequency spatial streams from vehicle onboard units and evaluates boundary proximity against fixed station anchors:
+Hạ tầng viễn thông thu nhận dữ liệu không gian tần số cao từ phương tiện và tính toán vùng bao quanh trạm dừng cố định:
 
 ```mermaid
 flowchart TD
-    OBU["On-Board Vehicle Unit / Driver Mobile<br/>Emits GPS Stream: lat, lon, speed, heading"]
-    WSS["WebSocket Telemetry Gateway<br/>/tracking/gps-stream"]
-    KinematicFilter["Kinematic Anomaly & Outlier Filter<br/>Rejects speeds > 150 km/h or time delta < 1s"]
-    RedisSpatial["Redis Geospatial Index<br/>GEOADD bus_positions lon lat tripId"]
+    ThietBiXe["Thiết Bị Tài Xế / GPS Phương Tiện<br/>Phát luồng tọa độ: vĩ độ, kinh độ, tốc độ, góc hướng"]
+    CongWSS["Cổng Kết Nối WebSocket WSS<br/>/tracking/gps-stream"]
+    BoLocNhiễu["Bộ Lọc Nhiễu Động Học Kalman<br/>Bác bỏ vận tốc bất thường > 150 km/h hoặc chu kỳ < 1s"]
+    RedisKhongGian["Bộ Nhớ Không Gian Redis<br/>GEOADD bus_positions kinh_độ vĩ_độ mã_chuyến"]
     
-    GeoEval{"Haversine Proximity Check<br/>Distance to Next Station &le; 500m?"}
-    ETAPredictor["ETA Prediction Engine<br/>Distance / Speed + Incident Delay Factor"]
-    PushTrigger["Notification Dispatch Service<br/>Firebase Cloud Messaging (FCM)"]
-    WebClient["Real-time Leaflet Map UI<br/>Passenger & Dispatcher Visualizer"]
-    PassengerAlert["Push Notification Delivered:<br/>'Bus is arriving at your pickup station within 3 mins'"]
+    KiemTraKhoangCach{"Đánh Giá Khoảng Cách Haversine<br/>Khoảng cách tới trạm kế tiếp &le; 500m?"}
+    DuDoanETA["Động Cơ Dự Báo Thời Gian Đến (ETA)<br/>Khoảng cách / Vận tốc + Thời gian trễ sự cố"]
+    PhatThongBao["Trung Tâm Điều Phối Thông Báo<br/>Firebase Cloud Messaging (FCM Web Push)"]
+    BanDoTrucTuyen["Giao Diện Bản Đồ Trực Tuyến<br/>Cập nhật vị trí tức thời trên nền Leaflet"]
+    CanhBaoHanhKhach["Thông Báo Đẩy Tới Điện Thoại Sinh Viên:<br/>'Xe buýt sắp cập trạm đón bạn trong 3 phút nữa!'"]
 
-    OBU -->|WSS Stream every 5s| WSS
-    WSS --> KinematicFilter
-    KinematicFilter --> RedisSpatial
-    RedisSpatial --> WebClient
+    ThietBiXe -->|Truyền tin WSS định kỳ mỗi 5 giây| CongWSS
+    CongWSS --> BoLocNhiễu
+    BoLocNhiễu --> RedisKhongGian
+    RedisKhongGian --> BanDoTrucTuyen
     
-    KinematicFilter --> ETAPredictor
-    ETAPredictor --> GeoEval
-    GeoEval -- "TRUE (Inside Geofence)" --> PushTrigger
-    GeoEval -- "FALSE (En Route)" --> WebClient
-    PushTrigger --> PassengerAlert
+    BoLocNhiễu --> DuDoanETA
+    DuDoanETA --> KiemTraKhoangCach
+    KiemTraKhoangCach -- "ĐÚNG (Đi vào vùng Geofence)" --> PhatThongBao
+    KiemTraKhoangCach -- "SAI (Đang trên đường đi)" --> BanDoTrucTuyen
+    PhatThongBao --> CanhBaoHanhKhach
 ```
 
 ---
 
-## 7. Cryptographic QR Verification & State Machine
+## 7. Sơ Đồ 5: Máy Trạng Thái Soát Vé QR & Cơ Chế Chống Gian Lận
 
-The state diagram below illustrates the multi-tier deterministic validation pipeline executed by the driver inspection terminal during boarding:
+Sơ đồ máy trạng thái dưới đây thể hiện quy trình thẩm định 3 lớp nghiêm ngặt được thực thi trên thiết bị quét của phụ xe/tài xế tại cửa xe:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ReadScan: Scanner captures QR string
+    [*] --> DocMaQR: Máy quét đọc chuỗi ký tự từ mã QR
     
-    ReadScan --> VerifyHMAC: Parse payload & compute HMAC-SHA256 signature
-    VerifyHMAC --> TamperedError: Digest mismatch or forged payload
-    TamperedError --> [*]: Rejection 400 ("Cryptographic signature invalid")
+    DocMaQR --> KiemTraChuKy: Tách gói tin & tính toán mã băm HMAC-SHA256
+    KiemTraChuKy --> SaiChuKy: Mã băm không khớp hoặc dữ liệu bị sửa đổi
+    SaiChuKy --> [*]: Từ chối 400 ("Chữ ký điện tử của vé không hợp lệ")
 
-    VerifyHMAC --> ValidateTripMatch: Compare Ticket Trip ID with Bus Current Trip ID
-    ValidateTripMatch --> WrongTripError: Ticket belongs to a different schedule
-    WrongTripError --> [*]: Rejection 400 ("Wrong vehicle trip allocation")
+    KiemTraChuKy --> DoiChieuChuyen: Đối chiếu Mã chuyến của vé với Chuyến xe hiện tại
+    DoiChieuChuyen --> SaiChuyenXe: Mã chuyến của vé khác chuyến xe đang chạy
+    SaiChuyenXe --> [*]: Cảnh báo 400 ("Khách lên sai chuyến xe buýt")
 
-    ValidateTripMatch --> QueryState: Inspect database record state
-    QueryState --> DuplicateError: Current status == 'boarded'
-    DuplicateError --> [*]: Rejection 400 ("Ticket already checked in")
+    DoiChieuChuyen --> KiemTraTrangThai: Kiểm tra trạng thái vé trong cơ sở dữ liệu
+    KiemTraTrangThai --> DaLenXe: Trạng thái hiện tại = 'boarded'
+    DaLenXe --> [*]: Bác bỏ 400 ("Vé đã được quét lên xe trước đó")
 
-    QueryState --> InactiveError: Status in ('cancelled', 'expired', 'refunded')
-    InactiveError --> [*]: Rejection 400 ("Ticket revoked or expired")
+    KiemTraTrangThai --> VeVoHieu: Trạng thái nằm trong ('cancelled', 'expired', 'refunded')
+    VeVoHieu --> [*]: Từ chối 400 ("Vé đã bị hủy hoặc hết hạn sử dụng")
 
-    QueryState --> GrantBoarding: Current status == 'paid'
-    GrantBoarding --> PersistState: Write status = 'boarded', checkedInAt = NOW()
-    PersistState --> AudioHapticFeedback: Trigger success tone and haptic confirmation
-    AudioHapticFeedback --> [*]: Passenger Boarding Confirmed
+    KiemTraTrangThai --> ChapThuan: Trạng thái hiện tại = 'paid'
+    ChapThuan --> CapNhatCSDL: Ghi nhận status = 'boarded', checkedInAt = NOW()
+    CapNhatCSDL --> PhapAmBao: Phát âm thanh Ting Ting và rung phản hồi Haptic
+    PhapAmBao --> [*]: Xác nhận hành khách lên xe an toàn
 ```
 
 ---
 
-## 8. Clean Monorepo & Modular Codebase Structure
+## 8. Sơ Đồ 6: Cấu Trúc Mã Nguồn Monorepo Hướng Tính Năng
 
-The repository is organized under a strict **Clean Separation Monorepo Architecture**, separating the presentation tier from the backend micro-monolith:
+Dự án tuân thủ kiến trúc **Monorepo Tách Biệt Sạch Sẽ (Clean Separation Monorepo)**, phân lập hoàn toàn mã nguồn giao diện người dùng với lõi xử lý nghiệp vụ backend:
 
 ```mermaid
 graph LR
-    MonorepoRoot["smart-bus-ticketing-system"]
+    GocMonorepo["smart-bus-ticketing-system"]
     
-    subgraph Frontend_App ["frontend/ (Next.js 16 + React 19)"]
-        FE_App["app/ (Route Handlers, Layouts, Dynamic Slugs)"]
-        FE_Features["features/ (Domain-Specific Business Logic)"]
-        FE_Components["components/ (Shared Reusable UI Components)"]
-        FE_Lib["lib/ (API Services, Context, Utility Functions)"]
-        FE_Hooks["hooks/ (Custom Hooks: useSeatLock, useTracking)"]
+    subgraph Frontend_Workspace ["Thư Mục Giao Diện: frontend/ (Next.js 16 + React 19)"]
+        FE_App["app/ (Điều hướng App Router, Layouts, Slugs động)"]
+        FE_Features["features/ (Mã nguồn nghiệp vụ đóng gói theo tính năng)"]
+        FE_Components["components/ (Các thành phần UI dùng chung, Biểu mẫu, Bảng biểu)"]
+        FE_Lib["lib/ (Dịch vụ gọi API, Quản lý phiên, Tiện ích)"]
+        FE_Hooks["hooks/ (React Custom Hooks: useSeatLock, useTracking)"]
     end
 
-    subgraph Backend_App ["backend/ (NestJS 11 + TypeORM)"]
-        BE_Modules["src/modules/ (16 Isolated Domain Modules)"]
-        BE_Database["src/database/ (Entities, Schema, Rolling Seed)"]
-        BE_Common["src/common/ (Filters, Guards, Interceptors)"]
-        BE_Config["src/config/ (Database, Redis, JWT, Mailer)"]
-        BE_Tests["test/ (36 Vitest Unit & Integration Suites)"]
+    subgraph Backend_Workspace ["Thư Mục Xử Lý: backend/ (NestJS 11 + TypeORM)"]
+        BE_Modules["src/modules/ (16 Modules nghiệp vụ vi hạt)"]
+        BE_Database["src/database/ (Thực thể TypeORM, Khởi tạo dữ liệu mẫu)"]
+        BE_Common["src/common/ (Bộ lọc ngoại lệ, Bộ chặn RBAC, Bộ chuyển đổi)"]
+        BE_Config["src/config/ (Cấu hình Cơ sở dữ liệu, Redis, JWT, Mail)"]
+        BE_Tests["test/ (36 Bộ kiểm thử tự động Unit & Integration)"]
     end
 
-    subgraph Core_Orchestrator ["Monorepo Governance"]
-        PkgJson["package.json (Unified Execution Scripts)"]
-        DevScript["scripts/start-dev.mjs (Concurrent Process Manager)"]
-        BatchLauncher["start-dev.bat (Windows Single-Click Bootstrapper)"]
+    subgraph Dieu_Phoi_Chung ["Thư Mục Điều Phối Dự Án"]
+        PkgJson["package.json (Tập lệnh điều phối chạy toàn hệ thống)"]
+        DevScript["scripts/start-dev.mjs (Quản lý tiến trình chạy song song)"]
+        BatchLauncher["start-dev.bat (Kịch bản khởi động 1 chạm trên Windows)"]
     end
 
-    MonorepoRoot --> Frontend_App
-    MonorepoRoot --> Backend_App
-    MonorepoRoot --> Core_Orchestrator
+    GocMonorepo --> Frontend_Workspace
+    GocMonorepo --> Backend_Workspace
+    GocMonorepo --> Dieu_Phoi_Chung
 ```
 
-### Module Breakdown (Backend Core)
-| Module Name | Responsibilities & Architectural Boundaries |
+### Bảng Phân Rã Các Phân Hệ Backend
+| Phân Hệ Nghiệp Vụ | Trách Nhiệm & Ranh Giới Kiến Trúc |
 | :--- | :--- |
-| `src/modules/auth` | JWT issuance, password hashing via Bcrypt, refresh token rotation, RBAC guards. |
-| `src/modules/transit` | Master data management for routes, stations, route-stop sequencing, and Haversine fare calculation. |
-| `src/modules/trips` | Trip scheduling, vehicle/driver dispatching, and 4-day rolling window database seeding. |
-| `src/modules/booking` | Seat selection, Redis distributed locking, booking intent creation, and ticket lifecycle. |
-| `src/modules/payment` | VNPay integration, transaction verification, secure checksum validation, and IPN handling. |
-| `src/modules/tracking` | WebSocket telemetry streaming, GPS outlier filtering, station ETA, and geofence triggering. |
-| `src/modules/promotion` | Student discount voucher management and monthly commuter pass registration. |
-| `src/modules/feedback` | Post-trip customer ratings, service feedback, and driver conduct tracking. |
-| `src/modules/audit` | Centralized system audit logging capturing mutations, IP origins, and user agent signatures. |
-| `src/modules/reports` | Financial reconciliation, occupancy statistics, Excel export, and A4 print templates. |
+| `src/modules/auth` | Phát hành và thu hồi JWT, mã hóa mật khẩu bằng Bcrypt, bảo vệ chống brute-force. |
+| `src/modules/transit` | Quản trị mạng lưới tuyến đường, các trạm dừng cố định, lộ trình ghé đón và tính toán cước phí Haversine. |
+| `src/modules/trips` | Lập lịch trình vận tải, phân công phương tiện và kíp lái, tự động sinh dữ liệu quay vòng 4 ngày. |
+| `src/modules/booking` | Quản lý lựa chọn chỗ ngồi, xác lập khóa phân tán Redis, tạo đơn đặt vé và vòng đời vé. |
+| `src/modules/payment` | Tích hợp cổng thanh toán VNPay, xác thực chữ ký an toàn, xử lý Webhook IPN đối soát. |
+| `src/modules/tracking` | Thu nhận luồng tọa độ WebSocket, lọc nhiễu vận tốc GPS, tính toán cự ly và kích hoạt Geofencing. |
+| `src/modules/promotion` | Quản lý mã giảm giá ưu đãi sinh viên và tiếp nhận đăng ký cấp mới/gia hạn vé tháng. |
+| `src/modules/feedback` | Đánh giá chất lượng phục vụ sau chuyến đi, ghi nhận khiếu nại và hình ảnh phản ánh. |
+| `src/modules/audit` | Lưu trữ nhật ký biến động hệ thống, địa chỉ IP thực hiện, định danh tác nhân và dữ liệu trước/sau. |
+| `src/modules/reports` | Tổng hợp báo cáo doanh thu tài chính, tỷ lệ lấp đầy ghế, xuất file Excel và kết xuất mẫu in A4 PDF. |
 
 ---
 
-## 9. Role-Based Access Control (RBAC) Specification
+## 9. Ma Trận Phân Quyền Truy Cập (RBAC Matrix)
 
-Access control is enforced at both the HTTP routing layer (via NestJS `RolesGuard`) and the persistence layer (via database user entity constraints):
+Cơ chế phân quyền được bảo vệ nghiêm ngặt ở cả tầng định tuyến HTTP (`RolesGuard`) và tầng truy vấn dữ liệu theo 4 cấp độ người dùng:
 
-| Functional Scope | Admin | Dispatcher | Driver / Crew | Passenger |
+| Danh Mục Nghiệp Vụ | Quản Trị Viên (Admin) | Điều Hành Viên (Dispatcher) | Tài Xế / Kíp Lái (Driver) | Hành Khách / Sinh Viên (Passenger) |
 | :--- | :---: | :---: | :---: | :---: |
-| Route, Station & Schedule Querying | Read | Read | Read | Read |
-| Seat Hold & Booking Creation | Denied | Denied | Denied | Create / Read |
-| Online Payment Execution | Denied | Denied | Denied | Create |
-| Self-Service Ticket Cancellation & Exchange | Denied | Denied | Denied | Update |
-| Mobile QR Boarding Inspection | Denied | Denied | Execute | Denied |
-| Real-time Telemetry Emission (GPS Ping) | Denied | Denied | Execute | Denied |
-| En-route Incident Logging | Denied | Denied | Create | Denied |
-| Crew & Vehicle Dispatching | Full Access | Full Access | Denied | Denied |
-| Safe Dispatch Lock Enforcement (`IN_PROGRESS`) | Enforced | Enforced | Denied | Denied |
-| Student Discount & Identity Document Approval | Full Access | Full Access | Denied | Denied |
-| Route Creation, Deletion & Fare Adjustment | Full Access | Denied | Denied | Denied |
-| Marketing Voucher & Discount Management | Full Access | Denied | Denied | Denied |
-| System Audit Logs & Forensic Change Analysis | Full Access | Denied | Denied | Denied |
-| Revenue Dashboard, Excel & PDF A4 Export | Full Access | Full Access | Denied | Denied |
+| Tra cứu thông tin tuyến, trạm & lịch trình | Xem | Xem | Xem | Xem |
+| Giữ chỗ ghế ngồi & Tạo đơn đặt vé | Chặn | Chặn | Chặn | Tạo mới / Xem |
+| Thanh toán trực tuyến Cổng VNPay | Chặn | Chặn | Chặn | Tạo mới |
+| Tự hủy vé hoặc Đổi chuyến sang giờ khác | Chặn | Chặn | Chặn | Cập nhật |
+| Soát vé điện tử QR bằng máy quét di động | Chặn | Chặn | Thực thi | Chặn |
+| Phát luồng tọa độ GPS hành trình xe | Chặn | Chặn | Thực thi | Chặn |
+| Báo cáo sự cố phát sinh trên đường | Chặn | Chặn | Tạo mới | Chặn |
+| Điều động xe, tài xế & phụ xe theo ca | Toàn quyền | Toàn quyền | Chặn | Chặn |
+| Ràng buộc khóa đổi xe khi đang chạy (`IN_PROGRESS`) | Bắt buộc | Bắt buộc | Chặn | Chặn |
+| Thẩm định hồ sơ ưu đãi HSSV / Bằng lái | Toàn quyền | Toàn quyền | Chặn | Chặn |
+| Tạo mới, Cập nhật & Xóa mềm tuyến đường | Toàn quyền | Chặn | Chặn | Chặn |
+| Quản lý kho Voucher & Mã khuyến mại | Toàn quyền | Chặn | Chặn | Chặn |
+| Xem vết kiểm toán hệ thống (Audit Logs) | Toàn quyền | Chặn | Chặn | Chặn |
+| Báo cáo doanh thu, Tỷ lệ lấp đầy, Xuất Excel/PDF | Toàn quyền | Toàn quyền | Chặn | Chặn |
 
 ---
 
-## 10. Automated Cancellation & Flexible Refund Policy
+## 10. Chính Sách Hoàn Tiền & Đổi Vé Tự Động
 
-To balance passenger convenience against operator empty-seat exposure, SBTS implements an automated tier-based refund and exchange policy:
+Để bảo vệ quyền lợi chính đáng của hành khách đồng thời hạn chế tình trạng đặt giữ chỗ ảo gây lãng phí ghế ngồi, hệ thống áp dụng biểu phí hoàn vé tự động:
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                                 DEPARTURE TIMELINE FEE THRESHOLDS                                 |
+|                            CÁC KHUNG THỜI GIAN ÁP DỤNG BIỂU PHÍ HOÀN VÉ                           |
 +---------------------------------------------------------------------------------------------------+
-|  >= 12 Hours to Departure        |  Refund: 100% of Face Value   |  Cancellation Fee: 0%          |
-|                                  |  Exchange Fee: 0%             |  Status: Permitted             |
-+----------------------------------+-------------------------------+--------------------------------+
-|  2 Hours to 12 Hours             |  Refund: 90% of Face Value    |  Cancellation Fee: 10%         |
-|                                  |  Exchange Fee: 5%             |  Status: Permitted             |
-+----------------------------------+-------------------------------+--------------------------------+
-|  15 Minutes to 2 Hours           |  Refund: 80% of Face Value    |  Cancellation Fee: 20%         |
-|                                  |  Exchange Fee: 10%            |  Status: Permitted             |
-+----------------------------------+-------------------------------+--------------------------------+
-|  < 15 Minutes to Departure       |  Refund: 0% (Non-refundable)  |  Cancellation Fee: 100%        |
-|                                  |  Exchange: Locked             |  Status: Rejected (HTTP 400)   |
-+----------------------------------+-------------------------------+--------------------------------+
+|  Thời gian đến giờ chạy >= 12 giờ |  Tỷ lệ hoàn tiền: 100% mệnh giá  |  Phí hủy vé: 0%            |
+|                                   |  Phí đổi chuyến: 0%              |  Trạng thái: Cho phép      |
++-----------------------------------+----------------------------------+----------------------------+
+|  Từ 2 giờ đến dưới 12 giờ         |  Tỷ lệ hoàn tiền: 90% mệnh giá   |  Phí hủy vé: 10%           |
+|                                   |  Phí đổi chuyến: 5%              |  Trạng thái: Cho phép      |
++-----------------------------------+----------------------------------+----------------------------+
+|  Từ 15 phút đến dưới 2 giờ        |  Tỷ lệ hoàn tiền: 80% mệnh giá   |  Phí hủy vé: 20%           |
+|                                   |  Phí đổi chuyến: 10%             |  Trạng thái: Cho phép      |
++-----------------------------------+----------------------------------+----------------------------+
+|  Dưới 15 phút trước giờ chạy      |  Tỷ lệ hoàn tiền: 0%             |  Phí hủy vé: 100%          |
+|                                   |  Phí đổi chuyến: Khóa chức năng  |  Trạng thái: Từ chối (400) |
++-----------------------------------+----------------------------------+----------------------------+
 ```
 
-### Cooling-off Period Override
-Regardless of the departure timeline threshold, any ticket cancelled within **30 minutes of creation** (`NOW() - createdAt <= 30 minutes`) receives an unconditional **100% refund** with 0% penalty fee.
+### Quy Tắc Làm Mát (Cooling-off Period)
+Bất kể chuyến xe sắp khởi hành, nếu vé được hủy trong vòng **30 phút kể từ thời điểm đặt vé thành công** (`NOW() - createdAt <= 30 phút`), hành khách được hưởng chính sách hoàn trả **100% số tiền** mà không phải chịu bất kỳ khoản khấu trừ nào.
 
 ---
 
-## 11. Installation, Environment & Deployment Runbook
+## 11. Hướng Dẫn Cài Đặt & Triển Khai Hệ Thống
 
-### 11.1. Prerequisites
-* **Runtime Environment**: Node.js `v20.x`, `v22.x`, or `v24.x LTS`.
-* **Package Manager**: `npm` (bundled with Node.js) or `pnpm`.
-* **Relational Database**: PostgreSQL 16+ instance with PostGIS and UUID extension support (e.g. Supabase).
-* **In-Memory Store**: Redis 6.0+ instance (e.g. Upstash Redis).
+### 11.1. Yêu Cầu Môi Trường Tiên Quyết
+* **Môi trường thực thi**: Node.js phiên bản `v20.x`, `v22.x` hoặc `v24.x LTS`.
+* **Trình quản lý gói**: `npm` (tích hợp sẵn theo Node.js) hoặc `pnpm`.
+* **Hệ quản trị cơ sở dữ liệu**: PostgreSQL 16 trở lên có cài đặt tiện ích mở rộng PostGIS và uuid-ossp (khuyên dùng dịch vụ Cloud Supabase).
+* **Bộ nhớ đệm phân tán**: Redis Server phiên bản 6.0 trở lên hoặc Upstash Redis.
 
-### 11.2. Dependency Installation
-Execute dependency installation for both workspaces from the root directory:
+### 11.2. Cài Đặt Các Thư Viện Phụ Thuộc
+Chạy câu lệnh cài đặt tự động cho cả hai phân hệ Frontend và Backend từ thư mục gốc của dự án:
 ```bash
 npm --prefix backend install && npm --prefix frontend install
 ```
 
-### 11.3. Environment Configuration
-Populate `backend/.env` with production or sandbox parameters:
+### 11.3. Cấu Hình Biến Môi Trường (`backend/.env`)
+Sao chép mẫu cấu hình và khai báo các thông số vận hành tại tệp `backend/.env`:
 ```ini
-# Core Application Server
+# Cấu hình Cổng Dịch Vụ
 PORT=3001
 NODE_ENV=production
 
-# PostgreSQL Connection (Supabase Transaction Pooler)
+# Kết Nối Cơ Sở Dữ Liệu PostgreSQL (Supabase Pooler)
 DATABASE_URL=postgresql://postgres.xxx:xxx@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require
 
-# Redis Distributed Cache & Lock Engine
+# Kết Nối Bộ Nhớ Đệm Redis Phân Tán
 REDIS_URL=redis://default:xxx@xxx.upstash.io:6379
 
-# Cryptographic Signatures & JWT
+# Khóa Bí Mật Ký Số & Xác Thực JWT
 JWT_SECRET=ICTU_SMART_BUS_JWT_ENTERPRISE_SECRET_KEY_2026
 JWT_EXPIRATION=7d
 
-# VNPay Payment Gateway Sandbox Credentials
+# Thông Tin Đăng Nhập Cổng Thanh Toán VNPay Sandbox
 VNPAY_TMN_CODE=BDCDEH71
 VNPAY_HASH_SECRET=TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN
 VNPAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
 VNPAY_RETURN_URL=http://localhost:3000/payment/result
 
-# Transactional Mail Relay (SMTP)
+# Dịch Vụ Chuyển Tiếp Email Giao Dịch (SMTP Google)
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USER=smartbus.ictu@gmail.com
@@ -597,76 +595,76 @@ MAIL_PASS=xxxx-xxxx-xxxx-xxxx
 MAIL_FROM="Smart Bus ICTU" <smartbus.ictu@gmail.com>
 ```
 
-### 11.4. Application Startup
+### 11.4. Khởi Chạy Ứng Dụng
 ```bash
-# Option 1: Concurrent startup via root script (Frontend: 3000, Backend: 3001)
+# Lựa chọn 1: Khởi chạy song song cả Frontend (Cổng 3000) và Backend (Cổng 3001)
 npm run dev
 
-# Option 2: Windows automated one-click launcher
+# Lựa chọn 2: Khởi chạy nhanh 1 chạm trên hệ điều hành Windows
 start-dev.bat
 ```
 
-### 11.5. Build Verification
-Validate compilation health across both workspaces:
+### 11.5. Biên Dịch Đóng Gói Bản Phát Hành (Production Build)
+Kiểm tra tính toàn vẹn của mã nguồn trước khi triển khai:
 ```bash
-# Compile Backend NestJS application
+# Biên dịch Backend NestJS sang mã Javascript tối ưu
 npm --prefix backend run build
 
-# Compile Frontend Next.js production bundle with Turbopack
+# Biên dịch Frontend Next.js kết xuất các trang tĩnh và Server Components
 npm --prefix frontend run build
 ```
 
 ---
 
-## 12. Automated Test Suite Execution & Quality Metrics
+## 12. Báo Cáo Kiểm Thử Tự Động & Chỉ Số Chất Lượng
 
-The codebase is protected by **36 automated test suites** executed via Vitest, verifying 100% of all critical transactional contracts, security validations, and edge conditions:
+Toàn bộ hệ sinh thái mã nguồn được kiểm soát chất lượng bởi **36 bộ kiểm thử tự động** viết trên nền Vitest, xác thực 100% các hợp đồng giao dịch, ràng buộc dữ liệu và xử lý ngoại lệ biên:
 
 ```bash
-# Execute full backend automated test suite
+# Kích hoạt toàn bộ bộ kiểm thử tự động
 npm run test:backend
 ```
 
-### Verification Execution Report
+### Bảng Tổng Hợp Kết Quả Thực Thi Kiểm Thử
 ```
 --------------------------------------------------------------------------------
-VITEST TEST EXECUTION SUMMARY (ALL 36 FILES PASSED)
+BẢNG TỔNG KẾT KIỂM THỬ TỰ ĐỘNG VITEST (36/36 FILE ĐẠT TIÊU CHUẨN)
 --------------------------------------------------------------------------------
- [PASS] test/search-hardening.spec.ts                            (3 tests)
- [PASS] test/real-endpoints-verification.spec.ts                 (4 tests)
- [PASS] test/tracking-realtime-and-eta.spec.ts                   (17 tests)
- [PASS] test/incident-flow-integration.spec.ts                   (7 tests)
- [PASS] test/ticket-cancel-and-exchange.spec.ts                  (10 tests)
- [PASS] test/auth-register-integration.spec.ts                   (13 tests)
- [PASS] test/transit-management-and-integrity.spec.ts            (16 tests)
- [PASS] test/trip-dispatch-and-crew-notification.spec.ts         (10 tests)
- [PASS] test/security-and-auth-hardening.spec.ts                (10 tests)
- [PASS] test/seat-hold-payment.spec.ts                           (10 tests)
- [PASS] test/qr-ticket-notification.spec.ts                     (10 tests)
- [PASS] test/qa/sprint1-core-features.spec.ts                   (32 tests)
- [PASS] test/qa/sprint2-advanced-features.spec.ts               (17 tests)
- [PASS] test/entrypoint-standardization.spec.ts                 (12 tests)
- [PASS] test/unit/conductor-creation-and-dispatch-constraints   (10 tests)
- [PASS] test/unit/auth-register.spec.ts                         (15 tests)
- [PASS] test/unit/anti-spam-and-email.spec.ts                   (4 tests)
- [PASS] test/unit/trips-vietnam-timezone.spec.ts                (3 tests)
- [PASS] test/unit/notification-controller-and-service.spec.ts   (7 tests)
- [PASS] test/qa/sprint3-geofencing-push-notification.spec.ts    (17 tests)
- [PASS] test/qa/sprint2-geofencing-notification.spec.ts         (17 tests)
- [PASS] ... 15 additional unit test suites ...
+ [ĐẠT] test/search-hardening.spec.ts                            (3 ca kiểm thử)
+ [ĐẠT] test/real-endpoints-verification.spec.ts                 (4 ca kiểm thử)
+ [ĐẠT] test/tracking-realtime-and-eta.spec.ts                   (17 ca kiểm thử)
+ [ĐẠT] test/incident-flow-integration.spec.ts                   (7 ca kiểm thử)
+ [ĐẠT] test/ticket-cancel-and-exchange.spec.ts                  (10 ca kiểm thử)
+ [ĐẠT] test/auth-register-integration.spec.ts                   (13 ca kiểm thử)
+ [ĐẠT] test/transit-management-and-integrity.spec.ts            (16 ca kiểm thử)
+ [ĐẠT] test/trip-dispatch-and-crew-notification.spec.ts         (10 ca kiểm thử)
+ [ĐẠT] test/security-and-auth-hardening.spec.ts                (10 ca kiểm thử)
+ [ĐẠT] test/seat-hold-payment.spec.ts                           (10 ca kiểm thử)
+ [ĐẠT] test/qr-ticket-notification.spec.ts                     (10 ca kiểm thử)
+ [ĐẠT] test/qa/sprint1-core-features.spec.ts                   (32 ca kiểm thử)
+ [ĐẠT] test/qa/sprint2-advanced-features.spec.ts               (17 ca kiểm thử)
+ [ĐẠT] test/entrypoint-standardization.spec.ts                 (12 ca kiểm thử)
+ [ĐẠT] test/unit/conductor-creation-and-dispatch-constraints   (10 ca kiểm thử)
+ [ĐẠT] test/unit/auth-register.spec.ts                         (15 ca kiểm thử)
+ [ĐẠT] test/unit/anti-spam-and-email.spec.ts                   (4 ca kiểm thử)
+ [ĐẠT] test/unit/trips-vietnam-timezone.spec.ts                (3 ca kiểm thử)
+ [ĐẠT] test/unit/notification-controller-and-service.spec.ts   (7 ca kiểm thử)
+ [ĐẠT] test/qa/sprint3-geofencing-push-notification.spec.ts    (17 ca kiểm thử)
+ [ĐẠT] test/qa/sprint2-geofencing-notification.spec.ts         (17 ca kiểm thử)
+ [ĐẠT] ... và 15 bộ kiểm thử đơn vị độc lập khác ...
 
- Test Files  36 passed (36)
-      Tests  322 passed (322)
-   Duration  21.68s
-   Exit Code 0
+ Tổng số file kiểm thử: 36 file (Đạt 100%)
+ Tổng số ca kiểm thử:   322 ca kiểm thử (Đạt 100%)
+ Thời gian thực thi:    21.68 giây
+ Mã lỗi trả về:         0 (Không phát sinh lỗi hoặc suy thoái phần mềm)
 --------------------------------------------------------------------------------
 ```
 
 ---
 
-## 13. Institutional Governance & Licensing
+## 13. Thông Tin Bản Quyền & Đơn Vị Quản Lý
 
-* **Host Institution**: Thai Nguyen University of Information and Communication Technology (ICTU) - Thai Nguyen University
-* **Department**: Faculty of Information Technology & Software Engineering
-* **Project Designation**: Graduate Capstone Project / Production Release Candidate `v1.0.0`
-* **Intellectual Property**: © 2026 Smart Bus Ticketing System - ICTU. All rights reserved.
+* **Cơ quan chủ quản**: Trường Đại học Công nghệ Thông tin và Truyền thông (ICTU) - Đại học Thái Nguyên
+* **Khoa phụ trách chuyên môn**: Khoa Công nghệ Thông tin & Khoa Kỹ thuật Phần mềm
+* **Định danh sản phẩm**: Đồ án tốt nghiệp chuyên ngành Kỹ thuật Phần mềm / Bản phát hành chính thức `Release v1.0.0`
+* **Quyền sở hữu trí tuệ**: © 2026 Smart Bus Ticketing System - ICTU. Mọi quyền được bảo lưu.
