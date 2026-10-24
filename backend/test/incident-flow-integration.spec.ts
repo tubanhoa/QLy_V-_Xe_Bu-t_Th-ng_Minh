@@ -161,6 +161,7 @@ describe('[TASK-BACKEND] Incident Management & Real-time Notification Integratio
 
     // Đặt lại trạng thái ban đầu của chuyến xe thành 'in_progress' để kiểm tra chuyển đổi trạng thái
     testTrip.status = TripStatus.IN_PROGRESS;
+    testTrip.departureTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
     await tripRepo.save(testTrip);
 
     // Xóa các incident cũ của trip nếu có để đảm bảo môi trường sạch

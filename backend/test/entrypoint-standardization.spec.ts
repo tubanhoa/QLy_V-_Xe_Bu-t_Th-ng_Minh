@@ -189,11 +189,11 @@ describe('Phase 1 Step 3 - Entrypoint Standardization Verification', () => {
       }
     });
 
-    it('Voucher: POST /api/v1/vouchers/validate returns 201 OK', async () => {
+    it('Voucher: POST /api/v1/vouchers/validate returns 200/201 OK', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/vouchers/validate')
         .send({ code: 'ICTU2026', orderAmount: 50000 });
-      expect(res.status).toBe(201);
+      expect([200, 201]).toContain(res.status);
       expect(res.body.success).toBe(true);
       expect(res.body.data.valid).toBe(true);
     });

@@ -42,8 +42,10 @@ describe('Real Dev Environment Verification (Postgres & Redis, HTTP Pipeline wit
     await app.init();
 
     // Ensure database seed data is populated
+    process.env.FORCE_SEED = 'true';
     const seedService = app.get(SeedService);
     await seedService.runSeed();
+    await seedService.ensureRollingWindowTrips();
   });
 
   afterAll(async () => {

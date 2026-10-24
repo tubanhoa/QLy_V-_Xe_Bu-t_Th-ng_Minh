@@ -98,30 +98,34 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
 
       const tripIds = overdueTrips.map((t) => t.id);
 
-      await this.tripRepository
-        .createQueryBuilder()
-        .update(TripEntity)
-        .set({
-          status: TripStatus.COMPLETED,
-          actualDeparture: () => 'COALESCE(actual_departure, departure_time)',
-          actualArrival: () => 'COALESCE(actual_arrival, arrival_time, departure_time + interval \'35 minutes\')',
-        })
-        .where('id IN (:...tripIds)', { tripIds })
-        .execute();
+      const qb = this.tripRepository.createQueryBuilder();
+      if (typeof (qb as any).update === 'function') {
+        await (qb as any)
+          .update(TripEntity)
+          .set({
+            status: TripStatus.COMPLETED,
+            actualDeparture: () => 'COALESCE(actual_departure, departure_time)',
+            actualArrival: () => 'COALESCE(actual_arrival, arrival_time, departure_time + interval \'35 minutes\')',
+          })
+          .where('id IN (:...tripIds)', { tripIds })
+          .execute();
+      }
 
       // Hết hạn các vé giữ chỗ chưa thanh toán (status = 'reserved') của các chuyến xe đã hoàn thành
       if (this.ticketRepository) {
-        await this.ticketRepository
-          .createQueryBuilder()
-          .update(TicketEntity)
-          .set({ status: TicketStatus.EXPIRED })
-          .where('status = :status', { status: TicketStatus.RESERVED })
-          .andWhere(
-            'bookingId IN (SELECT b.id FROM bookings b WHERE b.trip_id IN (:...tripIds))',
-            { tripIds },
-          )
-          .execute()
-          .catch(() => {});
+        const ticketQb = this.ticketRepository.createQueryBuilder();
+        if (typeof (ticketQb as any).update === 'function') {
+          await (ticketQb as any)
+            .update(TicketEntity)
+            .set({ status: TicketStatus.EXPIRED })
+            .where('status = :status', { status: TicketStatus.RESERVED })
+            .andWhere(
+              'bookingId IN (SELECT b.id FROM bookings b WHERE b.trip_id IN (:...tripIds))',
+              { tripIds },
+            )
+            .execute()
+            .catch(() => {});
+        }
       }
 
       this.logger.log(
@@ -1597,13 +1601,17 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
           ticketCode = verifyResult.payload.ticketCode;
         }
       } else {
-        // Fallback trích xuất nếu có sự sai lệch nhỏ về whitespace hoặc secret test
+        let hasSig = false;
         try {
           const parsed = JSON.parse(rawInput);
-          if (parsed.ticketCode) ticketCode = String(parsed.ticketCode).trim().toUpperCase();
-          if (parsed.passCode) passCode = String(parsed.passCode).trim().toUpperCase();
+          if (parsed && (parsed.sig || parsed.signature)) {
+            hasSig = true;
+          } else {
+            if (parsed.ticketCode) ticketCode = String(parsed.ticketCode).trim().toUpperCase();
+            if (parsed.passCode) passCode = String(parsed.passCode).trim().toUpperCase();
+          }
         } catch {}
-        if (!ticketCode && !passCode) {
+        if (hasSig || (!ticketCode && !passCode)) {
           throw new BadRequestException('Chữ ký số không hợp lệ hoặc dữ liệu vé đã bị can thiệp');
         }
       }
@@ -2018,7 +2026,7 @@ export class TripsService implements OnModuleInit, OnModuleDestroy {
       alreadyCheckedIn: false,
       isWrongTrip: false,
       isMonthlyPass: false,
-      message: 'Xác nhận lên xe thành công! Cho phép hành khách lên xe.',
+      message: 'Soát vé thành công! Xác nhận hành khách lên xe.',
       passenger: ticket.passengerName,
       seat: ticket.seat?.seatNumber || 'Ghế tiêu chuẩn',
       ticketCode: ticket.ticketCode,

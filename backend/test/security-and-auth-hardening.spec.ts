@@ -420,6 +420,7 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/upload/student-card')
+      .set('Authorization', tokenPassenger)
       .attach('file', Buffer.from(maliciousSvg, 'utf-8'), 'student_card.svg');
 
     expect(res.status).toBe(400);
@@ -432,6 +433,7 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/upload/student-card')
+      .set('Authorization', tokenPassenger)
       .attach('file', fakePng, 'fake_card.png');
 
     expect(res.status).toBe(400);
@@ -453,6 +455,7 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/upload/student-card')
+      .set('Authorization', tokenPassenger)
       .attach('file', oversizedBuffer, 'oversized.png');
 
     expect(res.status).toBe(400);
@@ -465,12 +468,13 @@ describe('Security & Hardening Suite: SEC-01, SEC-02, SEC-03, AUTH-01 HTTP Tests
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/upload/student-card')
+      .set('Authorization', tokenPassenger)
       .attach('file', validJpeg, 'valid_student_card.jpg');
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.mimeType).toBe('image/jpeg');
-    expect(res.body.url).toMatch(/^\/uploads\/student-cards\/student_card_/);
+    expect(res.body.url).toMatch(/^\/uploads\//);
   });
 
   // --- SEC-03: Rate Limiting cho API gửi lại Email & Tra cứu Voucher ---

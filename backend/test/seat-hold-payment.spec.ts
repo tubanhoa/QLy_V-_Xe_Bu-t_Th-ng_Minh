@@ -646,7 +646,7 @@ describe('Seat Hold & Payment Synchronization HTTP Integration Tests (10 Yêu C�
     expect(txnRef).toBeDefined();
 
     // Giả lập callback VNPay trả về thành công (vnp_ResponseCode = '00')
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const params: Record<string, string> = {
       vnp_TxnRef: txnRef,
       vnp_ResponseCode: '00',
@@ -713,7 +713,7 @@ describe('Seat Hold & Payment Synchronization HTTP Integration Tests (10 Yêu C�
     const txnRef = payUrlRes.body.data.txnRef;
 
     // Giả lập callback VNPay báo lỗi (vnp_ResponseCode = '24' - Khách hủy trên cổng VNPay)
-    const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+    const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
     const params: Record<string, string> = {
       vnp_TxnRef: txnRef,
       vnp_ResponseCode: '24',

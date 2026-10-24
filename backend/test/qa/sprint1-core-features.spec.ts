@@ -37,6 +37,7 @@ import { VoucherEntity } from '../../src/database/entities/voucher.entity.js';
 import { SeatHoldEntity } from '../../src/database/entities/seat-hold.entity.js';
 import { PaymentEntity } from '../../src/database/entities/payment.entity.js';
 import { PaymentLogEntity } from '../../src/database/entities/payment-log.entity.js';
+import { PasswordResetEntity } from '../../src/database/entities/password-reset.entity.js';
 
 import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter.js';
 import { TransformResponseInterceptor } from '../../src/common/interceptors/transform-response.interceptor.js';
@@ -555,6 +556,15 @@ describe('Sprint 1 Automation Test Suite - Core Features [QA Specification]', ()
         },
         { provide: getRepositoryToken(UserEntity), useValue: mockUserRepo },
         { provide: getRepositoryToken(RoleEntity), useValue: mockRoleRepo },
+        {
+          provide: getRepositoryToken(PasswordResetEntity),
+          useValue: {
+            findOne: () => Promise.resolve(null),
+            save: (d: any) => Promise.resolve(d),
+            create: (d: any) => d,
+            delete: () => Promise.resolve({ affected: 1 }),
+          },
+        },
         { provide: getRepositoryToken(TripEntity), useValue: mockTripRepo },
         { provide: getRepositoryToken(RouteEntity), useValue: mockRouteRepo },
         { provide: getRepositoryToken(RouteStationEntity), useValue: { find: () => Promise.resolve(mockRouteStations) } },
@@ -1058,7 +1068,7 @@ describe('Sprint 1 Automation Test Suite - Core Features [QA Specification]', ()
 
     describe('[TC-PAY-02] Tiếp nhận IPN Webhook thanh toán thành công (HMAC Checksum)', () => {
       it('Happy Path: Webhook VNPay IPN hợp lệ -> Chuyển trạng thái Booking sang CONFIRMED và Ticket sang PAID', async () => {
-        const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+        const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
         const queryParams: Record<string, string> = {
           vnp_TxnRef: paymentTxnRef,
           vnp_ResponseCode: '00',
@@ -1111,7 +1121,7 @@ describe('Sprint 1 Automation Test Suite - Core Features [QA Specification]', ()
 
     describe('[TC-PAY-04] Chống Replay Attack (Gửi lặp IPN)', () => {
       it('Edge Case: Gửi lặp lại webhook đã xử lý -> Trả về kết quả RspCode 02 (Order already confirmed) mà không tạo vé trùng', async () => {
-        const secretKey = process.env.VNPAY_HASH_SECRET || 'SECRETKEYICTU2026BUS';
+        const secretKey = process.env.VNPAY_HASH_SECRET || 'TJAWJFAONXJGYJULKCPRUYGNVXTCHGUN';
         const queryParams: Record<string, string> = {
           vnp_TxnRef: paymentTxnRef,
           vnp_ResponseCode: '00',

@@ -9,6 +9,8 @@ import { RoleEntity } from '../../src/database/entities/role.entity.js';
 import { UserStatus } from '../../src/common/constants/status.constant.js';
 import { Role } from '../../src/common/constants/roles.constant.js';
 import { AuditService } from '../../src/modules/audit/audit.service.js';
+import { PasswordResetEntity } from '../../src/database/entities/password-reset.entity.js';
+import { NotificationService } from '../../src/modules/notification/notification.service.js';
 
 // Mock bcrypt
 vi.mock('bcrypt', () => ({
@@ -59,6 +61,7 @@ describe('AuthService - Unit Tests', () => {
       }),
     };
 
+
     roleRepository = {
       findOne: vi.fn(),
       create: vi.fn(),
@@ -75,8 +78,25 @@ describe('AuthService - Unit Tests', () => {
         AuthService,
         { provide: getRepositoryToken(UserEntity), useValue: userRepository },
         { provide: getRepositoryToken(RoleEntity), useValue: roleRepository },
+        {
+          provide: getRepositoryToken(PasswordResetEntity),
+          useValue: {
+            findOne: vi.fn(),
+            create: vi.fn(),
+            save: vi.fn(),
+            update: vi.fn(),
+            delete: vi.fn(),
+          },
+        },
         { provide: JwtService, useValue: jwtService },
         { provide: AuditService, useValue: { log: vi.fn().mockResolvedValue({}) } },
+        {
+          provide: NotificationService,
+          useValue: {
+            sendVerificationEmail: vi.fn().mockResolvedValue(true),
+            sendPasswordResetEmail: vi.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile();
 

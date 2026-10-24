@@ -196,6 +196,9 @@ export class SeedService implements OnApplicationBootstrap {
         order++;
       }
       this.logger.log(`Seeded route: CT-01 with ${stationsData.length} stations`);
+    } else if (route1.status !== 'active') {
+      route1.status = 'active';
+      await this.routeRepo.save(route1);
     }
 
     // 4b. Seed Route CT-02 (Tuyến độc lập: Bến Xe Nam ↔ KCN Sông Công)
@@ -248,6 +251,9 @@ export class SeedService implements OnApplicationBootstrap {
         order2++;
       }
       this.logger.log('Seeded route: CT-02 with 3 stations');
+    } else if (route2.status !== 'active') {
+      route2.status = 'active';
+      await this.routeRepo.save(route2);
     }
 
     // 5. Seed Vehicles & Seats (Đảm bảo mỗi xe có đủ đúng 28 ghế)

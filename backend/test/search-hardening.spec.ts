@@ -42,8 +42,10 @@ describe('Search Hardening Tests (VIỆC A & VIỆC B)', () => {
 
     await app.init();
 
+    process.env.FORCE_SEED = 'true';
     const seedService = app.get(SeedService);
     await seedService.runSeed();
+    await seedService.ensureRollingWindowTrips();
   });
 
   afterAll(async () => {
